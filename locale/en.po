@@ -319,39 +319,39 @@ msgstr "Game name"
 msgid "Choose the Game"
 msgstr "Choose the Game"
 
-#: understeer/ui/cover_search.py:194
+#: understeer/ui/cover_search.py:195
 msgid "Enter the name of the game"
 msgstr "Enter the name of the game"
 
-#: understeer/ui/cover_search.py:205
+#: understeer/ui/cover_search.py:206
 msgid "Search failed"
 msgstr "Search failed"
 
-#: understeer/ui/cover_search.py:221
+#: understeer/ui/cover_search.py:222
 msgid "No games found"
 msgstr "No games found"
 
-#: understeer/ui/cover_search.py:222
+#: understeer/ui/cover_search.py:223
 msgid "Try a shorter or different name."
 msgstr "Try a shorter or different name."
 
-#: understeer/ui/cover_search.py:252
+#: understeer/ui/cover_search.py:253
 msgid "Covers could not be loaded"
 msgstr "Covers could not be loaded"
 
-#: understeer/ui/cover_search.py:256
+#: understeer/ui/cover_search.py:257
 msgid "No covers"
 msgstr "No covers"
 
-#: understeer/ui/cover_search.py:257
+#: understeer/ui/cover_search.py:258
 msgid "SteamGridDB has no portrait covers for this game yet."
 msgstr "SteamGridDB has no portrait covers for this game yet."
 
-#: understeer/ui/cover_search.py:276
+#: understeer/ui/cover_search.py:277
 msgid "By {author}"
 msgstr "By {author}"
 
-#: understeer/ui/cover_search.py:318
+#: understeer/ui/cover_search.py:319
 msgid "Cover from SteamGridDB set"
 msgstr "Cover from SteamGridDB set"
 
@@ -968,8 +968,8 @@ msgid "Preset “{name}” loaded — click Apply to write it"
 msgstr "Preset “{name}” loaded — click Apply to write it"
 
 #: understeer/ui/window.py:1243
-msgid "e.g. GT3 Race"
-msgstr "e.g. GT3 Race"
+msgid "e.g. BeamNG Drift"
+msgstr "e.g. BeamNG Drift"
 
 #: understeer/ui/window.py:1246
 msgid "Save as Preset"

@@ -319,39 +319,39 @@ msgstr "Spielname"
 msgid "Choose the Game"
 msgstr "Spiel auswählen"
 
-#: understeer/ui/cover_search.py:194
+#: understeer/ui/cover_search.py:195
 msgid "Enter the name of the game"
 msgstr "Gib den Namen des Spiels ein"
 
-#: understeer/ui/cover_search.py:205
+#: understeer/ui/cover_search.py:206
 msgid "Search failed"
 msgstr "Suche fehlgeschlagen"
 
-#: understeer/ui/cover_search.py:221
+#: understeer/ui/cover_search.py:222
 msgid "No games found"
 msgstr "Keine Spiele gefunden"
 
-#: understeer/ui/cover_search.py:222
+#: understeer/ui/cover_search.py:223
 msgid "Try a shorter or different name."
 msgstr "Versuch einen kürzeren oder anderen Namen."
 
-#: understeer/ui/cover_search.py:252
+#: understeer/ui/cover_search.py:253
 msgid "Covers could not be loaded"
 msgstr "Cover konnten nicht geladen werden"
 
-#: understeer/ui/cover_search.py:256
+#: understeer/ui/cover_search.py:257
 msgid "No covers"
 msgstr "Keine Cover"
 
-#: understeer/ui/cover_search.py:257
+#: understeer/ui/cover_search.py:258
 msgid "SteamGridDB has no portrait covers for this game yet."
 msgstr "SteamGridDB hat für dieses Spiel noch keine Cover im Hochformat."
 
-#: understeer/ui/cover_search.py:276
+#: understeer/ui/cover_search.py:277
 msgid "By {author}"
 msgstr "Von {author}"
 
-#: understeer/ui/cover_search.py:318
+#: understeer/ui/cover_search.py:319
 msgid "Cover from SteamGridDB set"
 msgstr "Cover von SteamGridDB übernommen"
 
@@ -968,8 +968,8 @@ msgid "Preset “{name}” loaded — click Apply to write it"
 msgstr "Preset „{name}“ geladen – zum Schreiben auf Übernehmen klicken"
 
 #: understeer/ui/window.py:1243
-msgid "e.g. GT3 Race"
-msgstr "z. B. GT3-Rennen"
+msgid "e.g. BeamNG Drift"
+msgstr "z. B. BeamNG Drift"
 
 #: understeer/ui/window.py:1246
 msgid "Save as Preset"

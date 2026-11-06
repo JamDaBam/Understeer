@@ -16,6 +16,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Tools → Appearance*; light and dark mode follow your system.
 - **Translations:** Available in English and German, chosen automatically or under *Tools → Appearance*. More languages can be added easily (see below).
 
+![Games page with BeamNG.drive running](docs/games.png)
+
 Understeer is based on [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi.
 
 ## Prerequisites

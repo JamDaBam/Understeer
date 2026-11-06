@@ -1240,7 +1240,7 @@ class TunerWindow(Adw.ApplicationWindow):
                     name=name))
 
     def _ask_preset_name(self):
-        entry = Gtk.Entry(placeholder_text=_("e.g. GT3 Race"),
+        entry = Gtk.Entry(placeholder_text=_("e.g. BeamNG Drift"),
                           activates_default=True)
         dialog = Adw.MessageDialog(
             transient_for=self, heading=_("Save as Preset"),

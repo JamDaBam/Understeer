@@ -1,7 +1,7 @@
 """Presets and app settings in ~/.config/Understeer, without depending on GTK.
 
 Every *.json directly in CONFIG_DIR is a preset:
-    {"name": "GT3 Race", "values": {"FF": 70, "SEN": 900, ...}}
+    {"name": "BeamNG Drift", "values": {"FF": 55, "SEN": 540, ...}}
 """
 import hashlib
 import json
@@ -124,8 +124,8 @@ def set_setting(key, value):
 
 def load_games():
     """Games with their preset, e.g.
-    [{"game": "steam:805550", "name": "Assetto Corsa Competizione",
-      "preset": "GT3 Race.json", "auto": true}]
+    [{"game": "steam:284160", "name": "BeamNG.drive",
+      "preset": "BeamNG Drift.json", "auto": true}]
     "preset" is the file name of a preset in CONFIG_DIR, or None.
     "cover" (optional) is the file name of a picture the user chose, in
     CUSTOM_COVER_DIR; "steamgriddb" (optional) the game's SteamGridDB id.
