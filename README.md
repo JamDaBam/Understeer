@@ -19,7 +19,7 @@ This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanat
 
 ## Installation
 
-Download `SimPower-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/FanatecLinux/releases/latest), make it executable (`chmod +x SimPower-x86_64.AppImage`) and run it.
+Download `SimPower-<version>-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/FanatecLinux/releases/latest), make it executable (`chmod +x SimPower-*-x86_64.AppImage`) and run it.
 
 The AppImage contains embedded update information, so AppImage managers such as [Gear Lever](https://github.com/mijorus/gearlever) detect new releases automatically.
 

@@ -49,6 +49,6 @@ export VERSION="${VERSION#v}"
 # It also produces a .zsync file that must be uploaded next to the AppImage.
 UPDATE_INFO="gh-releases-zsync|JamDaBam|FanatecLinux|latest|SimPower-*x86_64.AppImage.zsync"
 
-"./$TOOL" -u "$UPDATE_INFO" AppDir "SimPower-$ARCH.AppImage"
+"./$TOOL" -u "$UPDATE_INFO" AppDir "SimPower-$VERSION-$ARCH.AppImage"
 
 echo "=== Success: AppImage compilation sequence completed ==="
