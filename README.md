@@ -17,6 +17,12 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
 
+## Installation
+
+Download `SimPower-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/FanatecLinux/releases/latest), make it executable (`chmod +x SimPower-x86_64.AppImage`) and run it.
+
+The AppImage contains embedded update information, so AppImage managers such as [Gear Lever](https://github.com/mijorus/gearlever) detect new releases automatically.
+
 ## Hardware Permissions
 
 By default, Linux restricts writing to device configurations in the `/sys` directory to the root user. To allow this application to save settings seamlessly without needing `sudo` or `pkexec` prompts every single time, you must add a local `udev` hardware rule.

@@ -33,13 +33,22 @@ EOF
 chmod +x AppDir/AppRun
 
 echo "=== Step 5: Downloading packaging utilities ==="
-wget -N https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-chmod +x appimagetool-x86_64.AppImage
+# The tool runs on the build machine; ARCH below picks the target runtime.
+TOOL="appimagetool-$(uname -m).AppImage"
+wget -N "https://github.com/AppImage/appimagetool/releases/download/continuous/$TOOL"
+chmod +x "$TOOL"
 
 echo "=== Step 6: Compiling final AppImage package ==="
 export APPIMAGE_EXTRACT_AND_RUN=1
 export ARCH=x86_64
+# Version shown by AppImage managers, e.g. v1.0.3 -> 1.0.3
+VERSION="${VERSION:-$(git describe --tags --always 2>/dev/null || echo dev)}"
+export VERSION="${VERSION#v}"
 
-./appimagetool-x86_64.AppImage AppDir
+# Update information lets tools like Gear Lever find new releases on GitHub.
+# It also produces a .zsync file that must be uploaded next to the AppImage.
+UPDATE_INFO="gh-releases-zsync|JamDaBam|FanatecLinux|latest|SimPower-*x86_64.AppImage.zsync"
+
+"./$TOOL" -u "$UPDATE_INFO" AppDir "SimPower-$ARCH.AppImage"
 
 echo "=== Success: AppImage compilation sequence completed ==="
