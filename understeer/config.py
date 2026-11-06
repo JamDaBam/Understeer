@@ -12,6 +12,7 @@ OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
 # Kept in a subfolder: every *.json directly in CONFIG_DIR is a preset.
 AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
 SLOT_NAMES_FILE = CONFIG_DIR / "settings" / "slot_names.json"
+SLOT_COUNTS_FILE = CONFIG_DIR / "settings" / "slot_counts.json"
 
 
 def migrate_config():
@@ -71,6 +72,22 @@ def save_slot_name(model, slot, name):
     try:
         SLOT_NAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
         SLOT_NAMES_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
+    except OSError:
+        pass
+
+
+def load_slot_count(model):
+    """Highest slot number seen on this wheel base model, 0 if unknown."""
+    count = _read_json(SLOT_COUNTS_FILE).get(model)
+    return count if isinstance(count, int) and count > 0 else 0
+
+
+def save_slot_count(model, count):
+    data = _read_json(SLOT_COUNTS_FILE)
+    data[model] = count
+    try:
+        SLOT_COUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SLOT_COUNTS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
     except OSError:
         pass
 

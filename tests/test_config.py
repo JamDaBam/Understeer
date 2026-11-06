@@ -13,6 +13,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OLD_CONFIG_DIR", tmp_path / ".config" / "SimPower")
     monkeypatch.setattr(config, "AXES_FILE", cfg / "settings" / "axes.json")
     monkeypatch.setattr(config, "SLOT_NAMES_FILE", cfg / "settings" / "slot_names.json")
+    monkeypatch.setattr(config, "SLOT_COUNTS_FILE", cfg / "settings" / "slot_counts.json")
     return tmp_path
 
 
@@ -73,6 +74,20 @@ def test_broken_slot_names_file(home):
     assert config.load_slot_names("0EB7:0020") == {}
     config.save_slot_name("0EB7:0020", 3, "Rain")
     assert config.load_slot_names("0EB7:0020") == {3: "Rain"}
+
+
+def test_slot_count_per_model(home):
+    assert config.load_slot_count("0EB7:0020") == 0
+    config.save_slot_count("0EB7:0020", 6)
+    assert config.load_slot_count("0EB7:0020") == 6
+    assert config.load_slot_count("0EB7:0006") == 0
+    assert config.list_presets() == []
+
+
+def test_broken_slot_count(home):
+    config.SLOT_COUNTS_FILE.parent.mkdir(parents=True)
+    config.SLOT_COUNTS_FILE.write_text('{"0EB7:0020": "six"}')
+    assert config.load_slot_count("0EB7:0020") == 0
 
 
 def test_migration_moves_old_folder(home):

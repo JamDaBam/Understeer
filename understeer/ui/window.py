@@ -11,7 +11,7 @@ from ..device import (can_write, find_device_path, find_rumble_path,
                       read_int, write_values)
 from ..i18n import _
 from ..inputs import AXIS_ROLES, InputMonitor
-from ..settings import PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
+from ..settings import MAX_SLOT, PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
 from .setting_row import SettingRow
 
 LIVE_DELAY_MS = 120
@@ -34,6 +34,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
         self.model = None           # wheel base model, e.g. "0EB7:0020"
         self.slot_names = {}        # slot number -> name chosen by the user
+        self.slot_count = SLOTS     # more if the wheel base reported more
         self._filling_slot_names = False
 
         self.active_preset = None   # path of the last applied/saved preset
@@ -491,12 +492,7 @@ class TunerWindow(Adw.ApplicationWindow):
                           "base, e.g. “A” or “Set 1”. The names are saved for "
                           "this wheel base model."))
         self.slot_name_rows = {}
-        for n in range(1, SLOTS + 1):
-            entry = Adw.EntryRow(title=_("Slot {n}").format(n=n))
-            entry.connect("changed", lambda e, n=n:
-                          self._on_slot_name_changed(n, e.get_text()))
-            self.slot_name_rows[n] = entry
-            self.slot_names_group.add(entry)
+        self._show_slot_name_rows()
         page.add(self.slot_names_group)
 
         rumble = Adw.PreferencesGroup(
@@ -585,6 +581,9 @@ class TunerWindow(Adw.ApplicationWindow):
     def _load_slot_names(self):
         self.model = model_id(self.device_path) if self.device_path else None
         self.slot_names = config.load_slot_names(self.model) if self.model else {}
+        self.slot_count = max(SLOTS, config.load_slot_count(self.model)
+                              if self.model else 0)
+        self._show_slot_name_rows()
         self._filling_slot_names = True
         try:
             for n, entry in self.slot_name_rows.items():
@@ -593,6 +592,39 @@ class TunerWindow(Adw.ApplicationWindow):
             self._filling_slot_names = False
         self.slot_names_group.set_sensitive(self.model is not None)
         self._update_slot_dropdown()
+
+    def _show_slot_name_rows(self):
+        """One name row per slot of the connected wheel base."""
+        for n in range(1, self.slot_count + 1):
+            if n not in self.slot_name_rows:
+                entry = Adw.EntryRow(title=_("Slot {n}").format(n=n))
+                self._filling_slot_names = True
+                try:
+                    entry.set_text(self.slot_names.get(n, ""))
+                finally:
+                    self._filling_slot_names = False
+                entry.connect("changed", lambda e, n=n:
+                              self._on_slot_name_changed(n, e.get_text()))
+                self.slot_name_rows[n] = entry
+                self.slot_names_group.add(entry)
+        for n, entry in self.slot_name_rows.items():
+            entry.set_visible(n <= self.slot_count)
+
+    def _show_device_slot(self):
+        """Select the slot the wheel base reports in the slot menu."""
+        slot = read_int(self._attr_file("SLOT"))
+        if not slot or not 1 <= slot <= MAX_SLOT:
+            return
+        if slot > self.slot_count:
+            # Some wheel bases have more slots than the driver can switch
+            # to (a CSL DD has 6); remember that for this model.
+            self.slot_count = slot
+            if self.model:
+                config.save_slot_count(self.model, slot)
+            self._show_slot_name_rows()
+            self._update_slot_dropdown()
+        with self.slot_dropdown.handler_block(self._slot_handler):
+            self.slot_dropdown.set_selected(slot - 1)
 
     def _on_slot_name_changed(self, n, text):
         if self._filling_slot_names or self.model is None:
@@ -606,7 +638,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _update_slot_dropdown(self):
         labels = [self.slot_names.get(n) or _("Slot {n}").format(n=n)
-                  for n in range(1, SLOTS + 1)]
+                  for n in range(1, self.slot_count + 1)]
         model = self.slot_dropdown.get_model()
         # Changing the list must not switch the slot on the wheel base.
         with self.slot_dropdown.handler_block(self._slot_handler):
@@ -719,10 +751,7 @@ class TunerWindow(Adw.ApplicationWindow):
             if value is not None:
                 row.set(value)
             row.set_baseline(row.get())
-        slot = read_int(self._attr_file("SLOT"))
-        if slot and 1 <= slot <= SLOTS:
-            with self.slot_dropdown.handler_block(self._slot_handler):
-                self.slot_dropdown.set_selected(slot - 1)
+        self._show_device_slot()
         self._set_status(_("In sync with device"))
         self._update_preset_indicator()
 
@@ -830,7 +859,11 @@ class TunerWindow(Adw.ApplicationWindow):
         self._flush_pending()
         slot = self.slot_dropdown.get_selected() + 1
         if write_values({self._attr_file("SLOT"): slot}):
-            self.toasts.add_toast(Adw.Toast.new(_("Could not switch slot")))
+            self.toasts.add_toast(Adw.Toast.new(
+                _("The driver can only switch to slots 1–{n}. Choose this "
+                  "slot on the wheel base.").format(n=SLOTS)
+                if slot > SLOTS else _("Could not switch slot")))
+            self._show_device_slot()        # back to the slot that is active
             return
         # Switching loads the slot's stored values into all attributes.
         GLib.timeout_add(150, lambda: self._load_from_device() and False)
