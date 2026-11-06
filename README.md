@@ -91,4 +91,6 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 
 Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 
+Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt install python3-pytest`). They use a fake sysfs and temporary folders, so no wheel base or password is needed.
+
 *Disclaimer: This software is provided as-is. I am not responsible for any damage to hardware or personal injury resulting from misconfigured settings. Use at your own risk.*

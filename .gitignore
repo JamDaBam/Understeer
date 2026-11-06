@@ -3,3 +3,4 @@ appimagetool-*.AppImage
 *.AppImage
 __pycache__/
 *.zsync
+.pytest_cache/
