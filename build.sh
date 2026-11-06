@@ -19,7 +19,7 @@ echo "=== Step 3: Copying project assets into the layout ==="
 cp -r understeer AppDir/usr/share/understeer/
 find AppDir -name __pycache__ -prune -exec rm -rf {} +
 cp locale/*.po AppDir/usr/share/understeer/locale/
-cp icons/*.svg AppDir/usr/share/understeer/icons/
+cp -r icons/hicolor AppDir/usr/share/understeer/icons/
 
 # Launcher
 cat << 'EOF' > AppDir/usr/bin/understeer

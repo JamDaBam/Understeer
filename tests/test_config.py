@@ -14,6 +14,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "AXES_FILE", cfg / "settings" / "axes.json")
     monkeypatch.setattr(config, "SLOT_NAMES_FILE", cfg / "settings" / "slot_names.json")
     monkeypatch.setattr(config, "SLOT_COUNTS_FILE", cfg / "settings" / "slot_counts.json")
+    monkeypatch.setattr(config, "APP_SETTINGS_FILE", cfg / "settings" / "app.json")
     return tmp_path
 
 
@@ -88,6 +89,19 @@ def test_broken_slot_count(home):
     config.SLOT_COUNTS_FILE.parent.mkdir(parents=True)
     config.SLOT_COUNTS_FILE.write_text('{"0EB7:0020": "six"}')
     assert config.load_slot_count("0EB7:0020") == 0
+
+
+def test_app_settings(home):
+    assert config.get_setting("language") is None
+    assert config.get_setting("layout", "full") == "full"
+    config.set_setting("language", "de")
+    config.set_setting("layout", "compact")
+    assert config.get_setting("language") == "de"
+    assert config.get_setting("layout", "full") == "compact"
+    config.set_setting("language", None)
+    assert config.get_setting("language") is None
+    assert config.get_setting("layout") == "compact"
+    assert config.list_presets() == []
 
 
 def test_migration_moves_old_folder(home):

@@ -12,7 +12,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
 - **Pedals:** Load cell brake force, brake level LED and FullForce, plus a rumble test for ClubSport V3 / CSL Elite pedals.
 - **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base, name them like on its display, and keep named presets for your games. Apply a preset with one click or save your changes back into it.
-- **Translations:** Available in English and German, more languages can be added easily (see below).
+- **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Tools → Appearance*; light and dark mode follow your system.
+- **Translations:** Available in English and German, chosen automatically or under *Tools → Appearance*. More languages can be added easily (see below).
 
 Understeer is based on [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi.
 
@@ -65,13 +66,14 @@ The live input display (current steering angle and pedal travel) reads the wheel
 
 ## Translations
 
-Understeer uses your system language when a translation is available and falls back to English otherwise. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
+Understeer uses your system language when a translation is available and falls back to English otherwise. You can also pick a language under *Tools → Appearance*. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
 
 To add a language:
 
 1. Copy `locale/understeer.pot` to `locale/<code>.po`, for example `locale/fr.po`.
 2. Fill in every `msgstr`. Keep placeholders such as `{name}` or `{n}` unchanged.
-3. Test it with `LANGUAGE=fr python3 -m understeer`.
+3. Add the language's own name to `LANGUAGE_NAMES` in [`understeer/i18n.py`](understeer/i18n.py), for example `"fr": "Français"`, so it shows up in the language menu.
+4. Test it with `LANGUAGE=fr python3 -m understeer`.
 
 After changing text in the code, run `python3 tools/update_translations.py`. It updates the template and adds new strings to every `.po` file while keeping existing translations.
 

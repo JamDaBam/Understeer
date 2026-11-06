@@ -13,6 +13,7 @@ OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
 AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
 SLOT_NAMES_FILE = CONFIG_DIR / "settings" / "slot_names.json"
 SLOT_COUNTS_FILE = CONFIG_DIR / "settings" / "slot_counts.json"
+APP_SETTINGS_FILE = CONFIG_DIR / "settings" / "app.json"
 
 
 def migrate_config():
@@ -88,6 +89,26 @@ def save_slot_count(model, count):
     try:
         SLOT_COUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         SLOT_COUNTS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
+    except OSError:
+        pass
+
+
+def get_setting(key, default=None):
+    """App setting such as "language" or "layout" from settings/app.json."""
+    value = _read_json(APP_SETTINGS_FILE).get(key)
+    return default if value is None else value
+
+
+def set_setting(key, value):
+    """Store an app setting; None removes it."""
+    data = _read_json(APP_SETTINGS_FILE)
+    if value is None:
+        data.pop(key, None)
+    else:
+        data[key] = value
+    try:
+        APP_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        APP_SETTINGS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
     except OSError:
         pass
 

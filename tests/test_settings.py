@@ -13,6 +13,7 @@ def test_ids_are_unique():
 def test_setting_is_complete(s):
     assert s["page"] in {key for key, _title, _icon in PAGES}
     assert s["group"] and s["label"] and s["desc"]
+    assert s["icon"].endswith("-symbolic")
     if s.get("kind") == "choice":
         values = [v for v, _l in s["choices"]]
         assert len(values) == len(set(values))

@@ -9,12 +9,15 @@ from .. import config
 from ..device import (can_write, find_device_path, find_rumble_path,
                       install_udev_rule, join_group, model_id, permission_hint,
                       read_int, write_values)
+from .. import i18n
 from ..i18n import _
 from ..inputs import AXIS_ROLES, InputMonitor
 from ..settings import MAX_SLOT, PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
-from .setting_row import SettingRow
+from .live import WheelView
+from .setting_tile import SettingTile
 
 LIVE_DELAY_MS = 120
+LAYOUTS = ["full", "compact"]
 WATCH_MS = 250       # how often to look for changes made on the wheel base
 SLOT_TOAST_MS = 3000
 
@@ -23,13 +26,15 @@ class TunerWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")
-        self.set_default_size(860, 720)
+        self.set_default_size(1060, 780)
+        layout = config.get_setting("layout")
+        self.layout = layout if layout in LAYOUTS else "full"
 
         self.device_path = find_device_path()
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
 
-        self.rows = {}           # attr id -> SettingRow
+        self.rows = {}           # attr id -> SettingTile
         self.pending = {}        # attr id -> value waiting to be written
         self.device_values = {}  # attr id (and "SLOT") -> last value read or written
         self._slot_toast = None  # shown slot message, updated by the next one
@@ -53,6 +58,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
         self._build_actions()
         self._build_ui()
+        self._apply_layout()
         self._refresh_device_state()
         self._start_inputs()
         self._watch = GLib.timeout_add(WATCH_MS, self._check_device)
@@ -176,64 +182,129 @@ class TunerWindow(Adw.ApplicationWindow):
         self.content_page.set_title(row.page_title)
         self.split.set_show_content(True)
 
+    # -----------------------------------------------------------------------
+    # Page layout helpers
+    # -----------------------------------------------------------------------
+    @staticmethod
+    def _scroll_page():
+        """Scrollable page with a centred column; returns (page, column)."""
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(column, f"set_margin_{side}")(12)
+        clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
+        clamp.set_child(column)
+        page = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                  vexpand=True)
+        page.set_child(clamp)
+        return page, column
+
+    @staticmethod
+    def _tile_grid():
+        """Grid of tiles that wraps to the window width."""
+        grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
+                           homogeneous=True, min_children_per_line=1,
+                           max_children_per_line=5, column_spacing=12,
+                           row_spacing=12, valign=Gtk.Align.START)
+        return grid
+
+    @staticmethod
+    def _section(column, title, description=None, suffix=None):
+        head = Gtk.Box(spacing=12)
+        label = Gtk.Label(label=title, xalign=0, hexpand=True)
+        label.add_css_class("section-title")
+        head.append(label)
+        if suffix is not None:
+            suffix.set_valign(Gtk.Align.END)
+            head.append(suffix)
+        column.append(head)
+        if description:
+            desc = Gtk.Label(label=description, xalign=0, wrap=True)
+            desc.add_css_class("dim-label")
+            desc.set_margin_start(6)
+            desc.set_margin_bottom(6)
+            column.append(desc)
+
     def _build_settings_page(self, page_key):
-        page = Adw.PreferencesPage()
+        page, column = self._scroll_page()
         if page_key == "steering":
-            page.add(self._build_live_steering())
+            self._build_live_steering(column)
         elif page_key == "pedals":
-            page.add(self._build_live_pedals())
-        groups = {}
+            self._build_live_pedals(column)
+        grids = {}
         for s in SETTINGS:
             if s["page"] != page_key:
                 continue
-            if s["group"] not in groups:
-                grp = Adw.PreferencesGroup(title=_(s["group"]))
-                page.add(grp)
-                groups[s["group"]] = grp
-            row = SettingRow(s, self._on_setting_changed)
-            self.rows[s["id"]] = row
-            groups[s["group"]].add(row.row)
+            if s["group"] not in grids:
+                self._section(column, _(s["group"]))
+                grids[s["group"]] = self._tile_grid()
+                column.append(grids[s["group"]])
+            tile = SettingTile(s, self._on_setting_changed)
+            self.rows[s["id"]] = tile
             if s.get("quick"):
-                groups[s["group"]].add(self._quick_angle_row(s))
+                tile.add_extra(self._quick_angle_buttons(s))
+            grids[s["group"]].append(tile.row)
         return page
 
     # -----------------------------------------------------------------------
     # Live input display
     # -----------------------------------------------------------------------
-    def _build_live_steering(self):
-        grp = Adw.PreferencesGroup(title=_("Live Input"))
-        self.steer_row = Adw.ActionRow(title=_("Current Angle"))
+    def _build_live_steering(self, column):
+        self._section(column, _("Live Input"))
+        tile = Gtk.Box(spacing=24)
+        tile.add_css_class("card")
+        tile.add_css_class("tile")
+        tile.add_css_class("live-tile")
+        self.wheel_view = WheelView("understeer-steering-symbolic")
+        tile.append(self.wheel_view)
+
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
+                       hexpand=True, valign=Gtk.Align.CENTER)
+        caption = Gtk.Label(label=_("Current Angle"), xalign=0)
+        caption.add_css_class("dim-label")
+        self.steer_label = Gtk.Label(xalign=0)
+        self.steer_label.add_css_class("live-value")
         self.steer_adj = Gtk.Adjustment(lower=-1, upper=1)
         scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
                           adjustment=self.steer_adj)
-        scale.set_size_request(240, -1)
-        scale.set_valign(Gtk.Align.CENTER)
         scale.set_draw_value(False)
         scale.set_has_origin(False)
         scale.add_mark(0, Gtk.PositionType.BOTTOM, None)
         scale.set_can_target(False)     # display only
         scale.set_focusable(False)
-        self.steer_label = Gtk.Label(xalign=1, width_chars=9)
-        self.steer_label.add_css_class("numeric")
-        self.steer_row.add_suffix(scale)
-        self.steer_row.add_suffix(self.steer_label)
-        grp.add(self.steer_row)
-        return grp
+        self.steer_status = Gtk.Label(xalign=0, wrap=True)
+        self.steer_status.add_css_class("dim-label")
+        for w in (caption, self.steer_label, scale, self.steer_status):
+            info.append(w)
+        tile.append(info)
+        column.append(tile)
 
-    def _build_live_pedals(self):
-        grp = Adw.PreferencesGroup(
-            title=_("Live Input"),
-            description=_("Press a pedal to see which bar moves and choose "
-                          "what it is. Max shows the highest value since the "
-                          "last reset."))
+    def _build_live_pedals(self, column):
         reset = Gtk.Button(label=_("Reset Max"))
         reset.add_css_class("flat")
         reset.connect("clicked", lambda b: self._reset_peaks())
-        grp.set_header_suffix(reset)
-        self.axes_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self.axes_list.add_css_class("boxed-list")
-        grp.add(self.axes_list)
-        return grp
+        self._section(column, _("Live Input"),
+                      _("Press a pedal to see which bar moves and choose "
+                        "what it is. Max shows the highest value since the "
+                        "last reset."), suffix=reset)
+        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        tile.add_css_class("card")
+        tile.add_css_class("tile")
+        tile.add_css_class("live-tile")
+        self.axes_empty = Gtk.Label(xalign=0, wrap=True)
+        self.axes_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
+                                     homogeneous=True, min_children_per_line=2,
+                                     max_children_per_line=8,
+                                     column_spacing=18, row_spacing=18)
+        self.hidden_box = Gtk.Box(spacing=12)
+        self.hidden_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.hidden_switch.connect("notify::active", lambda sw, _p:
+                                   self._toggle_hidden(sw.get_active()))
+        self.hidden_label = Gtk.Label(xalign=0)
+        self.hidden_box.append(self.hidden_switch)
+        self.hidden_box.append(self.hidden_label)
+        for w in (self.axes_empty, self.axes_flow, self.hidden_box):
+            tile.append(w)
+        column.append(tile)
 
     def _start_inputs(self):
         self.inputs.start()
@@ -248,12 +319,15 @@ class TunerWindow(Adw.ApplicationWindow):
         return _("No Fanatec input device found.")
 
     def _rebuild_axes_list(self):
-        self.axes_list.remove_all()
+        self.axes_flow.remove_all()
         self.axis_widgets = {}
         steering = self.inputs.steering_axis()
         axes = [a for a in self.inputs.axes.values() if a is not steering]
+        self.axes_empty.set_label(self._input_problem())
+        self.axes_empty.set_visible(not axes)
+        self.axes_flow.set_visible(bool(axes))
+        self.hidden_box.set_visible(False)
         if not axes:
-            self.axes_list.append(Adw.ActionRow(title=self._input_problem()))
             return
 
         role_keys = [k for k, _l in AXIS_ROLES]
@@ -265,41 +339,39 @@ class TunerWindow(Adw.ApplicationWindow):
                 if not self.show_hidden_axes:
                     continue
             label = dict(AXIS_ROLES).get(role) if role and role != "hidden" else None
-            row = Adw.ActionRow(
-                title=_(label) if label else
-                _("Axis {name}").format(name=axis.name),
-                subtitle=f"{axis.device} · {axis.name}")
-            bar = Gtk.LevelBar(min_value=0, max_value=1)
+            pedal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            pedal.add_css_class("pedal")
+            name = Gtk.Label(label=_(label) if label else
+                             _("Axis {name}").format(name=axis.name))
+            name.add_css_class("heading")
+            bar = Gtk.LevelBar(min_value=0, max_value=1,
+                               orientation=Gtk.Orientation.VERTICAL,
+                               inverted=True, halign=Gtk.Align.CENTER)
             for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
                            Gtk.LEVEL_BAR_OFFSET_FULL):
                 bar.remove_offset_value(offset)
-            bar.set_size_request(150, -1)
-            bar.set_valign(Gtk.Align.CENTER)
-            value = Gtk.Label(xalign=1, width_chars=6)
-            value.add_css_class("numeric")
-            peak = Gtk.Label(xalign=1, width_chars=10)
-            peak.add_css_class("numeric")
+            value = Gtk.Label()
+            value.add_css_class("pedal-value")
+            peak = Gtk.Label()
             peak.add_css_class("dim-label")
             choose = Gtk.DropDown.new_from_strings(
                 [_(l) for _k, l in AXIS_ROLES])
             choose.set_selected(role_keys.index(role) if role in role_keys else 0)
-            choose.set_valign(Gtk.Align.CENTER)
-            choose.set_size_request(140, -1)    # keeps the bars aligned
             choose.set_tooltip_text(_("What this axis is"))
             choose.connect("notify::selected", lambda d, _p, k=axis.key:
                            self._set_axis_role(k, role_keys[d.get_selected()]))
-            for w in (bar, value, peak, choose):
-                row.add_suffix(w)
-            self.axes_list.append(row)
+            source = Gtk.Label(label=f"{axis.device} · {axis.name}")
+            source.set_ellipsize(3)             # Pango.EllipsizeMode.END
+            source.add_css_class("tile-id")
+            for w in (name, bar, value, peak, choose, source):
+                pedal.append(w)
+            self.axes_flow.append(pedal)
             self.axis_widgets[axis.key] = (bar, value, peak)
 
         if hidden:
-            show = Adw.SwitchRow(
-                title=_("Show hidden axes ({n})").format(n=hidden),
-                active=self.show_hidden_axes)
-            show.connect("notify::active", lambda r, _p: self._toggle_hidden(
-                r.get_active()))
-            self.axes_list.append(show)
+            self.hidden_label.set_label(
+                _("Show hidden axes ({n})").format(n=hidden))
+            self.hidden_box.set_visible(True)
         self._update_inputs()
 
     def _set_axis_role(self, key, role):
@@ -312,8 +384,9 @@ class TunerWindow(Adw.ApplicationWindow):
         GLib.idle_add(lambda: self._rebuild_axes_list() and False)
 
     def _toggle_hidden(self, show):
-        self.show_hidden_axes = show
-        GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+        if show != self.show_hidden_axes:
+            self.show_hidden_axes = show
+            GLib.idle_add(lambda: self._rebuild_axes_list() and False)
 
     def _reset_peaks(self):
         for axis in self.inputs.axes.values():
@@ -335,10 +408,12 @@ class TunerWindow(Adw.ApplicationWindow):
             sen = self.rows["SEN"].get() if "SEN" in self.rows else 0
             v, unit = (round(c * sen / 2), "°") if sen > 0 else (round(c * 100), " %")
             self.steer_label.set_label(f"{v:+d}{unit}" if v else f"0{unit}")
-            self.steer_row.set_subtitle(_("Turn the wheel to see the angle"))
+            self.steer_status.set_label(_("Turn the wheel to see the angle"))
+            self.wheel_view.set_angle(c * (sen / 2 if sen > 0 else 450))
         else:
             self.steer_label.set_label("—")
-            self.steer_row.set_subtitle(self._input_problem())
+            self.steer_status.set_label(self._input_problem())
+            self.wheel_view.set_angle(0)
         for key, (bar, value, peak) in self.axis_widgets.items():
             a = self.inputs.axes.get(key)
             if a:
@@ -348,11 +423,11 @@ class TunerWindow(Adw.ApplicationWindow):
                 peak.set_label(_("Max {n} %").format(n=f"{a.peak * 100:.0f}"))
         return GLib.SOURCE_REMOVE
 
-    def _quick_angle_row(self, setting):
-        row = Adw.ActionRow(title=_("Quick Select"))
-        box = Gtk.Box()
+    def _quick_angle_buttons(self, setting):
+        box = Gtk.Box(homogeneous=True)
         box.add_css_class("linked")
-        box.set_valign(Gtk.Align.CENTER)
+        box.add_css_class("quick-select")
+        box.set_tooltip_text(_("Quick Select"))
         for value in setting["quick"]:
             b = Gtk.Button(label=f"{value}°")
             b.connect("clicked", lambda b, v=value:
@@ -362,68 +437,78 @@ class TunerWindow(Adw.ApplicationWindow):
         auto.set_tooltip_text(_("Use the maximum range of the wheel base"))
         auto.connect("clicked", lambda b: self._set_angle_auto())
         box.append(auto)
-        row.add_suffix(box)
-        return row
+        return box
 
     # -----------------------------------------------------------------------
     # Presets page and menu
     # -----------------------------------------------------------------------
     def _build_presets_page(self):
-        self.presets_page = Adw.PreferencesPage()
-        save_grp = Adw.PreferencesGroup(
-            title=_("Save Preset"),
-            description=_("Saves all current settings under a name in "
-                          "~/.config/Understeer/."))
-        save_row = Adw.ActionRow(title=_("Current Settings"))
-        save_btn = Gtk.Button(label=_("Save as Preset…"))
-        save_btn.set_valign(Gtk.Align.CENTER)
-        save_btn.set_action_name("win.save-preset")
-        save_row.add_suffix(save_btn)
-        save_grp.add(save_row)
-        self.presets_page.add(save_grp)
-        self.presets_list_grp = None
+        page, column = self._scroll_page()
+        self._section(column, _("Saved Presets"),
+                      _("Saves all current settings under a name in "
+                        "~/.config/Understeer/."))
+        self.presets_flow = self._tile_grid()
+        column.append(self.presets_flow)
         self._rebuild_presets_list()
-        return self.presets_page
+        return page
 
     def _rebuild_presets_list(self):
-        # PreferencesGroup has no row removal, so replace the whole group.
-        if self.presets_list_grp is not None:
-            self.presets_page.remove(self.presets_list_grp)
-        grp = Adw.PreferencesGroup(title=_("Saved Presets"))
-        self.presets_list_grp = grp
-        self.presets_page.add(grp)
-
+        self.presets_flow.remove_all()
         presets = config.list_presets()
+
+        new = Gtk.Button(action_name="win.save-preset")
+        new.add_css_class("card")
+        new.add_css_class("tile")
+        new.add_css_class("new-preset")
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
+                        valign=Gtk.Align.CENTER)
+        plus = Gtk.Image.new_from_icon_name("list-add-symbolic")
+        plus.set_pixel_size(32)
+        plus.add_css_class("tile-icon")
+        plus.set_halign(Gtk.Align.CENTER)
+        inner.append(plus)
+        inner.append(Gtk.Label(label=_("Save as Preset…"), css_classes=["heading"]))
         if not presets:
-            grp.add(Adw.ActionRow(
-                title=_("No presets saved yet"),
-                subtitle=_("Saved presets appear here and in the Presets "
-                           "menu at the top.")))
-            return
+            hint = Gtk.Label(label=_("Saved presets appear here and in the "
+                                     "Presets menu at the top."),
+                             wrap=True, justify=Gtk.Justification.CENTER)
+            hint.add_css_class("dim-label")
+            inner.append(hint)
+        new.set_child(inner)
+        self.presets_flow.append(new)
+
         for name, path in presets:
             active = self.active_preset is not None and path == self.active_preset
-            row = Adw.ActionRow(
-                title=name,
-                subtitle=_("Active preset") if active else path.name)
+            tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            tile.add_css_class("card")
+            tile.add_css_class("tile")
+            tile.add_css_class("preset-tile")
+            if active:
+                tile.add_css_class("active")
+            title = Gtk.Label(label=name, xalign=0, wrap=True)
+            title.add_css_class("preset-name")
+            sub = Gtk.Label(label=_("Active preset") if active else path.name,
+                            xalign=0, vexpand=True, valign=Gtk.Align.START)
+            sub.set_ellipsize(3)                # Pango.EllipsizeMode.END
+            sub.add_css_class("dim-label")
+            buttons = Gtk.Box(spacing=6)
+            apply_btn = Gtk.Button(label=_("Apply"), hexpand=True)
+            apply_btn.add_css_class("suggested-action")
+            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
-            save_btn.set_valign(Gtk.Align.CENTER)
             save_btn.connect("clicked", lambda b, p=path:
                              self._confirm_overwrite(p))
-            row.add_suffix(save_btn)
-            apply_btn = Gtk.Button(label=_("Apply"))
-            apply_btn.add_css_class("suggested-action")
-            apply_btn.set_valign(Gtk.Align.CENTER)
-            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
             del_btn = Gtk.Button(icon_name="user-trash-symbolic")
             del_btn.set_tooltip_text(_("Delete"))
             del_btn.add_css_class("flat")
-            del_btn.set_valign(Gtk.Align.CENTER)
             del_btn.connect("clicked", lambda b, p=path, n=name:
                             self._confirm_delete_preset(p, n))
-            row.add_suffix(apply_btn)
-            row.add_suffix(del_btn)
-            grp.add(row)
+            for w in (apply_btn, save_btn, del_btn):
+                buttons.append(w)
+            for w in (title, sub, buttons):
+                tile.append(w)
+            self.presets_flow.append(tile)
 
     def _rebuild_preset_menu(self):
         menu = Gio.Menu()
@@ -483,6 +568,27 @@ class TunerWindow(Adw.ApplicationWindow):
     # -----------------------------------------------------------------------
     def _build_tools_page(self):
         page = Adw.PreferencesPage()
+
+        appearance = Adw.PreferencesGroup(title=_("Appearance"))
+        layout_row = Adw.ComboRow(title=_("Layout"),
+                                  subtitle=_("Size of the tiles"))
+        layout_row.set_model(Gtk.StringList.new([_("Full"), _("Compact")]))
+        layout_row.set_selected(LAYOUTS.index(self.layout))
+        layout_row.connect("notify::selected", lambda r, _p:
+                           self._set_layout(LAYOUTS[r.get_selected()]))
+        appearance.add(layout_row)
+
+        languages = [None] + i18n.available_languages()
+        current = config.get_setting("language")
+        language_row = Adw.ComboRow(title=_("Language"))
+        language_row.set_model(Gtk.StringList.new(
+            [_("System language")] + [i18n.language_name(c) for c in languages[1:]]))
+        language_row.set_selected(languages.index(current)
+                                  if current in languages else 0)
+        language_row.connect("notify::selected", lambda r, _p:
+                             self._set_language(languages[r.get_selected()]))
+        appearance.add(language_row)
+        page.add(appearance)
 
         defaults = Adw.PreferencesGroup(title=_("Quick Setup"))
         row = Adw.ActionRow(
@@ -570,6 +676,25 @@ class TunerWindow(Adw.ApplicationWindow):
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())
         self.update_action.set_enabled(False)
+
+    def _apply_layout(self):
+        if self.layout == "compact":
+            self.add_css_class("compact")
+        else:
+            self.remove_css_class("compact")
+
+    def _set_layout(self, layout):
+        self.layout = layout
+        config.set_setting("layout", layout)
+        self._apply_layout()
+
+    def _set_language(self, language):
+        config.set_setting("language", language)
+        i18n.set_language(language)
+        # All text is created with the window, so build a new one; wait
+        # until the language menu has finished its signal.
+        GLib.idle_add(lambda: self.get_application().rebuild_window("tools")
+                      and False)
 
     def _select_page(self, key):
         i = 0

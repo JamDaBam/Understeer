@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Steering wheel: rim, three spokes, hub. Only filled shapes, because
+       GTK recolours the fill of symbolic icons but not strokes. -->
+  <path fill="#222222" fill-rule="evenodd"
+        d="M8 1a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M8 3a5 5 0 1 1 0 10a5 5 0 1 1 0-10z"/>
+  <rect fill="#222222" x="2.5" y="7.7" width="3.5" height="1.6" rx="0.8"/>
+  <rect fill="#222222" x="10" y="7.7" width="3.5" height="1.6" rx="0.8"/>
+  <rect fill="#222222" x="7.2" y="10.5" width="1.6" height="3" rx="0.8"/>
+  <circle fill="#222222" cx="8" cy="8.5" r="2"/>
+</svg>

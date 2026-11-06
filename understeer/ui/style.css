@@ -1,0 +1,152 @@
+/* Tiles on top of Libadwaita's "card" style; colours follow the system
+   accent colour and the light/dark theme. */
+
+.section-title {
+  font-weight: 700;
+  font-size: 1.05em;
+  margin: 18px 6px 6px 6px;
+}
+
+.tile {
+  padding: 14px 16px 12px 16px;
+  border-radius: 14px;
+}
+
+/* The minimum width decides how many tiles fit next to each other. */
+flowbox > flowboxchild > .tile {
+  min-width: 250px;
+}
+
+.tile-icon {
+  color: @accent_color;
+  background-color: alpha(@accent_bg_color, 0.14);
+  border-radius: 9px;
+  padding: 7px;
+}
+
+.tile-title {
+  font-weight: 600;
+}
+
+.tile-value {
+  font-size: 2.1em;
+  font-weight: 800;
+  font-feature-settings: "tnum";
+}
+
+.tile-id {
+  font-size: 0.8em;
+  opacity: 0.55;
+}
+
+.tile:disabled .tile-value {
+  opacity: 0.4;
+}
+
+.tile.modified {
+  box-shadow: inset 0 0 0 2px alpha(@accent_bg_color, 0.55);
+}
+
+.quick-select button {
+  padding-left: 6px;
+  padding-right: 6px;
+  min-width: 0;
+}
+
+/* Live input */
+.live-value {
+  font-size: 3em;
+  font-weight: 800;
+  font-feature-settings: "tnum";
+}
+
+.wheel-view {
+  color: @accent_color;
+  min-width: 128px;
+  min-height: 128px;
+}
+
+.wheel-view image {
+  -gtk-icon-size: 100px;
+}
+
+.pedal levelbar.vertical trough {
+  min-width: 34px;
+  min-height: 150px;
+  border-radius: 10px;
+}
+
+.pedal levelbar.vertical trough block {
+  min-width: 34px;
+  border-radius: 10px;
+}
+
+.pedal levelbar trough block.filled {
+  background-color: @accent_bg_color;
+}
+
+.pedal-value {
+  font-size: 1.4em;
+  font-weight: 800;
+  font-feature-settings: "tnum";
+}
+
+/* Presets */
+.preset-tile.active {
+  box-shadow: inset 0 0 0 2px @accent_bg_color;
+}
+
+.preset-name {
+  font-size: 1.3em;
+  font-weight: 800;
+}
+
+.new-preset {
+  border: 2px dashed alpha(currentColor, 0.25);
+  background: none;
+  box-shadow: none;
+}
+
+/* Compact layout: smaller tiles, more of them per row */
+.compact .section-title {
+  margin-top: 10px;
+}
+
+.compact .tile {
+  padding: 9px 12px 8px 12px;
+  border-radius: 11px;
+}
+
+.compact flowbox > flowboxchild > .tile {
+  min-width: 190px;
+}
+
+.compact .tile-value {
+  font-size: 1.5em;
+}
+
+.compact .tile-icon {
+  padding: 4px;
+}
+
+.compact .live-value {
+  font-size: 2.2em;
+}
+
+.compact .wheel-view {
+  min-width: 84px;
+  min-height: 84px;
+}
+
+.compact .wheel-view image {
+  -gtk-icon-size: 64px;
+}
+
+.compact .pedal levelbar.vertical trough {
+  min-height: 100px;
+  min-width: 26px;
+}
+
+.compact .pedal levelbar.vertical trough block {
+  min-width: 26px;
+}

@@ -36,3 +36,33 @@ def test_language_choice(tmp_path, monkeypatch, env, expected):
     for var, value in env.items():
         monkeypatch.setenv(var, value)
     assert i18n.load_catalog(tmp_path).get("Steering") == expected
+
+
+def test_chosen_language_wins_over_system(tmp_path, monkeypatch):
+    (tmp_path / "de.po").write_text('msgid "Steering"\nmsgstr "Lenkung"\n')
+    monkeypatch.setenv("LANGUAGE", "de")
+    assert i18n.load_catalog(tmp_path, language="en") == {}     # English source text
+    monkeypatch.setenv("LANGUAGE", "en")
+    assert i18n.load_catalog(tmp_path, language="de") == {"Steering": "Lenkung"}
+
+
+def test_available_languages(tmp_path):
+    for code in ("en", "de", "fr"):
+        (tmp_path / f"{code}.po").write_text("")
+    (tmp_path / "understeer.pot").write_text("")
+    assert i18n.available_languages(tmp_path) == ["de", "en", "fr"]
+    assert i18n.language_name("de") == "Deutsch"
+    assert i18n.language_name("fr") == "fr"
+
+
+def test_shipped_languages_have_names():
+    for code in i18n.available_languages():
+        assert code in i18n.LANGUAGE_NAMES
+
+
+def test_set_language_switches_translations(monkeypatch):
+    monkeypatch.setattr(i18n, "_CATALOG", {})
+    i18n.set_language("de")
+    assert i18n._("Steering") == "Lenkung"
+    i18n.set_language("en")
+    assert i18n._("Steering") == "Steering"

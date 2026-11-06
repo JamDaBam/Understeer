@@ -8,6 +8,9 @@ from . import DATA_DIR
 
 LOCALE_DIR = DATA_DIR / "locale"
 
+# Shown in the language menu in their own language, so anyone can find theirs.
+LANGUAGE_NAMES = {"de": "Deutsch", "en": "English"}
+
 
 def _unquote_po(s):
     s = s.strip()
@@ -56,9 +59,19 @@ def _wanted_languages():
     return []
 
 
-def load_catalog(locale_dir=None):
+def available_languages(locale_dir=None):
+    """Language codes with a translation file, e.g. ["de", "en"]."""
+    return sorted(p.stem for p in (locale_dir or LOCALE_DIR).glob("*.po"))
+
+
+def language_name(code):
+    return LANGUAGE_NAMES.get(code, code)
+
+
+def load_catalog(locale_dir=None, language=None):
+    """Translations for language, or for the system language if None."""
     locale_dir = locale_dir or LOCALE_DIR
-    for lang in _wanted_languages():
+    for lang in [language] if language else _wanted_languages():
         po = locale_dir / f"{lang}.po"
         if po.is_file():
             try:
@@ -69,6 +82,15 @@ def load_catalog(locale_dir=None):
 
 
 _CATALOG = load_catalog()
+
+
+def set_language(language):
+    """Use language ("de", "en", ...) from now on; None follows the system.
+
+    Only affects text created afterwards, so the window is rebuilt.
+    """
+    global _CATALOG
+    _CATALOG = load_catalog(language=language)
 
 
 def _(text):

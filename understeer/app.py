@@ -1,13 +1,16 @@
 """Application entry point."""
+import pathlib
 import sys
 
-from . import DATA_DIR
-from .config import migrate_config
+from . import DATA_DIR, config, i18n
 from .ui.window import TunerWindow  # also selects the GTK version
 
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
 
+# Our own symbolic icons. They must sit in an icon theme folder
+# (icons/hicolor/scalable/apps); loose files are not recoloured by GTK.
 ICON_DIR = DATA_DIR / "icons"
+STYLE = pathlib.Path(__file__).resolve().parent / "ui" / "style.css"
 
 
 class TunerApplication(Adw.Application):
@@ -15,16 +18,36 @@ class TunerApplication(Adw.Application):
         super().__init__(application_id="io.github.JamDaBam.Understeer",
                          flags=Gio.ApplicationFlags.FLAGS_NONE)
 
-    def do_activate(self):
-        win = self.get_active_window()
-        theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+        display = Gdk.Display.get_default()
         if ICON_DIR.is_dir():
-            theme.add_search_path(str(ICON_DIR))
-        if not win:
-            win = TunerWindow(application=self)
+            Gtk.IconTheme.get_for_display(display).add_search_path(str(ICON_DIR))
+        css = Gtk.CssProvider()
+        css.load_from_path(str(STYLE))
+        Gtk.StyleContext.add_provider_for_display(
+            display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def do_activate(self):
+        win = self.get_active_window() or TunerWindow(application=self)
         win.present()
+
+    def rebuild_window(self, page=None):
+        """Replace the window, e.g. after the language changed."""
+        old = self.get_active_window()
+        win = TunerWindow(application=self)
+        if old is not None:
+            win.set_default_size(old.get_width(), old.get_height())
+            if old.is_maximized():
+                win.maximize()
+        if page:
+            win._select_page(page)
+        win.present()
+        if old is not None:
+            old.close()
 
 
 def main():
-    migrate_config()
+    config.migrate_config()
+    i18n.set_language(config.get_setting("language"))
     return TunerApplication().run(sys.argv)
