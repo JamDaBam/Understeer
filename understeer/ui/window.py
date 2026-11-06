@@ -7,8 +7,8 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config
 from ..device import (can_write, find_device_path, find_rumble_path,
-                      install_udev_rule, join_group, permission_hint, read_int,
-                      write_values)
+                      install_udev_rule, join_group, model_id, permission_hint,
+                      read_int, write_values)
 from ..i18n import _
 from ..inputs import AXIS_ROLES, InputMonitor
 from ..settings import PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
@@ -31,6 +31,10 @@ class TunerWindow(Adw.ApplicationWindow):
         self.pending = {}        # attr id -> value waiting to be written
         self._live_timer = 0
         self._status = ""
+
+        self.model = None           # wheel base model, e.g. "0EB7:0020"
+        self.slot_names = {}        # slot number -> name chosen by the user
+        self._filling_slot_names = False
 
         self.active_preset = None   # path of the last applied/saved preset
         self.active_values = {}     # values stored in that preset
@@ -96,6 +100,7 @@ class TunerWindow(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append(_("Reload from Device"), "win.reload")
         menu.append(_("Save as Preset…"), "win.save-preset")
+        menu.append(_("Rename Slots…"), "win.rename-slots")
         menu_btn.set_menu_model(menu)
         header.pack_end(menu_btn)
 
@@ -480,6 +485,20 @@ class TunerWindow(Adw.ApplicationWindow):
         defaults.add(row)
         page.add(defaults)
 
+        self.slot_names_group = Adw.PreferencesGroup(
+            title=_("Slot Names"),
+            description=_("Name the slots like on the display of your wheel "
+                          "base, e.g. “A” or “Set 1”. The names are saved for "
+                          "this wheel base model."))
+        self.slot_name_rows = {}
+        for n in range(1, SLOTS + 1):
+            entry = Adw.EntryRow(title=_("Slot {n}").format(n=n))
+            entry.connect("changed", lambda e, n=n:
+                          self._on_slot_name_changed(n, e.get_text()))
+            self.slot_name_rows[n] = entry
+            self.slot_names_group.add(entry)
+        page.add(self.slot_names_group)
+
         rumble = Adw.PreferencesGroup(
             title=_("Pedal Rumble Test"),
             description=_("Sends a single rumble command to ClubSport Pedals "
@@ -537,6 +556,7 @@ class TunerWindow(Adw.ApplicationWindow):
         add("reload", lambda *a: self._load_from_device())
         add("save-preset", lambda *a: self._ask_preset_name())
         add("show-presets", lambda *a: self._select_page("presets"))
+        add("rename-slots", lambda *a: self._select_page("tools"))
         add("apply-preset", lambda a, p: self._apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
@@ -559,7 +579,40 @@ class TunerWindow(Adw.ApplicationWindow):
         self._update_banner()
         self.slot_dropdown.set_sensitive(bool(self.device_path))
         self.rumble_group.set_sensitive(bool(self.rumble_path))
+        self._load_slot_names()
         self._load_from_device()
+
+    def _load_slot_names(self):
+        self.model = model_id(self.device_path) if self.device_path else None
+        self.slot_names = config.load_slot_names(self.model) if self.model else {}
+        self._filling_slot_names = True
+        try:
+            for n, entry in self.slot_name_rows.items():
+                entry.set_text(self.slot_names.get(n, ""))
+        finally:
+            self._filling_slot_names = False
+        self.slot_names_group.set_sensitive(self.model is not None)
+        self._update_slot_dropdown()
+
+    def _on_slot_name_changed(self, n, text):
+        if self._filling_slot_names or self.model is None:
+            return
+        config.save_slot_name(self.model, n, text)
+        if text.strip():
+            self.slot_names[n] = text.strip()
+        else:
+            self.slot_names.pop(n, None)
+        self._update_slot_dropdown()
+
+    def _update_slot_dropdown(self):
+        labels = [self.slot_names.get(n) or _("Slot {n}").format(n=n)
+                  for n in range(1, SLOTS + 1)]
+        model = self.slot_dropdown.get_model()
+        # Changing the list must not switch the slot on the wheel base.
+        with self.slot_dropdown.handler_block(self._slot_handler):
+            selected = self.slot_dropdown.get_selected()
+            model.splice(0, model.get_n_items(), labels)
+            self.slot_dropdown.set_selected(selected)
 
     def _update_banner(self):
         if not self.device_path:

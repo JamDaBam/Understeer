@@ -11,7 +11,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Wheel & force feedback:** Steering angle with quick select, force feedback strength, force/spring/damper effects, scaling, intensity and interpolation.
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
 - **Pedals:** Load cell brake force, brake level LED and FullForce, plus a rumble test for ClubSport V3 / CSL Elite pedals.
-- **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base and keep named presets for your games. Apply a preset with one click or save your changes back into it.
+- **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base, name them like on its display, and keep named presets for your games. Apply a preset with one click or save your changes back into it.
 - **Translations:** Available in English and German, more languages can be added easily (see below).
 
 Understeer is based on [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi.

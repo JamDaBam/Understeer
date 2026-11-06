@@ -3,6 +3,7 @@ import glob
 import grp
 import os
 import pwd
+import re
 import shlex
 import shutil
 import stat
@@ -26,6 +27,19 @@ def find_device_path():
     candidates = [p for p in glob.glob(SYSFS_GLOB) if os.path.isdir(p)]
     valid = [p for p in candidates if os.path.exists(os.path.join(p, "FF"))]
     return valid[0] if valid else (candidates[0] if candidates else None)
+
+
+def model_id(device_path):
+    """Vendor and product id of the wheel base, e.g. "0EB7:0020".
+
+    The driver names the folder after the HID device ("0003:0EB7:0020.0005");
+    the number after the dot changes on every reconnect, so it is left out.
+    Other names are returned unchanged.
+    """
+    name = os.path.basename(os.path.normpath(device_path))
+    m = re.fullmatch(r"[0-9A-Fa-f]{4}:([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4})\.[0-9A-Fa-f]+",
+                     name)
+    return f"{m[1]}:{m[2]}".upper() if m else name
 
 
 def find_rumble_path():

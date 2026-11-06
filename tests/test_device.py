@@ -69,6 +69,16 @@ def test_rumble(sysfs, tmp_path):
     assert device.find_rumble_path() == str(r)
 
 
+@pytest.mark.parametrize("folder, model", [
+    ("0003:0EB7:0020.0005", "0EB7:0020"),
+    ("0003:0eb7:0020.001A", "0EB7:0020"),       # same model after reconnect
+    ("/sys/class/ftec_tuning/0003:0EB7:0006.0002/", "0EB7:0006"),
+    ("something-else", "something-else"),
+])
+def test_model_id(folder, model):
+    assert device.model_id(folder) == model
+
+
 # -- reading and writing ----------------------------------------------------
 def test_read_int(sysfs):
     d = sysfs("w", FF=" 70 ", BAD="abc")

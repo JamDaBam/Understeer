@@ -11,6 +11,7 @@ CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
 OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
 # Kept in a subfolder: every *.json directly in CONFIG_DIR is a preset.
 AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
+SLOT_NAMES_FILE = CONFIG_DIR / "settings" / "slot_names.json"
 
 
 def migrate_config():
@@ -33,6 +34,43 @@ def save_axis_roles(roles):
     try:
         AXES_FILE.parent.mkdir(parents=True, exist_ok=True)
         AXES_FILE.write_text(json.dumps(roles, indent=2))
+    except OSError:
+        pass
+
+
+def _read_json(path):
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_slot_names(model):
+    """{slot number: name} the user gave the slots of this wheel base model."""
+    names = _read_json(SLOT_NAMES_FILE).get(model)
+    if not isinstance(names, dict):
+        return {}
+    return {int(k): v.strip() for k, v in names.items()
+            if k.isdigit() and isinstance(v, str) and v.strip()}
+
+
+def save_slot_name(model, slot, name):
+    """Remember a slot name for this model; an empty name removes it."""
+    data = _read_json(SLOT_NAMES_FILE)
+    names = data.get(model)
+    names = names if isinstance(names, dict) else {}
+    if name.strip():
+        names[str(slot)] = name.strip()
+    else:
+        names.pop(str(slot), None)
+    if names:
+        data[model] = names
+    else:
+        data.pop(model, None)
+    try:
+        SLOT_NAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SLOT_NAMES_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
     except OSError:
         pass
 

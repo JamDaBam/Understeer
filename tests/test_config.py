@@ -12,6 +12,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_DIR", cfg)
     monkeypatch.setattr(config, "OLD_CONFIG_DIR", tmp_path / ".config" / "SimPower")
     monkeypatch.setattr(config, "AXES_FILE", cfg / "settings" / "axes.json")
+    monkeypatch.setattr(config, "SLOT_NAMES_FILE", cfg / "settings" / "slot_names.json")
     return tmp_path
 
 
@@ -47,6 +48,31 @@ def test_axis_roles_are_no_preset(home):
     config.save_axis_roles({"Pedals:1": "brake"})
     assert config.load_axis_roles() == {"Pedals:1": "brake"}
     assert config.list_presets() == []
+
+
+def test_slot_names_per_model(home):
+    assert config.load_slot_names("0EB7:0020") == {}
+    config.save_slot_name("0EB7:0020", 1, "A")
+    config.save_slot_name("0EB7:0020", 2, "  Set 1 ")
+    config.save_slot_name("0EB7:0006", 1, "GT3")
+    assert config.load_slot_names("0EB7:0020") == {1: "A", 2: "Set 1"}
+    assert config.load_slot_names("0EB7:0006") == {1: "GT3"}
+    assert config.list_presets() == []          # not mistaken for a preset
+
+
+def test_empty_slot_name_removes_it(home):
+    config.save_slot_name("0EB7:0020", 1, "A")
+    config.save_slot_name("0EB7:0020", 1, "  ")
+    assert config.load_slot_names("0EB7:0020") == {}
+    assert json.loads(config.SLOT_NAMES_FILE.read_text()) == {}
+
+
+def test_broken_slot_names_file(home):
+    config.SLOT_NAMES_FILE.parent.mkdir(parents=True)
+    config.SLOT_NAMES_FILE.write_text("[1, 2")
+    assert config.load_slot_names("0EB7:0020") == {}
+    config.save_slot_name("0EB7:0020", 3, "Rain")
+    assert config.load_slot_names("0EB7:0020") == {3: "Rain"}
 
 
 def test_migration_moves_old_folder(home):
