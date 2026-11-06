@@ -7,6 +7,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .. import config, games
 from ..i18n import _
+from . import cover_search
 from .live import CoverView
 
 log = logging.getLogger("understeer.games")
@@ -74,7 +75,23 @@ class GamesPage:
         self.download_row.connect("notify::active", self._on_download_toggled)
         options.add(self.download_row)
 
-        for w in (title, desc, self.flow, options):
+        self.key_row = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"),
+                                            show_apply_button=True)
+        self.key_row.set_text(config.get_setting(cover_search.KEY_SETTING) or "")
+        get_key = Gtk.Button(icon_name="web-browser-symbolic", valign=Gtk.Align.CENTER)
+        get_key.add_css_class("flat")
+        get_key.set_tooltip_text(_("Get a free API key on SteamGridDB"))
+        get_key.connect("clicked", lambda b: cover_search.open_key_page(self.window))
+        self.key_row.add_suffix(get_key)
+        self.key_row.connect("apply", self._on_key_applied)
+        key_group = Adw.PreferencesGroup(
+            title="SteamGridDB",
+            description=_("Covers for games without a Steam cover, chosen in the "
+                          "tile's menu. SteamGridDB needs a free personal API key."))
+        key_group.set_margin_top(18)
+        key_group.add(self.key_row)
+
+        for w in (title, desc, self.flow, options, key_group):
             column.append(w)
         clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
         clamp.set_child(column)
@@ -100,6 +117,30 @@ class GamesPage:
         log.info("Cover downloads %s", "on" if active else "off")
         if active:
             self.search_covers()
+
+    def _on_key_applied(self, row):
+        key = row.get_text().strip()
+        if not key:
+            config.set_setting(cover_search.KEY_SETTING, None)
+            log.info("SteamGridDB API key removed")
+            self.window._notify(_("SteamGridDB API key removed"))
+            return
+        row.set_sensitive(False)
+
+        def done(error):
+            row.set_sensitive(True)
+            if error is not None:
+                log.warning("SteamGridDB API key check failed: %s", error)
+                self.window._notify(cover_search.error_text(error))
+                return
+            config.set_setting(cover_search.KEY_SETTING, key)
+            log.info("SteamGridDB API key saved")
+            self.window._notify(_("SteamGridDB API key saved"))
+        cover_search.check_key(key, done)
+
+    def key_changed(self):
+        """The cover search saved a key."""
+        self.key_row.set_text(config.get_setting(cover_search.KEY_SETTING) or "")
 
     # -- tiles ---------------------------------------------------------------
     def refresh(self):
@@ -184,6 +225,7 @@ class GamesPage:
         add("choose-cover", lambda: self._choose_cover(game))
         add("remove-cover", lambda: self._remove_cover(game))
         add("find-cover", lambda: self.search_covers([game]))
+        add("steamgriddb", lambda: cover_search.CoverSearch(self, game))
         add("remove", lambda: self._remove(game))
 
         menu = Gio.Menu()
@@ -194,6 +236,7 @@ class GamesPage:
                             else _("Remove Picture"), "game.remove-cover")
         elif _steam_appid(game) and self._cover_file(game) is None:
             pictures.append(_("Download Cover"), "game.find-cover")
+        pictures.append(_("Search SteamGridDB…"), "game.steamgriddb")
         menu.append_section(None, pictures)
         menu.append(_("Remove Game"), "game.remove")
 
@@ -296,22 +339,24 @@ class GamesPage:
             self.set_cover(game, path)
 
     def set_cover(self, game, path):
+        """Use the picture at path for game; returns whether it worked."""
         try:
             Gdk.Texture.new_from_filename(path)
         except GLib.Error as e:
             log.warning("Picture %s for %s can't be shown: %s", path,
                         game["name"], e.message)
             self.window._notify(_("This picture can't be opened"))
-            return
+            return False
         try:
             config.set_game_cover(game, path)
         except OSError as e:
             log.warning("Could not copy picture %s: %s", path, e)
             self.window._notify(_("Could not save the picture"))
-            return
+            return False
         log.info("Picture for %s set from %s", game["name"], path)
         self._save()
         self.refresh()
+        return True
 
     def _remove_cover(self, game):
         log.info("Picture for %s removed", game["name"])
@@ -333,8 +378,9 @@ class GamesPage:
                   if not _steam_appid(g) and self._cover_file(g) is None]
         if not missing:
             self.window._notify(
-                _("Covers can only be downloaded for Steam games. For other "
-                  "games, choose a picture in the tile's menu.") if others
+                _("Steam has covers only for Steam games. For other games, "
+                  "search SteamGridDB or choose a picture in the tile's "
+                  "menu.") if others
                 else _("All games already have a cover"))
             return
         self._failed.difference_update(missing)

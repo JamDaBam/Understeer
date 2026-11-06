@@ -12,7 +12,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
 - **Pedals:** Load cell brake force, brake level LED and FullForce, plus a rumble test for ClubSport V3 / CSL Elite pedals.
 - **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base, name them like on its display, and keep named presets for your games. Apply a preset with one click or save your changes back into it.
-- **Presets per game:** Give each game a preset on the *Games* page. While Understeer is open, it applies the preset as soon as the game starts. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture.
+- **Presets per game:** Give each game a preset on the *Games* page. While Understeer is open, it applies the preset as soon as the game starts. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture, also chosen from [SteamGridDB](https://www.steamgriddb.com) with your free personal API key.
 - **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Tools → Appearance*; light and dark mode follow your system.
 - **Translations:** Available in English and German, chosen automatically or under *Tools → Appearance*. More languages can be added easily (see below).
 
@@ -93,6 +93,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 | `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
 | `config.py` | Presets and app settings in `~/.config/Understeer/` |
 | `games.py` | Installed Steam games, their covers and which games are running |
+| `steamgriddb.py` | Searching covers on SteamGridDB |
 | `log.py` | Session log file |
 | `i18n.py` | Loading translations from `locale/` |
 | `ui/` | GTK window and widgets |

@@ -1,0 +1,289 @@
+"""Choosing a game's cover from SteamGridDB: game first, then the picture."""
+import logging
+import pathlib
+import threading
+
+from gi.repository import Adw, Gdk, GLib, Gtk
+
+from .. import config, steamgriddb
+from ..i18n import _
+from .live import CoverView
+
+log = logging.getLogger("understeer.steamgriddb")
+
+KEY_SETTING = "steamgriddb_key"
+MAX_COVERS = 36         # more is hard to choose from
+THUMB_THREADS = 4
+
+
+def in_thread(work, done):
+    """Run work() in a thread; done(result, error) on the main loop."""
+    def run():
+        try:
+            result, error = work(), None
+        except steamgriddb.Error as e:
+            result, error = None, e
+        GLib.idle_add(lambda: done(result, error) and False)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def error_text(error):
+    if error.kind == "key":
+        return _("SteamGridDB did not accept the API key.")
+    if error.kind == "save":
+        return _("Could not save the picture")
+    return _("SteamGridDB could not be reached. Check your internet connection.")
+
+
+def check_key(key, done):
+    """Try key with a small search; done(error or None) on the main loop."""
+    in_thread(lambda: steamgriddb.search("Portal", key),
+              lambda _result, error: done(error))
+
+
+def open_key_page(parent):
+    Gtk.UriLauncher.new(steamgriddb.KEY_URL).launch(parent, None, None)
+
+
+class CoverSearch:
+    """Window to search a game on SteamGridDB and pick one of its covers."""
+
+    def __init__(self, games_page, game):
+        self.page = games_page
+        self.game = game
+        self._search_id = 0         # ignores answers of older searches
+        self._closed = False
+        self.window = Adw.Window(transient_for=games_page.window, modal=True,
+                                 default_width=600, default_height=680,
+                                 title=_("Cover from SteamGridDB"))
+        self.window.connect("close-request", self._on_close)
+        self.nav = Adw.NavigationView()
+        self.window.set_content(self.nav)
+        if config.get_setting(KEY_SETTING):
+            self.nav.add(self._search_page())
+        else:
+            self.nav.add(self._key_page())
+        self.window.present()
+
+    def _on_close(self, _window):
+        self._closed = True
+        return False
+
+    @staticmethod
+    def _page(title, content, tag=None):
+        view = Adw.ToolbarView()
+        view.add_top_bar(Adw.HeaderBar())
+        view.set_content(content)
+        return Adw.NavigationPage(title=title, child=view, tag=tag or title)
+
+    # -- API key -------------------------------------------------------------
+    def _key_page(self):
+        status = Adw.StatusPage(
+            icon_name="dialog-password-symbolic", title=_("API Key Needed"),
+            description=_("SteamGridDB answers only with a personal API key. "
+                          "It is free: sign in on SteamGridDB, open your "
+                          "preferences and copy the key from the API "
+                          "section."))
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        get = Gtk.Button(label=_("Get API Key"), halign=Gtk.Align.CENTER)
+        get.add_css_class("pill")
+        get.connect("clicked", lambda b: open_key_page(self.window))
+        group = Adw.PreferencesGroup()
+        entry = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"),
+                                     show_apply_button=True)
+        group.add(entry)
+        problem = Gtk.Label(wrap=True, visible=False)
+        problem.add_css_class("error")
+        box.append(get)
+        box.append(group)
+        box.append(problem)
+        clamp = Adw.Clamp(maximum_size=420, child=box)
+        status.set_child(clamp)
+
+        def applied(row):
+            key = row.get_text().strip()
+            if not key:
+                return
+            row.set_sensitive(False)
+            problem.set_visible(False)
+
+            def done(error):
+                row.set_sensitive(True)
+                if error is not None:
+                    problem.set_label(error_text(error))
+                    problem.set_visible(True)
+                    return
+                config.set_setting(KEY_SETTING, key)
+                log.info("SteamGridDB API key saved")
+                self.page.key_changed()
+                self.nav.replace([self._search_page()])
+            check_key(key, done)
+
+        entry.connect("apply", applied)
+        return self._page("SteamGridDB", status, "key")
+
+    # -- games ---------------------------------------------------------------
+    def _search_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{side}")(12)
+        entry = Gtk.SearchEntry(placeholder_text=_("Game name"), search_delay=500)
+        entry.set_text(self.game["name"])
+        self.results = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE,
+                                   valign=Gtk.Align.START)
+        self.results.add_css_class("boxed-list")
+        self.results.connect("row-activated",
+                             lambda lb, row: self.nav.push(self._covers_page(row.found)))
+        self.search_stack = Gtk.Stack(vexpand=True)
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_child(self.results)
+        self.search_stack.add_named(scroll, "results")
+        self.search_stack.add_named(Gtk.Spinner(spinning=True, halign=Gtk.Align.CENTER,
+                                                valign=Gtk.Align.CENTER,
+                                                width_request=32,
+                                                height_request=32), "busy")
+        self.search_status = Adw.StatusPage(icon_name="system-search-symbolic")
+        self.search_status.add_css_class("compact")
+        self.search_stack.add_named(self.search_status, "status")
+        box.append(entry)
+        box.append(self.search_stack)
+        entry.connect("search-changed", lambda e: self._search(e.get_text()))
+        entry.connect("activate", lambda e: self._search(e.get_text()))
+        GLib.idle_add(lambda: self._search(entry.get_text()) and False)
+        return self._page(_("Choose the Game"), box, "search")
+
+    def _show_status(self, stack, status, title, description=""):
+        status.set_title(title)
+        status.set_description(description)
+        stack.set_visible_child_name("status")
+
+    def _search(self, term):
+        self._search_id += 1
+        search_id = self._search_id
+        if not term.strip():
+            self._show_status(self.search_stack, self.search_status,
+                              _("Enter the name of the game"))
+            return
+        self.search_stack.set_visible_child_name("busy")
+        key = config.get_setting(KEY_SETTING)
+
+        def done(found, error):
+            if self._closed or search_id != self._search_id:
+                return
+            if error is not None:
+                log.warning("SteamGridDB search failed: %s", error)
+                self._show_status(self.search_stack, self.search_status,
+                                  _("Search failed"), error_text(error))
+                if error.kind == "key":
+                    self.nav.replace([self._key_page()])
+                return
+            self.results.remove_all()
+            for g in found:
+                row = Adw.ActionRow(title=g["name"], activatable=True,
+                                    subtitle=str(g["year"]) if g["year"] else "")
+                row.set_use_markup(False)
+                row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+                row.found = g
+                self.results.append(row)
+            if found:
+                self.search_stack.set_visible_child_name("results")
+            else:
+                self._show_status(self.search_stack, self.search_status,
+                                  _("No games found"),
+                                  _("Try a shorter or different name."))
+
+        in_thread(lambda: steamgriddb.search(term, key), done)
+
+    # -- covers --------------------------------------------------------------
+    def _covers_page(self, found):
+        stack = Gtk.Stack()
+        stack.add_named(Gtk.Spinner(spinning=True, halign=Gtk.Align.CENTER,
+                                    valign=Gtk.Align.CENTER, width_request=32,
+                                    height_request=32), "busy")
+        status = Adw.StatusPage(icon_name="image-missing-symbolic")
+        stack.add_named(status, "status")
+        flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
+                           min_children_per_line=2, max_children_per_line=4,
+                           column_spacing=12, row_spacing=12, valign=Gtk.Align.START)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(flow, f"set_margin_{side}")(12)
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_child(flow)
+        stack.add_named(scroll, "covers")
+        stack.set_visible_child_name("busy")
+        title = found["name"] + (f" ({found['year']})" if found["year"] else "")
+        page = self._page(title, stack, f"covers-{found['id']}")
+        key = config.get_setting(KEY_SETTING)
+
+        def done(covers, error):
+            if self._closed:
+                return
+            if error is not None:
+                log.warning("Loading SteamGridDB covers failed: %s", error)
+                self._show_status(stack, status, _("Covers could not be loaded"),
+                                  error_text(error))
+                return
+            if not covers:
+                self._show_status(stack, status, _("No covers"),
+                                  _("SteamGridDB has no portrait covers for "
+                                    "this game yet."))
+                return
+            limit = threading.Semaphore(THUMB_THREADS)
+            for cover in covers[:MAX_COVERS]:
+                flow.append(self._cover_button(cover, stack, limit))
+            stack.set_visible_child_name("covers")
+
+        in_thread(lambda: steamgriddb.covers(found["id"], key), done)
+        return page
+
+    def _cover_button(self, cover, stack, limit):
+        picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
+        view = CoverView(picture, natural_width=150)
+        view.add_css_class("game-cover")
+        button = Gtk.Button(child=view)
+        button.add_css_class("flat")
+        button.add_css_class("cover-choice")
+        if cover["author"]:
+            button.set_tooltip_text(_("By {author}").format(author=cover["author"]))
+        button.connect("clicked", lambda b: self._choose(cover, stack))
+
+        def load():
+            with limit:
+                return steamgriddb.fetch(cover["thumb"])
+
+        def shown(data, error):
+            if self._closed or error is not None:
+                return
+            try:
+                picture.set_paintable(Gdk.Texture.new_from_bytes(GLib.Bytes.new(data)))
+            except GLib.Error:
+                button.set_visible(False)       # not a picture GTK can show
+
+        in_thread(load, shown)
+        return button
+
+    def _choose(self, cover, stack):
+        stack.set_visible_child_name("busy")
+        suffix = pathlib.PurePosixPath(cover["url"]).suffix.lower() or ".img"
+        tmp = config.COVER_DIR / f"steamgriddb-download{suffix}"
+
+        def done(path, error):
+            if error is not None:
+                log.warning("Downloading %s failed: %s", cover["url"], error)
+                stack.set_visible_child_name("covers")
+                self.page.window._notify(error_text(error))
+                return
+            ok = self.page.set_cover(self.game, str(path))
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            if ok:
+                log.info("SteamGridDB cover %s chosen for %s", cover["url"],
+                         self.game["name"])
+                self.page.window._notify(_("Cover from SteamGridDB set"))
+                self.window.close()
+            else:
+                stack.set_visible_child_name("covers")
+
+        in_thread(lambda: steamgriddb.download(cover["url"], tmp), done)

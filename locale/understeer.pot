@@ -267,191 +267,283 @@ msgstr ""
 msgid "Auto"
 msgstr ""
 
-#: understeer/ui/games_page.py:48
-msgid "Give each game a preset. While Understeer is open, it applies the preset as soon as the game starts."
+#: understeer/ui/cover_search.py:32
+msgid "SteamGridDB did not accept the API key."
 msgstr ""
 
-#: understeer/ui/games_page.py:62
-msgid "Download Missing Covers"
-msgstr ""
-
-#: understeer/ui/games_page.py:63
-msgid "Loads covers of Steam games from Steam's servers when Steam has none stored. When off, Understeer uses only the pictures Steam already keeps on this computer."
-msgstr ""
-
-#: understeer/ui/games_page.py:70
-msgid "Search missing covers now"
-msgstr ""
-
-#: understeer/ui/games_page.py:125
-msgid "Add Game…"
-msgstr ""
-
-#: understeer/ui/games_page.py:160
-msgid "Searching for a cover…"
-msgstr ""
-
-#: understeer/ui/games_page.py:164
-msgid "No cover found online"
-msgstr ""
-
-#: understeer/ui/games_page.py:165
-msgid "No cover"
-msgstr ""
-
-#: understeer/ui/games_page.py:191
-msgid "Choose Picture…"
-msgstr ""
-
-#: understeer/ui/games_page.py:193
-msgid "Use Steam Cover"
-msgstr ""
-
-#: understeer/ui/games_page.py:194
-msgid "Remove Picture"
-msgstr ""
-
-#: understeer/ui/games_page.py:196
-msgid "Download Cover"
-msgstr ""
-
-#: understeer/ui/games_page.py:198
-msgid "Remove Game"
-msgstr ""
-
-#: understeer/ui/games_page.py:206
-msgid "Picture and More"
-msgstr ""
-
-#: understeer/ui/games_page.py:223
-msgid "Running"
-msgstr ""
-
-#: understeer/ui/games_page.py:237
-msgid "No Preset"
-msgstr ""
-
-#: understeer/ui/games_page.py:238
-msgid "Preset for this game"
-msgstr ""
-
-#: understeer/ui/games_page.py:245
-msgid "Auto-apply"
-msgstr ""
-
-#: understeer/ui/games_page.py:246
-msgid "Apply the preset as soon as the game starts"
-msgstr ""
-
-#: understeer/ui/games_page.py:280
-msgid "Pictures"
-msgstr ""
-
-#: understeer/ui/games_page.py:284
-msgid "Picture for {game}"
-msgstr ""
-
-#: understeer/ui/games_page.py:304
-msgid "This picture can't be opened"
-msgstr ""
-
-#: understeer/ui/games_page.py:310
+#: understeer/ui/cover_search.py:34
 msgid "Could not save the picture"
 msgstr ""
 
-#: understeer/ui/games_page.py:336
-msgid "Covers can only be downloaded for Steam games. For other games, choose a picture in the tile's menu."
+#: understeer/ui/cover_search.py:35
+msgid "SteamGridDB could not be reached. Check your internet connection."
 msgstr ""
 
-#: understeer/ui/games_page.py:338
+#: understeer/ui/cover_search.py:58
+msgid "Cover from SteamGridDB"
+msgstr ""
+
+#: understeer/ui/cover_search.py:82
+msgid "API Key Needed"
+msgstr ""
+
+#: understeer/ui/cover_search.py:83
+msgid "SteamGridDB answers only with a personal API key. It is free: sign in on SteamGridDB, open your preferences and copy the key from the API section."
+msgstr ""
+
+#: understeer/ui/cover_search.py:88
+msgid "Get API Key"
+msgstr ""
+
+#: understeer/ui/cover_search.py:92
+msgid "SteamGridDB API Key"
+msgstr ""
+
+#: understeer/ui/cover_search.py:130
+msgid "Game name"
+msgstr ""
+
+#: understeer/ui/cover_search.py:153
+msgid "Choose the Game"
+msgstr ""
+
+#: understeer/ui/cover_search.py:165
+msgid "Enter the name of the game"
+msgstr ""
+
+#: understeer/ui/cover_search.py:176
+msgid "Search failed"
+msgstr ""
+
+#: understeer/ui/cover_search.py:192
+msgid "No games found"
+msgstr ""
+
+#: understeer/ui/cover_search.py:193
+msgid "Try a shorter or different name."
+msgstr ""
+
+#: understeer/ui/cover_search.py:223
+msgid "Covers could not be loaded"
+msgstr ""
+
+#: understeer/ui/cover_search.py:227
+msgid "No covers"
+msgstr ""
+
+#: understeer/ui/cover_search.py:228
+msgid "SteamGridDB has no portrait covers for this game yet."
+msgstr ""
+
+#: understeer/ui/cover_search.py:247
+msgid "By {author}"
+msgstr ""
+
+#: understeer/ui/cover_search.py:284
+msgid "Cover from SteamGridDB set"
+msgstr ""
+
+#: understeer/ui/games_page.py:49
+msgid "Give each game a preset. While Understeer is open, it applies the preset as soon as the game starts."
+msgstr ""
+
+#: understeer/ui/games_page.py:63
+msgid "Download Missing Covers"
+msgstr ""
+
+#: understeer/ui/games_page.py:64
+msgid "Loads covers of Steam games from Steam's servers when Steam has none stored. When off, Understeer uses only the pictures Steam already keeps on this computer."
+msgstr ""
+
+#: understeer/ui/games_page.py:71
+msgid "Search missing covers now"
+msgstr ""
+
+#: understeer/ui/games_page.py:83
+msgid "Get a free API key on SteamGridDB"
+msgstr ""
+
+#: understeer/ui/games_page.py:89
+msgid "Covers for games without a Steam cover, chosen in the tile's menu. SteamGridDB needs a free personal API key."
+msgstr ""
+
+#: understeer/ui/games_page.py:126
+msgid "SteamGridDB API key removed"
+msgstr ""
+
+#: understeer/ui/games_page.py:138
+msgid "SteamGridDB API key saved"
+msgstr ""
+
+#: understeer/ui/games_page.py:166
+msgid "Add Game…"
+msgstr ""
+
+#: understeer/ui/games_page.py:201
+msgid "Searching for a cover…"
+msgstr ""
+
+#: understeer/ui/games_page.py:205
+msgid "No cover found online"
+msgstr ""
+
+#: understeer/ui/games_page.py:206
+msgid "No cover"
+msgstr ""
+
+#: understeer/ui/games_page.py:233
+msgid "Choose Picture…"
+msgstr ""
+
+#: understeer/ui/games_page.py:235
+msgid "Use Steam Cover"
+msgstr ""
+
+#: understeer/ui/games_page.py:236
+msgid "Remove Picture"
+msgstr ""
+
+#: understeer/ui/games_page.py:238
+msgid "Download Cover"
+msgstr ""
+
+#: understeer/ui/games_page.py:239
+msgid "Search SteamGridDB…"
+msgstr ""
+
+#: understeer/ui/games_page.py:241
+msgid "Remove Game"
+msgstr ""
+
+#: understeer/ui/games_page.py:249
+msgid "Picture and More"
+msgstr ""
+
+#: understeer/ui/games_page.py:266
+msgid "Running"
+msgstr ""
+
+#: understeer/ui/games_page.py:280
+msgid "No Preset"
+msgstr ""
+
+#: understeer/ui/games_page.py:281
+msgid "Preset for this game"
+msgstr ""
+
+#: understeer/ui/games_page.py:288
+msgid "Auto-apply"
+msgstr ""
+
+#: understeer/ui/games_page.py:289
+msgid "Apply the preset as soon as the game starts"
+msgstr ""
+
+#: understeer/ui/games_page.py:323
+msgid "Pictures"
+msgstr ""
+
+#: understeer/ui/games_page.py:327
+msgid "Picture for {game}"
+msgstr ""
+
+#: understeer/ui/games_page.py:348
+msgid "This picture can't be opened"
+msgstr ""
+
+#: understeer/ui/games_page.py:381
+msgid "Steam has covers only for Steam games. For other games, search SteamGridDB or choose a picture in the tile's menu."
+msgstr ""
+
+#: understeer/ui/games_page.py:384
 msgid "All games already have a cover"
 msgstr ""
 
-#: understeer/ui/games_page.py:343
+#: understeer/ui/games_page.py:389
 msgid "Searching covers for {n} games…"
 msgstr ""
 
-#: understeer/ui/games_page.py:382
+#: understeer/ui/games_page.py:428
 msgid "Found all {n} covers"
 msgstr ""
 
-#: understeer/ui/games_page.py:383
+#: understeer/ui/games_page.py:429
 msgid "Cover found"
 msgstr ""
 
-#: understeer/ui/games_page.py:385
+#: understeer/ui/games_page.py:431
 msgid "Steam has no covers for these games"
 msgstr ""
 
-#: understeer/ui/games_page.py:386
+#: understeer/ui/games_page.py:432
 msgid "Steam has no cover for this game"
 msgstr ""
 
-#: understeer/ui/games_page.py:388
+#: understeer/ui/games_page.py:434
 msgid "Found {found} of {n} covers"
 msgstr ""
 
-#: understeer/ui/games_page.py:399
+#: understeer/ui/games_page.py:445
 msgid "Search games"
 msgstr ""
 
-#: understeer/ui/games_page.py:409
+#: understeer/ui/games_page.py:455
 msgid "No installed Steam games found"
 msgstr ""
 
-#: understeer/ui/games_page.py:410
+#: understeer/ui/games_page.py:456
 msgid "Add other games by their program."
 msgstr ""
 
-#: understeer/ui/games_page.py:424
+#: understeer/ui/games_page.py:470
 msgid "Add Game"
 msgstr ""
 
-#: understeer/ui/games_page.py:426
+#: understeer/ui/games_page.py:472
 msgid "Cancel"
 msgstr ""
 
-#: understeer/ui/games_page.py:427
+#: understeer/ui/games_page.py:473
 msgid "Other Program…"
 msgstr ""
 
-#: understeer/ui/games_page.py:442
+#: understeer/ui/games_page.py:488
 msgid "Name"
 msgstr ""
 
-#: understeer/ui/games_page.py:443
+#: understeer/ui/games_page.py:489
 msgid "Program"
 msgstr ""
 
-#: understeer/ui/games_page.py:446
+#: understeer/ui/games_page.py:492
 msgid "Choose Program File…"
 msgstr ""
 
-#: understeer/ui/games_page.py:451
+#: understeer/ui/games_page.py:497
 msgid "Is the game running? Then pick it here:"
 msgstr ""
 
-#: understeer/ui/games_page.py:455
+#: understeer/ui/games_page.py:501
 msgid "Search programs"
 msgstr ""
 
-#: understeer/ui/games_page.py:458
+#: understeer/ui/games_page.py:504
 msgid "Update List"
 msgstr ""
 
-#: understeer/ui/games_page.py:500
+#: understeer/ui/games_page.py:546
 msgid "Add Other Program"
 msgstr ""
 
-#: understeer/ui/games_page.py:501
+#: understeer/ui/games_page.py:547
 msgid "For games not started by Steam. Understeer recognises them by their program file. For Windows games (Wine, Proton, Lutris, Heroic) that is the game's .exe, not the launcher."
 msgstr ""
 
-#: understeer/ui/games_page.py:506
+#: understeer/ui/games_page.py:552
 msgid "Add"
 msgstr ""
 
-#: understeer/ui/games_page.py:521
+#: understeer/ui/games_page.py:567
 msgid "Program File"
 msgstr ""
 
