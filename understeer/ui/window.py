@@ -23,7 +23,8 @@ LIVE_DELAY_MS = 120
 LAYOUTS = ["full", "compact"]
 WATCH_MS = 250       # how often to look for changes made on the wheel base
 GAMES_WATCH_MS = 2000   # how often to look for started games
-SLOT_TOAST_MS = 3000
+TOAST_MS = 3000         # how long a message stays
+TOAST_BUTTON_MS = 5000  # ... with a button such as Undo, to have time to click
 
 log = logging.getLogger("understeer.window")
 
@@ -43,8 +44,9 @@ class TunerWindow(Adw.ApplicationWindow):
         self.rows = {}           # attr id -> SettingTile
         self.pending = {}        # attr id -> value waiting to be written
         self.device_values = {}  # attr id (and "SLOT") -> last value read or written
-        self._slot_toast = None  # shown slot message, updated by the next one
-        self._slot_toast_timer = 0
+        self._toast = None       # shown message, replaced by the next one
+        self._toast_timer = 0
+        self._toast_action = None   # what its button does
         self._live_timer = 0
         self._status = ""
 
@@ -890,13 +892,12 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _join_group(self, group):
         if not join_group(group):
-            self.toasts.add_toast(Adw.Toast.new(
-                _("Setting up permissions failed")))
+            self._notify(_("Setting up permissions failed"))
             return
         self._update_banner()     # keeps pending changes, unlike a reload
-        self.toasts.add_toast(Adw.Toast.new(_(
+        self._notify(_(
             "Added to “{group}”. Log out and back in to tune live.").format(
-                group=group)))
+                group=group))
 
     def _on_banner_button(self):
         if self.device_path:
@@ -973,10 +974,8 @@ class TunerWindow(Adw.ApplicationWindow):
             names = ", ".join(os.path.basename(p) for p in failed)
             self._set_status(_("Write failed: {names}").format(names=names))
             log.warning("Shown to the user: could not write %s", names)
-            toast = Adw.Toast.new(_("Could not write: {names}").format(names=names))
-            toast.set_button_label(_("Show Log"))
-            toast.connect("button-clicked", lambda t: self._open_log())
-            self.toasts.add_toast(toast)
+            self._notify(_("Could not write: {names}").format(names=names),
+                         _("Show Log"), self._open_log)
         else:
             self._set_status(_("In sync with device"))
 
@@ -1021,7 +1020,7 @@ class TunerWindow(Adw.ApplicationWindow):
             message = pending_message or message
         self._update_preset_indicator()
         if message:
-            self.toasts.add_toast(Adw.Toast.new(message))
+            self._notify(message)
 
     def _undo_all(self):
         self._cancel_pending()
@@ -1043,38 +1042,48 @@ class TunerWindow(Adw.ApplicationWindow):
             self.rows[attr_id].set(value)
         return GLib.SOURCE_REMOVE
 
-    def _show_slot_toast(self, text):
-        """Show a slot message right away.
+    def _notify(self, text, button=None, action=None):
+        """Show a message right away.
 
-        Toasts normally queue up, so switching slots quickly would show each
-        message for its full time, one after another. Instead the shown
-        message gets the new text and its time starts again.
+        Adw.Toast messages queue up, so changing something quickly (slots,
+        presets, ...) would show each message for its full time, one after
+        another, and the latest one far too late. Instead there is only one
+        message: the next one takes over its text and its time starts again.
+        An optional button (e.g. Undo) calls action().
         """
-        if self._slot_toast is None:
+        if self._toast is None:
             toast = Adw.Toast.new("")
-            toast.set_use_markup(False)     # slot names are plain text
+            toast.set_use_markup(False)     # names are plain text
             toast.set_timeout(0)            # hidden by our own timer
-            toast.connect("dismissed", self._on_slot_toast_dismissed)
-            self._slot_toast = toast
+            toast.connect("dismissed", self._on_toast_dismissed)
+            toast.connect("button-clicked", self._on_toast_button)
+            self._toast = toast
             self.toasts.add_toast(toast)
-        self._slot_toast.set_title(text)
-        if self._slot_toast_timer:
-            GLib.source_remove(self._slot_toast_timer)
-        self._slot_toast_timer = GLib.timeout_add(SLOT_TOAST_MS,
-                                                  self._hide_slot_toast)
+        self._toast.set_title(text)
+        self._toast.set_button_label(button)
+        self._toast_action = action if button else None
+        if self._toast_timer:
+            GLib.source_remove(self._toast_timer)
+        self._toast_timer = GLib.timeout_add(
+            TOAST_BUTTON_MS if button else TOAST_MS, self._hide_toast)
 
-    def _hide_slot_toast(self):
-        self._slot_toast_timer = 0
-        if self._slot_toast is not None:
-            self._slot_toast.dismiss()
+    def _hide_toast(self):
+        self._toast_timer = 0
+        if self._toast is not None:
+            self._toast.dismiss()
         return GLib.SOURCE_REMOVE
 
-    def _on_slot_toast_dismissed(self, toast):
-        if self._slot_toast is toast:
-            self._slot_toast = None
-            if self._slot_toast_timer:          # closed by the user
-                GLib.source_remove(self._slot_toast_timer)
-                self._slot_toast_timer = 0
+    def _on_toast_button(self, toast):
+        if toast is self._toast and self._toast_action:
+            self._toast_action()
+
+    def _on_toast_dismissed(self, toast):
+        if self._toast is toast:
+            self._toast = None
+            self._toast_action = None
+            if self._toast_timer:               # closed by the user
+                GLib.source_remove(self._toast_timer)
+                self._toast_timer = 0
 
     def _check_device(self):
         """Follow changes made on the wheel base itself.
@@ -1093,7 +1102,7 @@ class TunerWindow(Adw.ApplicationWindow):
                      ", unapplied changes discarded" if discarded else "")
             self._load_from_device()
             name = self._slot_label(slot)
-            self._show_slot_toast(
+            self._notify(
                 _("Slot changed on the wheel base: {name}. Unapplied changes "
                   "were discarded.").format(name=name) if discarded else
                 _("Slot changed on the wheel base: {name}").format(name=name))
@@ -1121,7 +1130,7 @@ class TunerWindow(Adw.ApplicationWindow):
         slot = self.slot_dropdown.get_selected() + 1
         log.info("Switching to slot %s", slot)
         if write_values({self._attr_file("SLOT"): slot}):
-            self._show_slot_toast(
+            self._notify(
                 _("The driver can only switch to slots 1–{n}. Choose this "
                   "slot on the wheel base.").format(n=SLOTS)
                 if slot > SLOTS else _("Could not switch slot"))
@@ -1138,12 +1147,11 @@ class TunerWindow(Adw.ApplicationWindow):
         b = int(self.rumble_adj["b"].get_value())
         dur = int(self.rumble_adj["dur"].get_value())
         if write_values({self.rumble_path: (a << 16) | (b << 8) | dur}):
-            self.toasts.add_toast(Adw.Toast.new(_("Could not send rumble")))
+            self._notify(_("Could not send rumble"))
 
     def _setup_permissions(self):
         if not install_udev_rule():
-            self.toasts.add_toast(Adw.Toast.new(
-                _("Setting up permissions failed")))
+            self._notify(_("Setting up permissions failed"))
             return
         GLib.timeout_add(1000, self._recheck_permissions)
 
@@ -1152,8 +1160,7 @@ class TunerWindow(Adw.ApplicationWindow):
         self._refresh_device_state()
         self._start_inputs()
         if self.writable:
-            self.toasts.add_toast(Adw.Toast.new(
-                _("Permissions set up — changes now apply live")))
+            self._notify(_("Permissions set up — changes now apply live"))
         return GLib.SOURCE_REMOVE
 
     # -----------------------------------------------------------------------
@@ -1258,8 +1265,7 @@ class TunerWindow(Adw.ApplicationWindow):
             self._confirm_overwrite(path, new_name=name)
             return
         if self._write_preset(path, name):
-            self.toasts.add_toast(Adw.Toast.new(
-                _("Preset “{name}” saved").format(name=name)))
+            self._notify(_("Preset “{name}” saved").format(name=name))
 
     def _write_preset(self, path, name):
         values = self._collect_values()
@@ -1302,8 +1308,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
         def on_response(d, response):
             if response == "overwrite" and self._write_preset(path, name):
-                self.toasts.add_toast(Adw.Toast.new(
-                    _("Preset “{name}” saved").format(name=name)))
+                self._notify(_("Preset “{name}” saved").format(name=name))
 
         dialog.connect("response", on_response)
         dialog.present()
@@ -1320,20 +1325,16 @@ class TunerWindow(Adw.ApplicationWindow):
             old_text, name, old_values = None, self._active_name(), {}
         if not self._write_preset(path, name):
             return
-        toast = Adw.Toast.new(_("Saved to “{name}”").format(name=name))
-        if old_text is not None:
-            toast.set_button_label(_("Undo"))
+        def undo():
+            try:
+                path.write_text(old_text)
+            except OSError as e:
+                self._error(_("Could not save preset"), str(e))
+                return
+            self._set_active_preset(path, old_values)
 
-            def undo(t):
-                try:
-                    path.write_text(old_text)
-                except OSError as e:
-                    self._error(_("Could not save preset"), str(e))
-                    return
-                self._set_active_preset(path, old_values)
-
-            toast.connect("button-clicked", undo)
-        self.toasts.add_toast(toast)
+        self._notify(_("Saved to “{name}”").format(name=name),
+                     _("Undo") if old_text is not None else None, undo)
 
     def _confirm_delete_preset(self, path, name):
         dialog = Adw.MessageDialog(
