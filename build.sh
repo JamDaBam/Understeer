@@ -10,6 +10,7 @@ mkdir -p AppDir/usr/bin
 mkdir -p AppDir/usr/share/applications
 mkdir -p AppDir/usr/share/metainfo
 mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 mkdir -p AppDir/usr/share/understeer/locale AppDir/usr/share/understeer/icons
 
 echo "=== Step 3: Copying project assets into the layout ==="
@@ -24,10 +25,12 @@ cp icons/*.svg AppDir/usr/share/understeer/icons/
 # App metadata files
 cp $APP_ID.desktop AppDir/
 cp $APP_ID.desktop AppDir/usr/share/applications/
-cp $APP_ID.metainfo.xml AppDir/usr/share/metainfo/
+# appimagetool only looks for the older .appdata.xml file name
+cp $APP_ID.metainfo.xml AppDir/usr/share/metainfo/$APP_ID.appdata.xml
 
-# App icon (AppImage looks in the root and in the hicolor spec folder)
-cp $APP_ID.svg AppDir/
+# App icon: PNG in the root becomes .DirIcon (must be PNG), SVG for desktops
+cp $APP_ID.png AppDir/
+cp $APP_ID.png AppDir/usr/share/icons/hicolor/256x256/apps/
 cp $APP_ID.svg AppDir/usr/share/icons/hicolor/scalable/apps/
 
 echo "=== Step 4: Creating the core AppRun launch script ==="
