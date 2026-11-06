@@ -3,654 +3,654 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: \n"
 
-#: FFB_Tuner.py:139
+#: understeer.py:140
 msgid "Steering"
 msgstr ""
 
-#: FFB_Tuner.py:140
+#: understeer.py:141
 msgid "Wheel Feel"
 msgstr ""
 
-#: FFB_Tuner.py:141
+#: understeer.py:142
 msgid "Pedals"
 msgstr ""
 
-#: FFB_Tuner.py:142
+#: understeer.py:143
 msgid "Paddles"
 msgstr ""
 
-#: FFB_Tuner.py:143
+#: understeer.py:144
 msgid "Presets"
 msgstr ""
 
-#: FFB_Tuner.py:144
+#: understeer.py:145
 msgid "Tools"
 msgstr ""
 
-#: FFB_Tuner.py:150
+#: understeer.py:151
 msgid "Off"
 msgstr ""
 
-#: FFB_Tuner.py:152
+#: understeer.py:153
 msgid "Counter-steer {n}"
 msgstr ""
 
-#: FFB_Tuner.py:153
+#: understeer.py:154
 msgid "Centering +{n}"
 msgstr ""
 
-#: FFB_Tuner.py:160
+#: understeer.py:161
 msgid "Always on"
 msgstr ""
 
-#: FFB_Tuner.py:166
+#: understeer.py:167
 msgid "Rotation"
 msgstr ""
 
-#: FFB_Tuner.py:167
+#: understeer.py:168
 msgid "Steering Angle"
 msgstr ""
 
-#: FFB_Tuner.py:168
+#: understeer.py:169
 msgid "Total wheel rotation in degrees. Auto uses the maximum range of the wheel base."
 msgstr ""
 
-#: FFB_Tuner.py:171
+#: understeer.py:172
 msgid "Force Feedback"
 msgstr ""
 
-#: FFB_Tuner.py:172
+#: understeer.py:173
 msgid "Force Feedback Strength"
 msgstr ""
 
-#: FFB_Tuner.py:173
+#: understeer.py:174
 msgid "Master force feedback output of the wheel base."
 msgstr ""
 
-#: FFB_Tuner.py:175
+#: understeer.py:176
 msgid "Force Effects"
 msgstr ""
 
-#: FFB_Tuner.py:176
+#: understeer.py:177
 msgid "Strength of constant-force effects, the core of the game's force feedback."
 msgstr ""
 
-#: FFB_Tuner.py:179
+#: understeer.py:180
 msgid "Spring Effects"
 msgstr ""
 
-#: FFB_Tuner.py:180
+#: understeer.py:181
 msgid "Strength of centering spring effects sent by the game."
 msgstr ""
 
-#: FFB_Tuner.py:182
+#: understeer.py:183
 msgid "Damper Effects"
 msgstr ""
 
-#: FFB_Tuner.py:183
+#: understeer.py:184
 msgid "Strength of damper effects sent by the game."
 msgstr ""
 
-#: FFB_Tuner.py:184
+#: understeer.py:185
 msgid "Signal"
 msgstr ""
 
-#: FFB_Tuner.py:185
+#: understeer.py:186
 msgid "Force Feedback Scaling"
 msgstr ""
 
-#: FFB_Tuner.py:186
+#: understeer.py:187
 msgid "Linear"
 msgstr ""
 
-#: FFB_Tuner.py:186
+#: understeer.py:187
 msgid "Peak"
 msgstr ""
 
-#: FFB_Tuner.py:187
+#: understeer.py:188
 msgid "Linear keeps a constant taper. Peak scales to the strongest force (default)."
 msgstr ""
 
-#: FFB_Tuner.py:190
+#: understeer.py:191
 msgid "Force Effect Intensity"
 msgstr ""
 
-#: FFB_Tuner.py:191
+#: understeer.py:192
 msgid "Filters the force feedback signal. Higher values give sharper details."
 msgstr ""
 
-#: FFB_Tuner.py:194
+#: understeer.py:195
 msgid "Interpolation Filter"
 msgstr ""
 
-#: FFB_Tuner.py:195
+#: understeer.py:196
 msgid "Smooths between force feedback updates. 0 turns it off."
 msgstr ""
 
-#: FFB_Tuner.py:197
+#: understeer.py:198
 msgid "Natural Feel"
 msgstr ""
 
-#: FFB_Tuner.py:198
+#: understeer.py:199
 msgid "Natural Damper"
 msgstr ""
 
-#: FFB_Tuner.py:199
+#: understeer.py:200
 msgid "Mechanical damping added by the wheel base itself, independent of the game."
 msgstr ""
 
-#: FFB_Tuner.py:202
+#: understeer.py:203
 msgid "Natural Friction"
 msgstr ""
 
-#: FFB_Tuner.py:203
+#: understeer.py:204
 msgid "Mechanical friction added by the wheel base itself, independent of the game."
 msgstr ""
 
-#: FFB_Tuner.py:206
+#: understeer.py:207
 msgid "Natural Inertia"
 msgstr ""
 
-#: FFB_Tuner.py:207
+#: understeer.py:208
 msgid "Mechanical inertia added by the wheel base itself, independent of the game."
 msgstr ""
 
-#: FFB_Tuner.py:209
+#: understeer.py:210
 msgid "Effects"
 msgstr ""
 
-#: FFB_Tuner.py:210
+#: understeer.py:211
 msgid "Wheel Vibration"
 msgstr ""
 
-#: FFB_Tuner.py:211
+#: understeer.py:212
 msgid "Strength of the rumble on curbs and impacts."
 msgstr ""
 
-#: FFB_Tuner.py:213
+#: understeer.py:214
 msgid "Drift Mode"
 msgstr ""
 
-#: FFB_Tuner.py:214
+#: understeer.py:215
 msgid "Negative values help with counter-steering, positive values add centering force. 0 turns it off."
 msgstr ""
 
-#: FFB_Tuner.py:217
+#: understeer.py:218
 msgid "Load Cell Brake"
 msgstr ""
 
-#: FFB_Tuner.py:218
+#: understeer.py:219
 msgid "Brake Force"
 msgstr ""
 
-#: FFB_Tuner.py:219
+#: understeer.py:220
 msgid "Pedal stiffness. Higher values need more force for full braking. Requires a load cell brake."
 msgstr ""
 
-#: FFB_Tuner.py:222
+#: understeer.py:223
 msgid "Brake Level Indicator"
 msgstr ""
 
-#: FFB_Tuner.py:223
+#: understeer.py:224
 msgid "Brake force at which the LED lights up."
 msgstr ""
 
-#: FFB_Tuner.py:224
+#: understeer.py:225
 msgid "Vibration"
 msgstr ""
 
-#: FFB_Tuner.py:225
+#: understeer.py:226
 msgid "FullForce"
 msgstr ""
 
-#: FFB_Tuner.py:226
+#: understeer.py:227
 msgid "Pedal vibration routed through the wheel motor. Requires a game with FullForce support."
 msgstr ""
 
-#: FFB_Tuner.py:229
+#: understeer.py:230
 msgid "Analogue Paddles"
 msgstr ""
 
-#: FFB_Tuner.py:230
+#: understeer.py:231
 msgid "Paddle Mode"
 msgstr ""
 
-#: FFB_Tuner.py:231
+#: understeer.py:232
 msgid "Independent (CbP)"
 msgstr ""
 
-#: FFB_Tuner.py:232
+#: understeer.py:233
 msgid "Clutch / Handbrake (CH)"
 msgstr ""
 
-#: FFB_Tuner.py:233
+#: understeer.py:234
 msgid "Brake / Throttle (Bt)"
 msgstr ""
 
-#: FFB_Tuner.py:234
+#: understeer.py:235
 msgid "Analogue Axes (AnA)"
 msgstr ""
 
-#: FFB_Tuner.py:235
+#: understeer.py:236
 msgid "How the analogue clutch paddles behave. Read-only on wheels with a physical mode switch."
 msgstr ""
 
-#: FFB_Tuner.py:318
+#: understeer.py:319
 msgid "Not assigned"
 msgstr ""
 
-#: FFB_Tuner.py:319
+#: understeer.py:320
 msgid "Throttle"
 msgstr ""
 
-#: FFB_Tuner.py:320
+#: understeer.py:321
 msgid "Brake"
 msgstr ""
 
-#: FFB_Tuner.py:321
+#: understeer.py:322
 msgid "Clutch"
 msgstr ""
 
-#: FFB_Tuner.py:322
+#: understeer.py:323
 msgid "Handbrake"
 msgstr ""
 
-#: FFB_Tuner.py:323
+#: understeer.py:324
 msgid "Hidden"
 msgstr ""
 
-#: FFB_Tuner.py:515
+#: understeer.py:525
 msgid "Undo changes to this setting"
 msgstr ""
 
-#: FFB_Tuner.py:524
+#: understeer.py:534
 msgid "About this setting"
 msgstr ""
 
-#: FFB_Tuner.py:570
+#: understeer.py:580
 msgid "Not supported by your hardware"
 msgstr ""
 
-#: FFB_Tuner.py:587
+#: understeer.py:597
 msgid "Auto"
 msgstr ""
 
-#: FFB_Tuner.py:663
+#: understeer.py:673
 msgid "Slot {n}"
 msgstr ""
 
-#: FFB_Tuner.py:665
+#: understeer.py:675
 msgid "Tuning slot on the wheel base that is being edited"
 msgstr ""
 
-#: FFB_Tuner.py:672
+#: understeer.py:682
 msgid "Apply or save a preset"
 msgstr ""
 
-#: FFB_Tuner.py:677
+#: understeer.py:687
 msgid "Reload from Device"
 msgstr ""
 
-#: FFB_Tuner.py:678
+#: understeer.py:688
 msgid "Save as Preset…"
 msgstr ""
 
-#: FFB_Tuner.py:684
+#: understeer.py:694
 msgid "Undo all changes since the values were loaded"
 msgstr ""
 
-#: FFB_Tuner.py:700
+#: understeer.py:710
 msgid "Apply"
 msgstr ""
 
-#: FFB_Tuner.py:703
+#: understeer.py:713
 msgid "Discard"
 msgstr ""
 
-#: FFB_Tuner.py:767
+#: understeer.py:777
 msgid "Live Input"
 msgstr ""
 
-#: FFB_Tuner.py:768
+#: understeer.py:778
 msgid "Current Angle"
 msgstr ""
 
-#: FFB_Tuner.py:789
+#: understeer.py:799
 msgid "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
 msgstr ""
 
-#: FFB_Tuner.py:792
+#: understeer.py:802
 msgid "Reset Max"
 msgstr ""
 
-#: FFB_Tuner.py:811
+#: understeer.py:821
 msgid "No read access to the input device. Set up permissions under Tools."
 msgstr ""
 
-#: FFB_Tuner.py:813
+#: understeer.py:823
 msgid "No Fanatec input device found."
 msgstr ""
 
-#: FFB_Tuner.py:835
+#: understeer.py:845
 msgid "Axis {name}"
 msgstr ""
 
-#: FFB_Tuner.py:853
+#: understeer.py:863
 msgid "What this axis is"
 msgstr ""
 
-#: FFB_Tuner.py:863
+#: understeer.py:873
 msgid "Show hidden axes ({n})"
 msgstr ""
 
-#: FFB_Tuner.py:903
+#: understeer.py:913
 msgid "Turn the wheel to see the angle"
 msgstr ""
 
-#: FFB_Tuner.py:913
+#: understeer.py:923
 msgid "Max {n} %"
 msgstr ""
 
-#: FFB_Tuner.py:917
+#: understeer.py:927
 msgid "Quick Select"
 msgstr ""
 
-#: FFB_Tuner.py:927
+#: understeer.py:937
 msgid "Use the maximum range of the wheel base"
 msgstr ""
 
-#: FFB_Tuner.py:939
+#: understeer.py:949
 msgid "Save Preset"
 msgstr ""
 
-#: FFB_Tuner.py:940
-msgid "Saves all current settings under a name in ~/.config/SimPower/."
+#: understeer.py:950
+msgid "Saves all current settings under a name in ~/.config/Understeer/."
 msgstr ""
 
-#: FFB_Tuner.py:942
+#: understeer.py:952
 msgid "Current Settings"
 msgstr ""
 
-#: FFB_Tuner.py:969
+#: understeer.py:979
 msgid "Saved Presets"
 msgstr ""
 
-#: FFB_Tuner.py:976
+#: understeer.py:986
 msgid "No presets saved yet"
 msgstr ""
 
-#: FFB_Tuner.py:977
+#: understeer.py:987
 msgid "Saved presets appear here and in the Presets menu at the top."
 msgstr ""
 
-#: FFB_Tuner.py:984
+#: understeer.py:994
 msgid "Active preset"
 msgstr ""
 
-#: FFB_Tuner.py:985
+#: understeer.py:995
 msgid "Save Here"
 msgstr ""
 
-#: FFB_Tuner.py:986
+#: understeer.py:996
 msgid "Save current settings to this preset"
 msgstr ""
 
-#: FFB_Tuner.py:1009
+#: understeer.py:1019
 msgid "Save to “{name}”"
 msgstr ""
 
-#: FFB_Tuner.py:1022
+#: understeer.py:1032
 msgid "Manage Presets"
 msgstr ""
 
-#: FFB_Tuner.py:1054
+#: understeer.py:1064
 msgid "Preset “{name}” has unsaved changes"
 msgstr ""
 
-#: FFB_Tuner.py:1064
+#: understeer.py:1074
 msgid "Quick Setup"
 msgstr ""
 
-#: FFB_Tuner.py:1066
+#: understeer.py:1076
 msgid "Sim Racing Defaults"
 msgstr ""
 
-#: FFB_Tuner.py:1067
+#: understeer.py:1077
 msgid "Balanced steering values for sim racing: 900°, 70 % force feedback, no spring or damper."
 msgstr ""
 
-#: FFB_Tuner.py:1072
+#: understeer.py:1082
 msgid "Sim racing defaults applied"
 msgstr ""
 
-#: FFB_Tuner.py:1078
+#: understeer.py:1088
 msgid "Pedal Rumble Test"
 msgstr ""
 
-#: FFB_Tuner.py:1079
+#: understeer.py:1089
 msgid "Sends a single rumble command to ClubSport Pedals V3 or CSL Elite/LC pedals."
 msgstr ""
 
-#: FFB_Tuner.py:1082
+#: understeer.py:1092
 msgid "Throttle Motor"
 msgstr ""
 
-#: FFB_Tuner.py:1083
+#: understeer.py:1093
 msgid "Brake Motor"
 msgstr ""
 
-#: FFB_Tuner.py:1084
+#: understeer.py:1094
 msgid "Duration (×10 ms)"
 msgstr ""
 
-#: FFB_Tuner.py:1090
+#: understeer.py:1100
 msgid "Send Rumble"
 msgstr ""
 
-#: FFB_Tuner.py:1091
+#: understeer.py:1101
 msgid "Send"
 msgstr ""
 
-#: FFB_Tuner.py:1099
+#: understeer.py:1109
 msgid "System"
 msgstr ""
 
-#: FFB_Tuner.py:1101
+#: understeer.py:1111
 msgid "Write Permissions"
 msgstr ""
 
-#: FFB_Tuner.py:1102
+#: understeer.py:1112
 msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr ""
 
-#: FFB_Tuner.py:1105
+#: understeer.py:1115
 msgid "Set Up"
 msgstr ""
 
-#: FFB_Tuner.py:1112
+#: understeer.py:1122
 msgid "Reset All Tuning Slots"
 msgstr ""
 
-#: FFB_Tuner.py:1113
+#: understeer.py:1123
 msgid "Clears all 5 tuning slots stored on the wheel base."
 msgstr ""
 
-#: FFB_Tuner.py:1114
+#: understeer.py:1124
 msgid "Reset…"
 msgstr ""
 
-#: FFB_Tuner.py:1157
+#: understeer.py:1167
 msgid "No Fanatec wheel base found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr ""
 
-#: FFB_Tuner.py:1159
+#: understeer.py:1169
 msgid "Retry"
 msgstr ""
 
-#: FFB_Tuner.py:1163
+#: understeer.py:1173
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr ""
 
-#: FFB_Tuner.py:1194
+#: understeer.py:1204
 msgid "No device"
 msgstr ""
 
-#: FFB_Tuner.py:1206
+#: understeer.py:1216
 msgid "In sync with device"
 msgstr ""
 
-#: FFB_Tuner.py:1218
+#: understeer.py:1228
 msgid "Writing…"
 msgstr ""
 
-#: FFB_Tuner.py:1239
+#: understeer.py:1249
 msgid "Write failed: {names}"
 msgstr ""
 
-#: FFB_Tuner.py:1241
+#: understeer.py:1251
 msgid "Could not write: {names}"
 msgstr ""
 
-#: FFB_Tuner.py:1256
+#: understeer.py:1266
 msgid "Pending changes: {n}"
 msgstr ""
 
-#: FFB_Tuner.py:1258
+#: understeer.py:1268
 msgid "Changes not applied yet"
 msgstr ""
 
-#: FFB_Tuner.py:1293
+#: understeer.py:1303
 msgid "Changes undone"
 msgstr ""
 
-#: FFB_Tuner.py:1313
+#: understeer.py:1323
 msgid "Could not switch slot"
 msgstr ""
 
-#: FFB_Tuner.py:1325
+#: understeer.py:1335
 msgid "Could not send rumble"
 msgstr ""
 
-#: FFB_Tuner.py:1332
+#: understeer.py:1342
 msgid "Setting up permissions failed"
 msgstr ""
 
-#: FFB_Tuner.py:1342
+#: understeer.py:1352
 msgid "Permissions set up — changes now apply live"
 msgstr ""
 
-#: FFB_Tuner.py:1369
+#: understeer.py:1379
 msgid "Could not load preset"
 msgstr ""
 
-#: FFB_Tuner.py:1375
+#: understeer.py:1385
 msgid "Preset “{name}” applied"
 msgstr ""
 
-#: FFB_Tuner.py:1376
+#: understeer.py:1386
 msgid "Preset “{name}” loaded — click Apply to write it"
 msgstr ""
 
-#: FFB_Tuner.py:1379
+#: understeer.py:1389
 msgid "e.g. GT3 Race"
 msgstr ""
 
-#: FFB_Tuner.py:1382
+#: understeer.py:1392
 msgid "Save as Preset"
 msgstr ""
 
-#: FFB_Tuner.py:1383
+#: understeer.py:1393
 msgid "Saves all current settings under this name."
 msgstr ""
 
-#: FFB_Tuner.py:1385
+#: understeer.py:1395
 msgid "Cancel"
 msgstr ""
 
-#: FFB_Tuner.py:1386
+#: understeer.py:1396
 msgid "Save"
 msgstr ""
 
-#: FFB_Tuner.py:1399
+#: understeer.py:1409
 msgid "No Name"
 msgstr ""
 
-#: FFB_Tuner.py:1399
+#: understeer.py:1409
 msgid "Enter a name for the preset."
 msgstr ""
 
-#: FFB_Tuner.py:1407
+#: understeer.py:1417
 msgid "Preset “{name}” saved"
 msgstr ""
 
-#: FFB_Tuner.py:1416
+#: understeer.py:1426
 msgid "Could not save preset"
 msgstr ""
 
-#: FFB_Tuner.py:1428
+#: understeer.py:1438
 msgid "and {n} more"
 msgstr ""
 
-#: FFB_Tuner.py:1439
+#: understeer.py:1449
 msgid "Settings that change:"
 msgstr ""
 
-#: FFB_Tuner.py:1440
+#: understeer.py:1450
 msgid "The preset already matches the current settings."
 msgstr ""
 
-#: FFB_Tuner.py:1444
+#: understeer.py:1454
 msgid "Overwrite “{name}”?"
 msgstr ""
 
-#: FFB_Tuner.py:1446
+#: understeer.py:1456
 msgid "Overwrite"
 msgstr ""
 
-#: FFB_Tuner.py:1470
+#: understeer.py:1480
 msgid "Saved to “{name}”"
 msgstr ""
 
-#: FFB_Tuner.py:1472
+#: understeer.py:1482
 msgid "Undo"
 msgstr ""
 
-#: FFB_Tuner.py:1488
+#: understeer.py:1498
 msgid "Delete “{name}”?"
 msgstr ""
 
-#: FFB_Tuner.py:1489
+#: understeer.py:1499
 msgid "The preset file will be removed. This cannot be undone."
 msgstr ""
 
-#: FFB_Tuner.py:1491
+#: understeer.py:1501
 msgid "Delete"
 msgstr ""
 
-#: FFB_Tuner.py:1500
+#: understeer.py:1510
 msgid "Could not delete preset"
 msgstr ""
 
-#: FFB_Tuner.py:1515
+#: understeer.py:1525
 msgid "Reset All Tuning Slots?"
 msgstr ""
 
-#: FFB_Tuner.py:1516
+#: understeer.py:1526
 msgid "All 5 tuning slots stored on the wheel base will be cleared. This cannot be undone."
 msgstr ""
 
-#: FFB_Tuner.py:1519
+#: understeer.py:1529
 msgid "Reset"
 msgstr ""
 
-#: FFB_Tuner.py:1528
+#: understeer.py:1538
 msgid "Not Available"
 msgstr ""
 
-#: FFB_Tuner.py:1529
+#: understeer.py:1539
 msgid "This wheel base does not support resetting."
 msgstr ""
 
-#: FFB_Tuner.py:1538
+#: understeer.py:1548
 msgid "OK"
 msgstr ""

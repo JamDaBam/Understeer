@@ -25,5 +25,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            SimPower-*-x86_64.AppImage SimPower-*-x86_64.AppImage.zsync \
+            Understeer-*-x86_64.AppImage Understeer-*-x86_64.AppImage.zsync \
             --title "$GITHUB_REF_NAME" --generate-notes

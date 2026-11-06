@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>io.github.JamDaBam.Understeer</id>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>GPL-3.0</project_license>
+    <name>Understeer</name>
+    <summary>Tune Fanatec wheel bases and pedals</summary>
+
+    <description>
+        <p>
+            Understeer adjusts the tuning settings of Fanatec wheel bases and
+            pedals on Linux through the hid-fanatecff kernel driver.
+        </p>
+        <ul>
+            <li>Live tuning: changes reach the wheel base while you move a control</li>
+            <li>Live display of the steering angle and pedal travel</li>
+            <li>Tuning slots and named presets</li>
+            <li>Translations through standard gettext files</li>
+        </ul>
+        <p>
+            Based on SimPower (FanatecLinux) by BenryBoi.
+        </p>
+    </description>
+
+    <launchable type="desktop-id">io.github.JamDaBam.Understeer.desktop</launchable>
+
+    <developer id="io.github.JamDaBam">
+        <name>JamDaBam</name>
+    </developer>
+
+    <url type="homepage">https://github.com/JamDaBam/FanatecLinux</url>
+    <url type="bugtracker">https://github.com/JamDaBam/FanatecLinux/issues</url>
+
+    <content_rating type="oars-1.1" />
+
+    <provides>
+        <binary>understeer.py</binary>
+    </provides>
+</component>

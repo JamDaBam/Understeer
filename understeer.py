@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SimPower — a GNOME-aligned GUI for adjusting Fanatec force-feedback
+Understeer — a GNOME-aligned GUI for adjusting Fanatec force-feedback
 settings exposed by the hid-fanatecff kernel driver via sysfs.
 
 Changes are written to the wheel base live while you move a control.
@@ -26,7 +26,7 @@ import sys
 _SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 LOCALE_DIRS = [
     _SCRIPT_DIR / "locale",                            # source checkout
-    _SCRIPT_DIR.parent / "share" / "simpower" / "locale",  # AppImage layout
+    _SCRIPT_DIR.parent / "share" / "understeer" / "locale",  # AppImage layout
 ]
 
 
@@ -112,11 +112,12 @@ from gi.repository import Gtk, Gdk, Adw, GLib, Gio  # noqa: E402
 # ---------------------------------------------------------------------------
 SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
 RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
-CONFIG_DIR  = pathlib.Path.home() / ".config" / "SimPower"
+CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
+OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
 # Kept in a subfolder: every *.json directly in CONFIG_DIR is a preset.
 AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
 ICON_DIRS   = [_SCRIPT_DIR / "icons",
-               _SCRIPT_DIR.parent / "share" / "simpower" / "icons"]
+               _SCRIPT_DIR.parent / "share" / "understeer" / "icons"]
 
 UDEV_RULE = """ACTION!="add|change", GOTO="fanatec_tuner_end"
 
@@ -136,9 +137,9 @@ UDEV_RULE_PATH = "/etc/udev/rules.d/99-fanatec-tuner.rules"
 # choices list (value, label) pairs.
 # ---------------------------------------------------------------------------
 PAGES = [
-    ("steering", N_("Steering"),       "input-gaming-symbolic"),
+    ("steering", N_("Steering"),       "understeer-steering-symbolic"),
     ("feel",     N_("Wheel Feel"),     "emblem-system-symbolic"),
-    ("pedals",   N_("Pedals"),         "simpower-pedals-symbolic"),
+    ("pedals",   N_("Pedals"),         "understeer-pedals-symbolic"),
     ("paddles",  N_("Paddles"),        "view-dual-symbolic"),
     ("presets",  N_("Presets"),        "document-save-symbolic"),
     ("tools",    N_("Tools"),          "applications-utilities-symbolic"),
@@ -451,6 +452,15 @@ class InputMonitor:
         return None
 
 
+def migrate_config():
+    """Move presets and settings from the old SimPower folder once."""
+    if OLD_CONFIG_DIR.is_dir() and not CONFIG_DIR.exists():
+        try:
+            OLD_CONFIG_DIR.rename(CONFIG_DIR)
+        except OSError:
+            pass
+
+
 def load_axis_roles():
     try:
         return json.loads(AXES_FILE.read_text())
@@ -600,7 +610,7 @@ class SettingRow:
 class TunerWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.set_title("SimPower")
+        self.set_title("Understeer")
         self.set_default_size(860, 720)
 
         self.device_path = find_device_path()
@@ -650,12 +660,12 @@ class TunerWindow(Adw.ApplicationWindow):
         side_scroll = Gtk.ScrolledWindow(vexpand=True)
         side_scroll.set_child(self.sidebar)
         side_view.set_content(side_scroll)
-        self.split.set_sidebar(Adw.NavigationPage.new(side_view, "SimPower"))
+        self.split.set_sidebar(Adw.NavigationPage.new(side_view, "Understeer"))
 
         # Content
         content_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        self.window_title = Adw.WindowTitle(title="SimPower")
+        self.window_title = Adw.WindowTitle(title="Understeer")
         header.set_title_widget(self.window_title)
         content_view.add_top_bar(header)
 
@@ -938,7 +948,7 @@ class TunerWindow(Adw.ApplicationWindow):
         save_grp = Adw.PreferencesGroup(
             title=_("Save Preset"),
             description=_("Saves all current settings under a name in "
-                          "~/.config/SimPower/."))
+                          "~/.config/Understeer/."))
         save_row = Adw.ActionRow(title=_("Current Settings"))
         save_btn = Gtk.Button(label=_("Save as Preset…"))
         save_btn.set_valign(Gtk.Align.CENTER)
@@ -1542,7 +1552,7 @@ class TunerWindow(Adw.ApplicationWindow):
 # ===========================================================================
 class TunerApplication(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="io.github.benryboi.FanatecLinux",
+        super().__init__(application_id="io.github.JamDaBam.Understeer",
                          flags=Gio.ApplicationFlags.FLAGS_NONE)
 
     def do_activate(self):
@@ -1557,5 +1567,6 @@ class TunerApplication(Adw.Application):
 
 
 if __name__ == "__main__":
+    migrate_config()
     app = TunerApplication()
     sys.exit(app.run(sys.argv))

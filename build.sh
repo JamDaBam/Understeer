@@ -5,38 +5,36 @@ echo "=== Step 1: Cleaning previous build artifacts ==="
 rm -rf AppDir
 
 echo "=== Step 2: Creating the AppDir folder structure ==="
+APP_ID=io.github.JamDaBam.Understeer
 mkdir -p AppDir/usr/bin
 mkdir -p AppDir/usr/share/applications
 mkdir -p AppDir/usr/share/metainfo
-mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+mkdir -p AppDir/usr/share/understeer/locale AppDir/usr/share/understeer/icons
 
 echo "=== Step 3: Copying project assets into the layout ==="
 # App execution script
-cp FFB_Tuner.py AppDir/usr/bin/
-chmod +x AppDir/usr/bin/FFB_Tuner.py
+cp understeer.py AppDir/usr/bin/
+chmod +x AppDir/usr/bin/understeer.py
 
-# Translations (looked up at usr/share/simpower/locale by the app)
-mkdir -p AppDir/usr/share/simpower/locale
-cp locale/*.po AppDir/usr/share/simpower/locale/
-
-# Custom symbolic icons (added to the icon theme by the app)
-mkdir -p AppDir/usr/share/simpower/icons
-cp icons/*.svg AppDir/usr/share/simpower/icons/
+# Translations and custom symbolic icons (found by the app under usr/share/understeer)
+cp locale/*.po AppDir/usr/share/understeer/locale/
+cp icons/*.svg AppDir/usr/share/understeer/icons/
 
 # App metadata files
-cp io.github.benryboi.FanatecLinux.desktop AppDir/
-cp io.github.benryboi.FanatecLinux.desktop AppDir/usr/share/applications/
-cp io.github.benryboi.FanatecLinux.appdata.xml AppDir/usr/share/metainfo/
+cp $APP_ID.desktop AppDir/
+cp $APP_ID.desktop AppDir/usr/share/applications/
+cp $APP_ID.metainfo.xml AppDir/usr/share/metainfo/
 
-# Visual assets (AppImage looks in the root and in the hicolor spec folder)
-cp io.github.benryboi.FanatecLinux.png AppDir/
-cp io.github.benryboi.FanatecLinux.png AppDir/usr/share/icons/hicolor/256x256/apps/
+# App icon (AppImage looks in the root and in the hicolor spec folder)
+cp $APP_ID.svg AppDir/
+cp $APP_ID.svg AppDir/usr/share/icons/hicolor/scalable/apps/
 
 echo "=== Step 4: Creating the core AppRun launch script ==="
 cat << 'EOF' > AppDir/AppRun
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
-exec python3 "$HERE/usr/bin/FFB_Tuner.py" "$@"
+exec python3 "$HERE/usr/bin/understeer.py" "$@"
 EOF
 chmod +x AppDir/AppRun
 
@@ -55,8 +53,8 @@ export VERSION="${VERSION#v}"
 
 # Update information lets tools like Gear Lever find new releases on GitHub.
 # It also produces a .zsync file that must be uploaded next to the AppImage.
-UPDATE_INFO="gh-releases-zsync|JamDaBam|FanatecLinux|latest|SimPower-*x86_64.AppImage.zsync"
+UPDATE_INFO="gh-releases-zsync|JamDaBam|FanatecLinux|latest|Understeer-*x86_64.AppImage.zsync"
 
-"./$TOOL" -u "$UPDATE_INFO" AppDir "SimPower-$VERSION-$ARCH.AppImage"
+"./$TOOL" -u "$UPDATE_INFO" AppDir "Understeer-$VERSION-$ARCH.AppImage"
 
 echo "=== Success: AppImage compilation sequence completed ==="

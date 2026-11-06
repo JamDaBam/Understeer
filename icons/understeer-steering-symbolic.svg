@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Steering wheel: rim, three spokes, hub -->
+  <g fill="none" stroke="#222222" stroke-width="2">
+    <circle cx="8" cy="8" r="6"/>
+  </g>
+  <g fill="none" stroke="#222222" stroke-width="1.6" stroke-linecap="round">
+    <line x1="2.5" y1="8.5" x2="6" y2="8.5"/>
+    <line x1="10" y1="8.5" x2="13.5" y2="8.5"/>
+    <line x1="8" y1="10.5" x2="8" y2="13.5"/>
+  </g>
+  <circle cx="8" cy="8.5" r="2" fill="#222222"/>
+</svg>

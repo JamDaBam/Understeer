@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Understeer
+Comment=Tune Fanatec wheel bases and pedals using the hid-fanatecff driver
+Exec=understeer.py
+Icon=io.github.JamDaBam.Understeer
+Terminal=false
+Categories=Utility;HardwareSettings;
+Keywords=fanatec;simracing;steering;wheel;pedals;force feedback;ffb;
+StartupWMClass=io.github.JamDaBam.Understeer

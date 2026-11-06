@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Collect all _("...") and N_("...") strings from FFB_Tuner.py.
+"""Collect all _("...") and N_("...") strings from understeer.py.
 
-Writes locale/simpower.pot and adds new strings to every locale/*.po
+Writes locale/understeer.pot and adds new strings to every locale/*.po
 (existing translations are kept, removed strings are dropped).
 Run it after changing user-visible text:  python3 tools/update_translations.py
 """
@@ -11,7 +11,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-SOURCE = ROOT / "FFB_Tuner.py"
+SOURCE = ROOT / "understeer.py"
 LOCALE = ROOT / "locale"
 
 
@@ -63,7 +63,7 @@ def quote(s):
 def render(strings, translations, header):
     out = [header]
     for msgid, line in strings:
-        out.append(f"#: FFB_Tuner.py:{line}")
+        out.append(f"#: understeer.py:{line}")
         out.append(f"msgid {quote(msgid)}")
         out.append(f"msgstr {quote(translations.get(msgid, ''))}")
         out.append("")
@@ -79,7 +79,7 @@ msgstr ""
 if __name__ == "__main__":
     strings = extract()
     LOCALE.mkdir(exist_ok=True)
-    (LOCALE / "simpower.pot").write_text(
+    (LOCALE / "understeer.pot").write_text(
         render(strings, {}, HEADER.format(lang="")), encoding="utf-8")
     for po in sorted(LOCALE.glob("*.po")):
         old = parse_po(po.read_text(encoding="utf-8"))
@@ -87,4 +87,4 @@ if __name__ == "__main__":
                       encoding="utf-8")
         missing = [s for s, _l in strings if not old.get(s)]
         print(f"{po.name}: {len(strings) - len(missing)}/{len(strings)} translated")
-    print(f"simpower.pot: {len(strings)} strings")
+    print(f"understeer.pot: {len(strings)} strings")
