@@ -4,6 +4,7 @@ Every *.json directly in CONFIG_DIR is a preset:
     {"name": "GT3 Race", "values": {"FF": 70, "SEN": 900, ...}}
 """
 import json
+import os
 import pathlib
 import re
 
@@ -14,6 +15,10 @@ AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
 SLOT_NAMES_FILE = CONFIG_DIR / "settings" / "slot_names.json"
 SLOT_COUNTS_FILE = CONFIG_DIR / "settings" / "slot_counts.json"
 APP_SETTINGS_FILE = CONFIG_DIR / "settings" / "app.json"
+GAMES_FILE = CONFIG_DIR / "settings" / "games.json"
+# Downloaded game covers can be fetched again, so they go to the cache.
+COVER_DIR = (pathlib.Path(os.environ.get("XDG_CACHE_HOME") or
+                          pathlib.Path.home() / ".cache") / "Understeer" / "covers")
 
 
 def migrate_config():
@@ -111,6 +116,44 @@ def set_setting(key, value):
         APP_SETTINGS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
     except OSError:
         pass
+
+
+def load_games():
+    """Games with their preset, e.g.
+    [{"game": "steam:805550", "name": "Assetto Corsa Competizione",
+      "preset": "GT3 Race.json", "auto": true}]
+    "preset" is the file name of a preset in CONFIG_DIR, or None.
+    """
+    try:
+        data = json.loads(GAMES_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    games = []
+    for g in data:
+        if isinstance(g, dict) and isinstance(g.get("game"), str):
+            games.append({"game": g["game"],
+                          "name": str(g.get("name") or g["game"]),
+                          "preset": g.get("preset") if isinstance(
+                              g.get("preset"), str) else None,
+                          "auto": bool(g.get("auto", True))})
+    return games
+
+
+def save_games(games):
+    try:
+        GAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        GAMES_FILE.write_text(json.dumps(games, indent=2))
+    except OSError:
+        pass
+
+
+def game_preset_path(game):
+    """Path of the preset a game uses, or None if unset or deleted."""
+    name = game.get("preset")
+    path = CONFIG_DIR / name if name else None
+    return path if path is not None and path.is_file() else None
 
 
 # ---------------------------------------------------------------------------

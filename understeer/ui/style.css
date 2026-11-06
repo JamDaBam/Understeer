@@ -150,3 +150,39 @@ flowbox > flowboxchild > .tile {
 .compact .pedal levelbar.vertical trough block {
   min-width: 26px;
 }
+
+/* Games */
+.games flowbox > flowboxchild > .tile {
+  min-width: 170px;
+}
+
+.compact .games flowbox > flowboxchild > .tile {
+  min-width: 140px;
+}
+
+.game-tile {
+  padding: 8px 8px 10px 8px;
+}
+
+.game-cover {
+  border-radius: 10px;
+}
+
+.cover-placeholder {
+  color: @accent_color;
+  background-color: alpha(@accent_bg_color, 0.12);
+}
+
+.game-tile.running {
+  box-shadow: inset 0 0 0 2px @success_color;
+}
+
+.running-badge {
+  background-color: @success_bg_color;
+  color: @success_fg_color;
+  border-radius: 99px;
+  padding: 2px 10px;
+  margin: 8px;
+  font-weight: 700;
+  font-size: 0.85em;
+}

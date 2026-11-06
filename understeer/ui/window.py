@@ -5,7 +5,7 @@ import pathlib
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import config
+from .. import config, games
 from ..device import (can_write, find_device_path, find_rumble_path,
                       install_udev_rule, join_group, model_id, permission_hint,
                       read_int, write_values)
@@ -13,12 +13,14 @@ from .. import i18n
 from ..i18n import _
 from ..inputs import AXIS_ROLES, InputMonitor
 from ..settings import MAX_SLOT, PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
+from .games_page import GamesPage
 from .live import WheelView
 from .setting_tile import SettingTile
 
 LIVE_DELAY_MS = 120
 LAYOUTS = ["full", "compact"]
 WATCH_MS = 250       # how often to look for changes made on the wheel base
+GAMES_WATCH_MS = 2000   # how often to look for started games
 SLOT_TOAST_MS = 3000
 
 
@@ -62,10 +64,14 @@ class TunerWindow(Adw.ApplicationWindow):
         self._refresh_device_state()
         self._start_inputs()
         self._watch = GLib.timeout_add(WATCH_MS, self._check_device)
+        self._running_games = set()
+        self._games_watch = GLib.timeout_add(GAMES_WATCH_MS, self._check_games)
+        GLib.idle_add(lambda: self._check_games() and False)
         self.connect("close-request", self._on_close)
 
     def _on_close(self, window):
         GLib.source_remove(self._watch)
+        GLib.source_remove(self._games_watch)
         self.inputs.stop()
         return False
 
@@ -154,6 +160,7 @@ class TunerWindow(Adw.ApplicationWindow):
         self.split.set_content(self.content_page)
 
         builders = {"presets": self._build_presets_page,
+                    "games": self._build_games_page,
                     "tools": self._build_tools_page}
         for key, title, icon in PAGES:
             page = builders.get(key, lambda k=key: self._build_settings_page(k))()
@@ -533,6 +540,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _presets_changed(self):
         self._rebuild_presets_list()
+        self.games_page.refresh()
         self._rebuild_preset_menu()
         self._update_preset_indicator()
 
@@ -1126,7 +1134,24 @@ class TunerWindow(Adw.ApplicationWindow):
         self.active_values = dict(values)
         self._presets_changed()
 
-    def _apply_preset(self, path):
+    def _build_games_page(self):
+        self.games_page = GamesPage(self)
+        return self.games_page.widget
+
+    def _check_games(self):
+        """Apply a game's preset when it starts (while the app is open)."""
+        running = games.running_games()
+        started = running - self._running_games
+        self._running_games = running
+        self.games_page.set_running(running)
+        for game in self.games_page.games:
+            if game["game"] in started and game["auto"]:
+                path = config.game_preset_path(game)
+                if path is not None:
+                    self._apply_preset(path, game=game["name"])
+        return GLib.SOURCE_CONTINUE
+
+    def _apply_preset(self, path, game=None):
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
@@ -1136,9 +1161,18 @@ class TunerWindow(Adw.ApplicationWindow):
         self.active_preset, self.active_values = path, dict(values)
         self._rebuild_preset_menu()
         self._rebuild_presets_list()
-        self._apply_values(
-            values, _("Preset “{name}” applied").format(name=name),
-            _("Preset “{name}” loaded — click Apply to write it").format(name=name))
+        if game:
+            self._apply_values(
+                values,
+                _("{game} started: preset “{name}” applied").format(
+                    game=game, name=name),
+                _("{game} started: preset “{name}” loaded — click Apply to "
+                  "write it").format(game=game, name=name))
+        else:
+            self._apply_values(
+                values, _("Preset “{name}” applied").format(name=name),
+                _("Preset “{name}” loaded — click Apply to write it").format(
+                    name=name))
 
     def _ask_preset_name(self):
         entry = Gtk.Entry(placeholder_text=_("e.g. GT3 Race"),

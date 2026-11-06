@@ -15,6 +15,7 @@ PAGES = [
     ("pedals",   N_("Pedals"),         "understeer-pedals-symbolic"),
     ("paddles",  N_("Paddles"),        "view-dual-symbolic"),
     ("presets",  N_("Presets"),        "document-save-symbolic"),
+    ("games",    N_("Games"),          "applications-games-symbolic"),
     ("tools",    N_("Tools"),          "applications-utilities-symbolic"),
 ]
 
