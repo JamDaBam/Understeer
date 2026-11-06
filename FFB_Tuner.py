@@ -188,6 +188,13 @@ class TunerWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         toolbar_view.add_top_bar(header)
 
+        apply_everything_btn = Gtk.Button(label="Apply All")
+        apply_everything_btn.add_css_class("suggested-action")
+        apply_everything_btn.set_tooltip_text(
+            "Write the settings from all tabs (Wheel, Pedals, Advanced) to the device")
+        apply_everything_btn.connect("clicked", lambda b: self._apply_everything())
+        header.pack_start(apply_everything_btn)
+
         tab_bar  = Adw.TabBar()
         tab_view = Adw.TabView()
         tab_bar.set_view(tab_view)
@@ -232,7 +239,8 @@ class TunerWindow(Adw.ApplicationWindow):
         rb.connect("clicked", lambda b: reload_cb())
         bar.append(rb)
 
-        ab = Gtk.Button(label="Apply All")
+        ab = Gtk.Button(label="Apply Page")
+        ab.set_tooltip_text("Write only the settings on this tab to the device")
         ab.add_css_class("pill")
         ab.connect("clicked", lambda b: apply_cb())
         bar.append(ab)
@@ -828,9 +836,8 @@ class TunerWindow(Adw.ApplicationWindow):
     # -----------------------------------------------------------------------
     # Apply-all helpers
     # -----------------------------------------------------------------------
-    def _apply_group(self, attrs, widgets):
-        if not self.device_path:
-            return
+    def _write_group(self, attrs, widgets):
+        """Write every attr in the group; return the ids that failed."""
         failures = []
         for attr_id, *_, kind in attrs:
             path = self._attr_file(attr_id)
@@ -840,6 +847,12 @@ class TunerWindow(Adw.ApplicationWindow):
             val = w.get_active() if isinstance(w, Gtk.Switch) else w.get_value()
             if not self._write_value(path, val):
                 failures.append(attr_id)
+        return failures
+
+    def _apply_group(self, attrs, widgets):
+        if not self.device_path:
+            return
+        failures = self._write_group(attrs, widgets)
         if failures:
             self._err("Write Errors", f"Failed syncing: {', '.join(failures)}")
 
@@ -850,12 +863,32 @@ class TunerWindow(Adw.ApplicationWindow):
         self._apply_group(PEDAL_ATTRS, self.pedal_w)
 
     def _apply_all_advanced(self):
+        # Write SLOT first: switching loads that slot's stored values, so
+        # doing it last would discard the values written below.
+        if self.device_path:
+            slot_path = self._attr_file("SLOT")
+            if os.path.exists(slot_path):
+                self._write_value(slot_path,
+                                  int(self.advanced_w["SLOT"].get_value()))
         self._apply_group(ADVANCED_ATTRS, self.advanced_w)
-        # Also write SLOT
+
+    def _apply_everything(self):
+        if not self.device_path:
+            self._err("No Device", "No active wheel interface detected.")
+            return
+        failures = []
+        # Switch slot first: switching loads that slot's stored values, so
+        # doing it last would discard the values written below.
         slot_path = self._attr_file("SLOT")
         if os.path.exists(slot_path):
-            self._write_value(slot_path,
-                              int(self.advanced_w["SLOT"].get_value()))
+            if not self._write_value(slot_path,
+                                     int(self.advanced_w["SLOT"].get_value())):
+                failures.append("SLOT")
+        failures += self._write_group(WHEEL_ATTRS, self.wheel_w)
+        failures += self._write_group(PEDAL_ATTRS, self.pedal_w)
+        failures += self._write_group(ADVANCED_ATTRS, self.advanced_w)
+        if failures:
+            self._err("Write Errors", f"Failed syncing: {', '.join(failures)}")
 
     # -----------------------------------------------------------------------
     # Sim-racing defaults (wheel tab)
