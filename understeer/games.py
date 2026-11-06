@@ -5,6 +5,7 @@ package, Flatpak, Snap) and keep games in several libraries, so all of
 them are searched.
 """
 import logging
+import os
 import pathlib
 import re
 import struct
@@ -228,9 +229,64 @@ def download_cover(appid, cache_dir, timeout=10):
 # Running games
 # ---------------------------------------------------------------------------
 def program_key(name):
-    """Normalised program name: "AC2-Win64-Shipping.exe" -> "ac2-win64-shipping"."""
+    """Normalised program name: "AC2-Win64-Shipping.exe" -> "ac2-win64-shipping".
+
+    Only ".exe" is dropped: Windows games show up with or without it,
+    depending on how Wine or Proton started them. Other endings such as
+    ".x86_64" or ".sh" belong to the name.
+    """
     name = re.split(r"[\\/]", name.strip())[-1].lower()
     return name[:-4] if name.endswith(".exe") else name
+
+
+# Programs that run another file given as their first argument.
+INTERPRETERS = re.compile(r"^(sh|bash|dash|zsh|python[\d.]*|perl|java|mono|"
+                          r"wine(64)?(-preloader)?|wine64-preloader)$")
+COMM_LENGTH = 15        # Linux cuts process names (comm) to this length
+
+
+def _program_names(pid_dir):
+    """Names a process can be recognised by, best name first.
+
+    - .exe files on the command line: Windows games under Wine/Proton
+    - the file it was started as, or the script an interpreter runs
+    - the executed file (/proc/<pid>/exe), e.g. behind a wrapper
+    - the process name, which Linux cuts to 15 characters
+    """
+    names = []
+    try:
+        argv = [a.decode(errors="replace")
+                for a in (pid_dir / "cmdline").read_bytes().split(b"\0") if a]
+    except OSError:
+        argv = []
+    names += [a for a in argv if a.lower().endswith(".exe")]
+    if argv:
+        names.append(argv[0])
+        if len(argv) > 1 and INTERPRETERS.match(program_key(argv[0])) \
+                and not argv[1].startswith("-"):
+            names.append(argv[1])
+    try:
+        names.append(str(pathlib.Path(pid_dir / "exe").readlink()))
+    except (OSError, AttributeError):
+        pass
+    try:
+        names.append((pid_dir / "comm").read_text())
+    except OSError:
+        pass
+    return [n for n in names if program_key(n)]
+
+
+def _steam_app(pid_dir):
+    try:
+        environ = (pid_dir / "environ").read_bytes()
+    except OSError:
+        return None                         # another user's process
+    for entry in environ.split(b"\0"):
+        if entry.startswith((b"SteamAppId=", b"SteamGameId=")):
+            appid = entry.split(b"=", 1)[1].decode(errors="replace")
+            if appid.isdigit() and appid != "0":
+                return appid
+    return ""
 
 
 def running_games(proc=None):
@@ -238,32 +294,68 @@ def running_games(proc=None):
 
     Steam sets SteamAppId (or SteamGameId) for every game it starts, native
     or through Proton. Other games are recognised by their program name,
-    taken from the command line (Proton games show their .exe there) and
-    from the process name, which Linux cuts to 15 characters.
-    Only processes of the current user can be read, which is all we need.
+    see _program_names(). Only processes of the current user can be read,
+    which is all we need.
     """
     found = set()
     for pid_dir in (proc or PROC).iterdir():
         if not pid_dir.name.isdigit():
             continue
-        try:
-            environ = (pid_dir / "environ").read_bytes()
-        except OSError:
+        appid = _steam_app(pid_dir)
+        if appid is None:
             continue
-        for entry in environ.split(b"\0"):
-            if entry.startswith((b"SteamAppId=", b"SteamGameId=")):
-                appid = entry.split(b"=", 1)[1].decode(errors="replace")
-                if appid.isdigit() and appid != "0":
-                    found.add(steam_id(appid))
-                    break
-        names = []
-        try:
-            argv0 = (pid_dir / "cmdline").read_bytes().split(b"\0")[0]
-            names.append(argv0.decode(errors="replace"))
-            names.append((pid_dir / "comm").read_text())
-        except OSError:
-            pass
-        for name in names:
-            if program_key(name):
-                found.add("process:" + program_key(name))
+        if appid:
+            found.add(steam_id(appid))
+        for name in _program_names(pid_dir):
+            found.add("process:" + program_key(name))
     return found
+
+
+def is_running(game_id, running):
+    """Whether the game with this id is among running_games()."""
+    if game_id in running:
+        return True
+    # A long program name may only be known by its cut process name.
+    kind, _sep, key = game_id.partition(":")
+    return kind == "process" and len(key) > COMM_LENGTH and \
+        f"process:{key[:COMM_LENGTH]}" in running
+
+
+def _start_time(pid_dir):
+    try:
+        stat = (pid_dir / "stat").read_text()
+        return int(stat.rsplit(")", 1)[1].split()[19])
+    except (OSError, IndexError, ValueError):
+        return 0
+
+
+def running_programs(proc=None):
+    """[(name, command line)] of the user's running programs, newest first.
+
+    For choosing a game that isn't started by Steam while it runs.
+    """
+    procs = []
+    own = str(os.getpid())
+    for pid_dir in (proc or PROC).iterdir():
+        if not pid_dir.name.isdigit() or pid_dir.name == own:
+            continue
+        if _steam_app(pid_dir) is None:
+            continue
+        names = _program_names(pid_dir)
+        if not names:
+            continue
+        try:
+            cmdline = (pid_dir / "cmdline").read_bytes().replace(
+                b"\0", b" ").decode(errors="replace").strip()
+        except OSError:
+            cmdline = ""
+        if not cmdline:                     # kernel threads
+            continue
+        name = re.split(r"[\\/]", names[0].strip())[-1]
+        procs.append((_start_time(pid_dir), name, cmdline))
+    seen, result = set(), []
+    for _t, name, cmdline in sorted(procs, key=lambda p: -p[0]):
+        if program_key(name) not in seen:
+            seen.add(program_key(name))
+            result.append((name, cmdline))
+    return result

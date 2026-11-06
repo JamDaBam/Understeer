@@ -1191,6 +1191,8 @@ class TunerWindow(Adw.ApplicationWindow):
         except OSError as e:
             log.warning("Could not look for running games: %s", e)
             return GLib.SOURCE_CONTINUE
+        running = {g["game"] for g in self.games_page.games
+                   if games.is_running(g["game"], running)}
         started = running - self._running_games
         stopped = self._running_games - running
         self._running_games = running

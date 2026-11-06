@@ -3,10 +3,12 @@
 Every *.json directly in CONFIG_DIR is a preset:
     {"name": "GT3 Race", "values": {"FF": 70, "SEN": 900, ...}}
 """
+import hashlib
 import json
 import os
 import pathlib
 import re
+import shutil
 
 CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
 OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
@@ -19,6 +21,8 @@ GAMES_FILE = CONFIG_DIR / "settings" / "games.json"
 # Downloaded game covers can be fetched again, so they go to the cache.
 COVER_DIR = (pathlib.Path(os.environ.get("XDG_CACHE_HOME") or
                           pathlib.Path.home() / ".cache") / "Understeer" / "covers")
+# Pictures the user picked for a game can't be fetched again: config, not cache.
+CUSTOM_COVER_DIR = CONFIG_DIR / "covers"
 
 
 def migrate_config():
@@ -123,6 +127,8 @@ def load_games():
     [{"game": "steam:805550", "name": "Assetto Corsa Competizione",
       "preset": "GT3 Race.json", "auto": true}]
     "preset" is the file name of a preset in CONFIG_DIR, or None.
+    "cover" (optional) is the file name of a picture the user chose, in
+    CUSTOM_COVER_DIR.
     """
     try:
         data = json.loads(GAMES_FILE.read_text())
@@ -138,6 +144,9 @@ def load_games():
                           "preset": g.get("preset") if isinstance(
                               g.get("preset"), str) else None,
                           "auto": bool(g.get("auto", True))})
+            cover = g.get("cover")
+            if isinstance(cover, str) and cover and "/" not in cover:
+                games[-1]["cover"] = cover
     return games
 
 
@@ -147,6 +156,37 @@ def save_games(games):
         GAMES_FILE.write_text(json.dumps(games, indent=2))
     except OSError:
         pass
+
+
+def game_cover_path(game):
+    """Picture the user chose for a game, or None."""
+    name = game.get("cover")
+    path = CUSTOM_COVER_DIR / name if name else None
+    return path if path is not None and path.is_file() else None
+
+
+def set_game_cover(game, source):
+    """Copy the picture at source for game; returns its path. Raises OSError."""
+    suffix = pathlib.Path(source).suffix.lower() or ".img"
+    name = hashlib.sha1(game["game"].encode()).hexdigest()[:16] + suffix
+    CUSTOM_COVER_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = CUSTOM_COVER_DIR / (name + ".part")
+    shutil.copyfile(source, tmp)
+    remove_game_cover(game)
+    tmp.replace(CUSTOM_COVER_DIR / name)
+    game["cover"] = name
+    return CUSTOM_COVER_DIR / name
+
+
+def remove_game_cover(game):
+    """Forget the picture the user chose for a game and delete its copy."""
+    path = game_cover_path(game)
+    game.pop("cover", None)
+    if path is not None:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def game_preset_path(game):

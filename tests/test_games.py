@@ -267,3 +267,80 @@ def test_game_preset_path(home):
     assert config.game_preset_path({"preset": "GT3.json"}) == home / "GT3.json"
     assert config.game_preset_path({"preset": "Deleted.json"}) is None
     assert config.game_preset_path({"preset": None}) is None
+
+
+# -- recognising other programs ----------------------------------------------
+def full_process(proc, pid, cmdline, comm, exe=None, starttime=1, environ=b""):
+    d = proc / str(pid)
+    d.mkdir(parents=True)
+    (d / "environ").write_bytes(environ)
+    (d / "cmdline").write_bytes(b"\0".join(a.encode() for a in cmdline) + b"\0")
+    (d / "comm").write_text(comm + "\n")
+    (d / "stat").write_text(f"{pid} ({comm}) S " + " ".join(
+        ["0"] * 18 + [str(starttime)] + ["0"] * 5))
+    if exe:
+        (d / "exe").symlink_to(exe)
+
+
+def test_wine_game_found_by_exe_argument(tmp_path):
+    proc = tmp_path / "proc"
+    full_process(proc, 10, ["/usr/bin/wine64-preloader",
+                            "C:\\Games\\Diablo II\\Game.exe", "-w"], "Game.exe")
+    assert "process:game" in games.running_games(proc)
+
+
+def test_script_found_behind_interpreter(tmp_path):
+    proc = tmp_path / "proc"
+    full_process(proc, 11, ["/bin/bash", "/opt/MyRacingGame/start-racing-game.sh"],
+                 "start-racing-ga")
+    assert "process:start-racing-game.sh" in games.running_games(proc)
+
+
+def test_found_by_executed_file(tmp_path):
+    proc = tmp_path / "proc"
+    binary = tmp_path / "RealGame.x86_64"
+    binary.write_text("")
+    full_process(proc, 12, ["launcher"], "launcher", exe=binary)
+    assert "process:realgame.x86_64" in games.running_games(proc)
+
+
+def test_long_name_matches_cut_process_name():
+    running = {"process:averyveryverylo"}
+    assert games.is_running("process:averyveryverylongname", running)
+    assert not games.is_running("process:shortname", running)
+    assert games.is_running("steam:1", {"steam:1"})
+    assert not games.is_running("steam:averyveryverylongname", running)
+
+
+def test_running_programs_newest_first(tmp_path):
+    proc = tmp_path / "proc"
+    full_process(proc, 20, ["/usr/bin/gnome-shell"], "gnome-shell", starttime=5)
+    full_process(proc, 21, ["Z:\\Games\\D2R.exe"], "D2R.exe", starttime=900)
+    full_process(proc, 22, ["/usr/bin/gnome-shell", "--x"], "gnome-shell",
+                 starttime=6)
+    (proc / "23").mkdir()                       # kernel thread: no cmdline
+    (proc / "23" / "environ").write_bytes(b"")
+    (proc / "23" / "cmdline").write_bytes(b"")
+    names = [name for name, _cmd in games.running_programs(proc)]
+    assert names == ["D2R.exe", "gnome-shell"]
+
+
+# -- own pictures -------------------------------------------------------------
+def test_custom_cover(home, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "CUSTOM_COVER_DIR", home / "covers")
+    picture = tmp_path / "Diablo.PNG"
+    picture.write_bytes(png(600, 900))
+    game = {"game": "process:game", "name": "Diablo II", "preset": None,
+            "auto": True}
+    path = config.set_game_cover(game, picture)
+    assert path.suffix == ".png" and path.parent == home / "covers"
+    assert config.game_cover_path(game) == path
+    config.save_games([game])
+    assert config.load_games()[0]["cover"] == path.name
+    # a new picture replaces the old copy
+    other = tmp_path / "other.jpg"
+    other.write_bytes(jpeg(600, 900))
+    new_path = config.set_game_cover(game, other)
+    assert not path.exists() and new_path.exists()
+    config.remove_game_cover(game)
+    assert "cover" not in game and not new_path.exists()

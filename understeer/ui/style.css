@@ -171,6 +171,12 @@ flowbox > flowboxchild > .tile {
 .cover-placeholder {
   color: @accent_color;
   background-color: alpha(@accent_bg_color, 0.12);
+  padding: 8px;
+}
+
+.cover-status {
+  font-size: 0.85em;
+  color: alpha(currentColor, 0.8);
 }
 
 .game-tile.running {

@@ -1,14 +1,20 @@
 """The Games page: one tile per game with its cover and preset."""
 import logging
+import pathlib
 import threading
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .. import config, games
 from ..i18n import _
 from .live import CoverView
 
 log = logging.getLogger("understeer.games")
+
+
+def _steam_appid(game):
+    kind, _sep, appid = game["game"].partition(":")
+    return appid if kind == "steam" else None
 
 
 class GamesPage:
@@ -21,6 +27,9 @@ class GamesPage:
         self.window = window
         self.games = config.load_games()
         self.running = set()
+        self._downloading = set()   # steam app ids being fetched
+        self._failed = set()        # ... or that had no cover online
+        self._search = None         # [asked, found] of a search the user started
         roots = games.steam_roots()
         log.info("Steam installations: %s", ", ".join(map(str, roots)) or "none")
         for root in roots:
@@ -28,8 +37,6 @@ class GamesPage:
                      ", ".join(map(str, games.library_folders(root))))
         log.info("%d games set up, cover downloads %s", len(self.games),
                  "on" if config.get_setting("download_covers", False) else "off")
-        self._downloading = set()   # steam app ids being fetched
-        self._failed = set()        # ... or that had no cover online
 
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         column.add_css_class("games")
@@ -51,14 +58,21 @@ class GamesPage:
 
         options = Adw.PreferencesGroup()
         options.set_margin_top(18)
-        download = Adw.SwitchRow(
+        self.download_row = Adw.SwitchRow(
             title=_("Download Missing Covers"),
-            subtitle=_("Loads covers from Steam's servers when Steam has none "
-                       "stored. When off, Understeer uses only the pictures "
-                       "Steam already keeps on this computer."))
-        download.set_active(bool(config.get_setting("download_covers", False)))
-        download.connect("notify::active", self._on_download_toggled)
-        options.add(download)
+            subtitle=_("Loads covers of Steam games from Steam's servers when "
+                       "Steam has none stored. When off, Understeer uses only "
+                       "the pictures Steam already keeps on this computer."))
+        self.download_row.set_active(bool(config.get_setting("download_covers", False)))
+        self.search_btn = Gtk.Button(icon_name="view-refresh-symbolic",
+                                     valign=Gtk.Align.CENTER)
+        self.search_btn.add_css_class("flat")
+        self.search_btn.set_tooltip_text(_("Search missing covers now"))
+        self.search_btn.set_sensitive(self.download_row.get_active())
+        self.search_btn.connect("clicked", lambda b: self.search_covers())
+        self.download_row.add_suffix(self.search_btn)
+        self.download_row.connect("notify::active", self._on_download_toggled)
+        options.add(self.download_row)
 
         for w in (title, desc, self.flow, options):
             column.append(w)
@@ -71,21 +85,21 @@ class GamesPage:
 
     # -- state ---------------------------------------------------------------
     def set_running(self, running):
-        """Ids of running games, see games.running_games()."""
-        shown = {g["game"] for g in self.games}
-        if (running & shown) != (self.running & shown):
-            self.running = running
+        """Ids of running games that are on this page."""
+        if running != self.running:
+            self.running = set(running)
             self.refresh()
-        else:
-            self.running = running
 
     def _save(self):
         config.save_games(self.games)
 
     def _on_download_toggled(self, row, _param):
-        config.set_setting("download_covers", row.get_active() or None)
-        self._failed.clear()
-        self.refresh()
+        active = row.get_active()
+        config.set_setting("download_covers", active or None)
+        self.search_btn.set_sensitive(active)
+        log.info("Cover downloads %s", "on" if active else "off")
+        if active:
+            self.search_covers()
 
     # -- tiles ---------------------------------------------------------------
     def refresh(self):
@@ -112,9 +126,17 @@ class GamesPage:
         button.set_child(inner)
         return button
 
+    def _cover_file(self, game):
+        """The picture to show: chosen by the user, else Steam's cover."""
+        path = config.game_cover_path(game)
+        appid = _steam_appid(game)
+        if path is None and appid:
+            path = games.find_cover(appid, config.COVER_DIR)
+        return path
+
     def _cover(self, game):
-        appid = game["game"].split(":", 1)[1] if game["game"].startswith("steam:") else None
-        path = games.find_cover(appid, config.COVER_DIR) if appid else None
+        appid = _steam_appid(game)
+        path = self._cover_file(game)
         if path is None and appid and config.get_setting("download_covers", False):
             self._download(appid)
         if path is not None:
@@ -122,12 +144,68 @@ class GamesPage:
             child.set_content_fit(Gtk.ContentFit.COVER)
             child.set_can_shrink(True)
         else:
-            child = Gtk.Image.new_from_icon_name("applications-games-symbolic")
-            child.set_pixel_size(48)
-            child.add_css_class("cover-placeholder")
+            child = self._placeholder(appid)
         cover = CoverView(child)                # portrait, like Steam's library
         cover.add_css_class("game-cover")
         return cover
+
+    def _placeholder(self, appid):
+        """Empty cover that tells whether a cover is being searched."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.add_css_class("cover-placeholder")
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
+                        valign=Gtk.Align.CENTER, vexpand=True)
+        if appid in self._downloading:
+            icon = Gtk.Spinner(spinning=True, width_request=32, height_request=32)
+            text = _("Searching for a cover…")
+        else:
+            icon = Gtk.Image.new_from_icon_name("applications-games-symbolic")
+            icon.set_pixel_size(48)
+            text = (_("No cover found online") if appid in self._failed
+                    else _("No cover"))
+        icon.set_halign(Gtk.Align.CENTER)
+        label = Gtk.Label(label=text, wrap=True, justify=Gtk.Justification.CENTER,
+                          max_width_chars=10)
+        label.add_css_class("cover-status")
+        inner.append(icon)
+        inner.append(label)
+        box.append(inner)
+        return box
+
+    def _game_menu(self, game):
+        """The ⋮ button on a cover: picture and remove actions."""
+        group = Gio.SimpleActionGroup()
+
+        def add(name, callback):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", lambda a, p: callback())
+            group.add_action(action)
+
+        add("choose-cover", lambda: self._choose_cover(game))
+        add("remove-cover", lambda: self._remove_cover(game))
+        add("find-cover", lambda: self.search_covers([game]))
+        add("remove", lambda: self._remove(game))
+
+        menu = Gio.Menu()
+        pictures = Gio.Menu()
+        pictures.append(_("Choose Picture…"), "game.choose-cover")
+        if config.game_cover_path(game) is not None:
+            pictures.append(_("Use Steam Cover") if _steam_appid(game)
+                            else _("Remove Picture"), "game.remove-cover")
+        elif _steam_appid(game) and self._cover_file(game) is None:
+            pictures.append(_("Download Cover"), "game.find-cover")
+        menu.append_section(None, pictures)
+        menu.append(_("Remove Game"), "game.remove")
+
+        button = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=menu,
+                                halign=Gtk.Align.END, valign=Gtk.Align.START)
+        button.add_css_class("osd")
+        button.add_css_class("circular")
+        button.set_margin_top(6)
+        button.set_margin_end(6)
+        button.set_tooltip_text(_("Picture and More"))
+        button.insert_action_group("game", group)
+        return button
 
     def _game_tile(self, game, presets):
         running = game["game"] in self.running
@@ -140,15 +218,7 @@ class GamesPage:
 
         overlay = Gtk.Overlay()
         overlay.set_child(self._cover(game))
-        remove = Gtk.Button(icon_name="user-trash-symbolic",
-                            halign=Gtk.Align.END, valign=Gtk.Align.START)
-        remove.add_css_class("osd")
-        remove.add_css_class("circular")
-        remove.set_margin_top(6)
-        remove.set_margin_end(6)
-        remove.set_tooltip_text(_("Remove Game"))
-        remove.connect("clicked", lambda b: self._remove(game))
-        overlay.add_overlay(remove)
+        overlay.add_overlay(self._game_menu(game))
         if running:
             badge = Gtk.Label(label=_("Running"), halign=Gtk.Align.START,
                               valign=Gtk.Align.START)
@@ -157,7 +227,7 @@ class GamesPage:
         tile.append(overlay)
 
         name = Gtk.Label(label=game["name"], xalign=0, wrap=True, lines=2)
-        name.set_ellipsize(3)                   # Pango.EllipsizeMode.END
+        name.set_ellipsize(Pango.EllipsizeMode.END)
         name.set_max_width_chars(8)
         name.add_css_class("heading")
         tile.append(name)
@@ -190,6 +260,7 @@ class GamesPage:
 
     def _remove(self, game):
         log.info("Removed game %s (%s)", game["name"], game["game"])
+        config.remove_game_cover(game)
         self.games = [g for g in self.games if g is not game]
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
@@ -204,7 +275,77 @@ class GamesPage:
         self._save()
         self.refresh()
 
-    # -- covers --------------------------------------------------------------
+    # -- own pictures --------------------------------------------------------
+    def _choose_cover(self, game):
+        images = Gtk.FileFilter(name=_("Pictures"))
+        images.add_pixbuf_formats()
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(images)
+        dialog = Gtk.FileDialog(title=_("Picture for {game}").format(game=game["name"]),
+                                filters=filters, default_filter=images)
+        dialog.open(self.window, None,
+                    lambda d, result: self._cover_chosen(game, d, result))
+
+    def _cover_chosen(self, game, dialog, result):
+        try:
+            file = dialog.open_finish(result)
+        except GLib.Error:
+            return                              # cancelled
+        path = file.get_path() if file else None
+        if path is not None:
+            self.set_cover(game, path)
+
+    def set_cover(self, game, path):
+        try:
+            Gdk.Texture.new_from_filename(path)
+        except GLib.Error as e:
+            log.warning("Picture %s for %s can't be shown: %s", path,
+                        game["name"], e.message)
+            self.window._notify(_("This picture can't be opened"))
+            return
+        try:
+            config.set_game_cover(game, path)
+        except OSError as e:
+            log.warning("Could not copy picture %s: %s", path, e)
+            self.window._notify(_("Could not save the picture"))
+            return
+        log.info("Picture for %s set from %s", game["name"], path)
+        self._save()
+        self.refresh()
+
+    def _remove_cover(self, game):
+        log.info("Picture for %s removed", game["name"])
+        config.remove_game_cover(game)
+        self._save()
+        self.refresh()
+
+    # -- downloaded covers ---------------------------------------------------
+    def search_covers(self, which=None):
+        """Download the missing covers of Steam games and report the result.
+
+        Started by the user (switch, refresh button or tile menu), so it
+        always says what happens, also when there is nothing to search.
+        """
+        which = self.games if which is None else which
+        missing = [_steam_appid(g) for g in which
+                   if _steam_appid(g) and self._cover_file(g) is None]
+        others = [g for g in which
+                  if not _steam_appid(g) and self._cover_file(g) is None]
+        if not missing:
+            self.window._notify(
+                _("Covers can only be downloaded for Steam games. For other "
+                  "games, choose a picture in the tile's menu.") if others
+                else _("All games already have a cover"))
+            return
+        self._failed.difference_update(missing)
+        self._search = [set(missing), 0]
+        log.info("Searching covers of Steam apps %s", ", ".join(missing))
+        self.window._notify(_("Searching covers for {n} games…").format(n=len(missing))
+                            if len(missing) > 1 else _("Searching for a cover…"))
+        for appid in missing:
+            self._download(appid)
+        self.refresh()                          # shows the spinners
+
     def _download(self, appid):
         if appid in self._downloading or appid in self._failed:
             return
@@ -221,10 +362,31 @@ class GamesPage:
                 self._failed.add(appid)
             else:
                 log.info("Downloaded cover for Steam app %s", appid)
-                self.refresh()
+            self._report_search(appid, path is not None)
+            self.refresh()
             return False
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _report_search(self, appid, found):
+        if self._search is None or appid not in self._search[0]:
+            return
+        asked = self._search[0]
+        if found:
+            self._search[1] += 1
+        if asked & self._downloading:
+            return                              # still waiting for others
+        found_n, total = self._search[1], len(asked)
+        self._search = None
+        if found_n == total:
+            text = (_("Found all {n} covers").format(n=total) if total > 1
+                    else _("Cover found"))
+        elif found_n == 0:
+            text = (_("Steam has no covers for these games") if total > 1
+                    else _("Steam has no cover for this game"))
+        else:
+            text = _("Found {found} of {n} covers").format(found=found_n, n=total)
+        self.window._notify(text)
 
     # -- adding games --------------------------------------------------------
     def _ask_game(self):
@@ -245,7 +407,7 @@ class GamesPage:
         if not installed:
             listbox.append(Adw.ActionRow(
                 title=_("No installed Steam games found"),
-                subtitle=_("Add other games by their program name.")))
+                subtitle=_("Add other games by their program.")))
         search.connect("search-changed", lambda e: listbox.invalidate_filter())
 
         def matches(row):
@@ -274,21 +436,91 @@ class GamesPage:
         dialog.present()
 
     def _ask_program(self):
-        name = Gtk.Entry(placeholder_text=_("Name, e.g. BeamNG.drive"))
-        program = Gtk.Entry(placeholder_text=_("Program, e.g. BeamNG.drive.x64"),
-                            activates_default=True)
+        """Add a game not started by Steam, recognised by its program."""
+        fields = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        fields.add_css_class("boxed-list")
+        name = Adw.EntryRow(title=_("Name"))
+        program = Adw.EntryRow(title=_("Program"))
+        pick = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
+        pick.add_css_class("flat")
+        pick.set_tooltip_text(_("Choose Program File…"))
+        program.add_suffix(pick)
+        fields.append(name)
+        fields.append(program)
+
+        hint = Gtk.Label(label=_("Is the game running? Then pick it here:"),
+                         xalign=0, wrap=True)
+        hint.add_css_class("dim-label")
+        hint.set_margin_top(10)
+        search = Gtk.SearchEntry(placeholder_text=_("Search programs"),
+                                 hexpand=True)
+        reload_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        reload_btn.set_tooltip_text(_("Update List"))
+        search_box = Gtk.Box(spacing=6)
+        search_box.append(search)
+        search_box.append(reload_btn)
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                    min_content_height=200)
+        scroll.set_child(listbox)
+
+        def fill_list():
+            listbox.remove_all()
+            for prog, cmdline in games.running_programs():
+                row = Adw.ActionRow(title=prog, subtitle=cmdline, activatable=True,
+                                    title_lines=1, subtitle_lines=1)
+                row.set_use_markup(False)
+                row.set_tooltip_text(cmdline)
+                row.program = prog
+                listbox.append(row)
+
+        def matches(row):
+            text = search.get_text().strip().lower()
+            return text in row.program.lower() or text in row.get_subtitle().lower()
+
+        listbox.set_filter_func(matches)
+        search.connect("search-changed", lambda e: listbox.invalidate_filter())
+        reload_btn.connect("clicked", lambda b: fill_list())
+        fill_list()
+
+        def use(file_name):
+            program.set_text(file_name)
+            if not name.get_text().strip():
+                name.set_text(pathlib.Path(file_name).stem
+                              if file_name.lower().endswith(".exe") else file_name)
+
+        listbox.connect("row-activated", lambda lb, row: use(row.program))
+
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.append(name)
-        box.append(program)
+        box.set_size_request(420, -1)
+        for w in (fields, hint, search_box, scroll):
+            box.append(w)
         dialog = Adw.MessageDialog(
             transient_for=self.window, heading=_("Add Other Program"),
-            body=_("For games not started by Steam. Enter the name of the "
-                   "program file; “.exe” is optional."))
+            body=_("For games not started by Steam. Understeer recognises them "
+                   "by their program file. For Windows games (Wine, Proton, "
+                   "Lutris, Heroic) that is the game's .exe, not the launcher."))
         dialog.set_extra_child(box)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("add", _("Add"))
         dialog.set_default_response("add")
         dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_enabled("add", False)
+        program.connect("changed", lambda e: dialog.set_response_enabled(
+            "add", bool(games.program_key(e.get_text()))))
+
+        def choose_file(_button):
+            def done(d, result):
+                try:
+                    file = d.open_finish(result)
+                except GLib.Error:
+                    return
+                if file is not None and file.get_basename():
+                    use(file.get_basename())
+            Gtk.FileDialog(title=_("Program File")).open(dialog, None, done)
+
+        pick.connect("clicked", choose_file)
 
         def on_response(d, response):
             key = games.program_key(program.get_text())
