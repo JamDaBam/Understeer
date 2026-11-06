@@ -262,6 +262,16 @@ def test_broken_games_file(home):
                                     "preset": None, "auto": True}]
 
 
+def test_steamgriddb_id_kept(home):
+    config.save_games([{"game": "process:game", "name": "Diablo II", "preset": None,
+                        "auto": True, "steamgriddb": 5248},
+                       {"game": "process:x", "name": "X", "steamgriddb": "5"},
+                       {"game": "process:y", "name": "Y", "steamgriddb": True}])
+    loaded = config.load_games()
+    assert loaded[0]["steamgriddb"] == 5248
+    assert "steamgriddb" not in loaded[1] and "steamgriddb" not in loaded[2]
+
+
 def test_game_preset_path(home):
     config.write_preset(home / "GT3.json", "GT3", {"FF": 70})
     assert config.game_preset_path({"preset": "GT3.json"}) == home / "GT3.json"

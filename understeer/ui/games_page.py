@@ -306,12 +306,15 @@ class GamesPage:
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
 
-    def _add(self, game_id, name):
+    def _add(self, game_id, name, steamgriddb_id=None):
         if any(g["game"] == game_id for g in self.games):
             return
-        log.info("Added game %s (%s)", name, game_id)
-        self.games.append({"game": game_id, "name": name, "preset": None,
-                           "auto": True})
+        log.info("Added game %s (%s)%s", name, game_id,
+                 f", SteamGridDB {steamgriddb_id}" if steamgriddb_id else "")
+        game = {"game": game_id, "name": name, "preset": None, "auto": True}
+        if steamgriddb_id:
+            game["steamgriddb"] = steamgriddb_id
+        self.games.append(game)
         self.games.sort(key=lambda g: g["name"].lower())
         self._save()
         self.refresh()
@@ -389,7 +392,8 @@ class GamesPage:
             return
         ids = {g["game"] for g in possible}
         self._failed.difference_update(ids)
-        self._search = [ids, 0, len(missing) - len(possible)]
+        self._search = {"asked": ids, "found": 0, "missed": [],
+                        "skipped": len(missing) - len(possible), "key_error": False}
         log.info("Searching covers of %s", ", ".join(sorted(ids)))
         self.window._notify(_("Searching covers for {n} games…").format(n=len(ids))
                             if len(ids) > 1 else _("Searching for a cover…"))
@@ -414,7 +418,8 @@ class GamesPage:
             if not key:
                 return None, None, None
             try:
-                url = steamgriddb.find_cover(game["name"], key, steam_appid=appid)
+                url = steamgriddb.find_cover(game["name"], key, steam_appid=appid,
+                                             game_id=game.get("steamgriddb"))
                 if url is None:
                     return None, None, None
                 suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
@@ -449,36 +454,48 @@ class GamesPage:
                          daemon=True).start()
 
     def _report_search(self, game_id, found, error=None):
-        if self._search is None or game_id not in self._search[0]:
+        search = self._search
+        if search is None or game_id not in search["asked"]:
             return
         if found:
-            self._search[1] += 1
-        if error is not None and error.kind == "key":
-            self._search.append(error)
-        asked, found_n, skipped = self._search[:3]
-        if asked & self._downloading:
-            return                              # still waiting for others
-        key_error = len(self._search) > 3
-        self._search = None
-        total = len(asked)
-        if key_error:
-            text = cover_search.error_text(steamgriddb.Error("key", ""))
-        elif found_n == total:
-            text = (_("Found all {n} covers").format(n=total) if total > 1
-                    else _("Cover found"))
-        elif found_n == 0:
-            text = (_("No covers found. Choose one with “Search SteamGridDB…” "
-                      "in the tile's menu.") if total > 1 else
-                    _("No cover found. Choose one with “Search SteamGridDB…” "
-                      "in the tile's menu."))
+            search["found"] += 1
         else:
-            text = _("Found {found} of {n} covers. Choose the others with "
-                     "“Search SteamGridDB…” in the tile's menu.").format(
-                         found=found_n, n=total)
-        if skipped and not key_error:
-            text = text.rstrip(".") + ". " + _(
-                "Games not on Steam need a SteamGridDB API key.")
-        self.window._notify(text)
+            search["missed"].append(game_id)
+        if error is not None and error.kind == "key":
+            search["key_error"] = True
+        if search["asked"] & self._downloading:
+            return                              # still waiting for others
+        self._search = None
+        found_n, total = search["found"], len(search["asked"])
+        missed = [g for g in self.games if g["game"] in search["missed"]]
+        button = action = None
+        if search["key_error"]:
+            self.window._notify(cover_search.error_text(steamgriddb.Error("key", "")))
+            return
+        if found_n == total:
+            parts = [_("Found all {n} covers").format(n=total) if total > 1
+                     else _("Cover found")]
+        else:
+            parts = [_("No cover found") if total == 1 else
+                     _("No covers found") if found_n == 0 else
+                     _("Found {found} of {n} covers").format(found=found_n, n=total)]
+        if search["skipped"]:
+            parts.append(_("Games not on Steam need a SteamGridDB API key."))
+        if missed and config.get_setting(cover_search.KEY_SETTING):
+            # Names that didn't match exactly: let the user pick them
+            parts.append(_("Choose the others on SteamGridDB?") if found_n
+                         else _("Choose on SteamGridDB?"))
+            button = _("Choose")
+            action = lambda: self.choose_covers(missed)   # noqa: E731
+        text = " ".join(p if p[-1] in ".?" else p + "." for p in parts)
+        self.window._notify(text, button, action)
+
+    def choose_covers(self, chosen):
+        """Pick covers on SteamGridDB for these games, one after another."""
+        chosen = [g for g in chosen if g in self.games]
+        if chosen:
+            log.info("Choosing covers for %s", ", ".join(g["name"] for g in chosen))
+            cover_search.CoverSearch(self, chosen[0], chosen[1:])
 
     # -- adding games --------------------------------------------------------
     def _ask_game(self):
@@ -527,6 +544,82 @@ class GamesPage:
         dialog.connect("response", lambda d, r: r == "other" and self._ask_program())
         dialog.present()
 
+    def _name_suggestions(self, name_row):
+        """Names from SteamGridDB under the name field, while typing.
+
+        Choosing one remembers the SteamGridDB game, so its cover is always
+        found, also after renaming. Returns the box shown under the field;
+        its `chosen` is the chosen game's id or None.
+        """
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
+                      visible=False)
+        box.chosen = None
+        box.closed = False
+        label = Gtk.Label(label=_("Suggestions from SteamGridDB"), xalign=0)
+        label.add_css_class("dim-label")
+        label.add_css_class("caption")
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        box.append(label)
+        box.append(listbox)
+        linked = Gtk.Image.new_from_icon_name("emblem-ok-symbolic")
+        linked.set_tooltip_text(_("Linked with SteamGridDB: its cover is found "
+                                  "automatically"))
+        linked.set_visible(False)
+        name_row.add_suffix(linked)
+        state = {"timer": 0, "search": 0, "setting": False}
+        key = config.get_setting(cover_search.KEY_SETTING)
+        if not key:
+            return box
+
+        def choose(row):
+            state["setting"] = True
+            name_row.set_text(row.found["name"])
+            state["setting"] = False
+            box.chosen = row.found["id"]
+            linked.set_visible(True)
+            box.set_visible(False)
+
+        def search():
+            state["timer"] = 0
+            term = name_row.get_text().strip()
+            state["search"] += 1
+            search_id = state["search"]
+            if len(term) < 2:
+                box.set_visible(False)
+                return False
+
+            def done(found, error):
+                if box.closed or search_id != state["search"]:
+                    return
+                if error is not None:
+                    log.info("SteamGridDB suggestions: %s", error)
+                    return
+                listbox.remove_all()
+                for g in found[:5]:
+                    row = Adw.ActionRow(title=g["name"], activatable=True,
+                                        subtitle=str(g["year"]) if g["year"] else "")
+                    row.set_use_markup(False)
+                    row.found = g
+                    listbox.append(row)
+                box.set_visible(bool(found))
+
+            cover_search.in_thread(lambda: steamgriddb.search(term, key), done)
+            return False
+
+        def changed(_row):
+            if state["setting"]:
+                return
+            box.chosen = None                   # typed by hand again
+            linked.set_visible(False)
+            if state["timer"]:
+                GLib.source_remove(state["timer"])
+            state["timer"] = GLib.timeout_add(500, search)
+
+        name_row.connect("changed", changed)
+        listbox.connect("row-activated", lambda lb, row: choose(row))
+        return box
+
     def _ask_program(self):
         """Add a game not started by Steam, recognised by its program."""
         fields = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
@@ -539,6 +632,7 @@ class GamesPage:
         program.add_suffix(pick)
         fields.append(name)
         fields.append(program)
+        suggestions = self._name_suggestions(name)
 
         hint = Gtk.Label(label=_("Is the game running? Then pick it here:"),
                          xalign=0, wrap=True)
@@ -586,7 +680,7 @@ class GamesPage:
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_size_request(420, -1)
-        for w in (fields, hint, search_box, scroll):
+        for w in (fields, suggestions, hint, search_box, scroll):
             box.append(w)
         dialog = Adw.MessageDialog(
             transient_for=self.window, heading=_("Add Other Program"),
@@ -616,8 +710,10 @@ class GamesPage:
 
         def on_response(d, response):
             key = games.program_key(program.get_text())
+            suggestions.closed = True
             if response == "add" and key:
-                self._add(f"process:{key}", name.get_text().strip() or key)
+                self._add(f"process:{key}", name.get_text().strip() or key,
+                          suggestions.chosen)
 
         dialog.connect("response", on_response)
         dialog.present()

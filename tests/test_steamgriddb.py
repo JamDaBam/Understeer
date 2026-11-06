@@ -147,3 +147,12 @@ def test_find_cover_by_steam_id():
     with patch:
         assert steamgriddb.find_cover("whatever", "k", steam_appid="1161040") is None
     assert "/grids/steam/1161040?" in asked[0].full_url
+
+
+def test_find_cover_by_chosen_game():
+    patch, asked = serve(lambda req: {"success": True, "data": [
+        {"url": "https://cdn2.steamgriddb.com/a.png"}]})
+    with patch:
+        url = steamgriddb.find_cover("Renamed Tile", "k", game_id=5248)
+    assert url == "https://cdn2.steamgriddb.com/a.png"
+    assert len(asked) == 1 and "/grids/game/5248?" in asked[0].full_url

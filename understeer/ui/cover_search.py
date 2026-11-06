@@ -46,10 +46,16 @@ def open_key_page(parent):
 
 
 class CoverSearch:
-    """Window to search a game on SteamGridDB and pick one of its covers."""
+    """Window to search a game on SteamGridDB and pick one of its covers.
 
-    def __init__(self, games_page, game):
+    With more games (`more`), it goes through them one after another; each
+    can be skipped.
+    """
+
+    def __init__(self, games_page, game, more=()):
         self.page = games_page
+        self.queue = [game, *more]
+        self.index = 0
         self.game = game
         self._search_id = 0         # ignores answers of older searches
         self._closed = False
@@ -69,12 +75,35 @@ class CoverSearch:
         self._closed = True
         return False
 
-    @staticmethod
-    def _page(title, content, tag=None):
+    def _progress(self):
+        """Subtitle: the game, and where we are when going through several."""
+        if len(self.queue) < 2:
+            return self.game["name"]
+        return _("{game} · {i} of {n}").format(game=self.game["name"],
+                                               i=self.index + 1, n=len(self.queue))
+
+    def _page(self, title, content, tag=None, subtitle=None):
         view = Adw.ToolbarView()
-        view.add_top_bar(Adw.HeaderBar())
+        header = Adw.HeaderBar()
+        if subtitle:
+            header.set_title_widget(Adw.WindowTitle(title=title, subtitle=subtitle))
+        if len(self.queue) > 1:
+            skip = Gtk.Button(label=_("Skip"))
+            skip.set_tooltip_text(_("Leave this game without a cover"))
+            skip.connect("clicked", lambda b: self._next())
+            header.pack_end(skip)
+        view.add_top_bar(header)
         view.set_content(content)
         return Adw.NavigationPage(title=title, child=view, tag=tag or title)
+
+    def _next(self):
+        """Go on with the next game, or close after the last."""
+        self.index += 1
+        if self.index >= len(self.queue):
+            self.window.close()
+            return
+        self.game = self.queue[self.index]
+        self.nav.replace([self._search_page()])
 
     # -- API key -------------------------------------------------------------
     def _key_page(self):
@@ -150,7 +179,8 @@ class CoverSearch:
         entry.connect("search-changed", lambda e: self._search(e.get_text()))
         entry.connect("activate", lambda e: self._search(e.get_text()))
         GLib.idle_add(lambda: self._search(entry.get_text()) and False)
-        return self._page(_("Choose the Game"), box, "search")
+        return self._page(_("Choose the Game"), box, f"search-{self.index}",
+                          self._progress())
 
     def _show_status(self, stack, status, title, description=""):
         status.set_title(title)
@@ -212,7 +242,7 @@ class CoverSearch:
         stack.add_named(scroll, "covers")
         stack.set_visible_child_name("busy")
         title = found["name"] + (f" ({found['year']})" if found["year"] else "")
-        page = self._page(title, stack, f"covers-{found['id']}")
+        page = self._page(title, stack, f"covers-{found['id']}", self._progress())
         key = config.get_setting(KEY_SETTING)
 
         def done(covers, error):
@@ -230,13 +260,13 @@ class CoverSearch:
                 return
             limit = threading.Semaphore(THUMB_THREADS)
             for cover in covers[:MAX_COVERS]:
-                flow.append(self._cover_button(cover, stack, limit))
+                flow.append(self._cover_button(cover, stack, limit, found))
             stack.set_visible_child_name("covers")
 
         in_thread(lambda: steamgriddb.covers(found["id"], key), done)
         return page
 
-    def _cover_button(self, cover, stack, limit):
+    def _cover_button(self, cover, stack, limit, found):
         picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
         view = CoverView(picture, natural_width=150)
         view.add_css_class("game-cover")
@@ -245,7 +275,7 @@ class CoverSearch:
         button.add_css_class("cover-choice")
         if cover["author"]:
             button.set_tooltip_text(_("By {author}").format(author=cover["author"]))
-        button.connect("clicked", lambda b: self._choose(cover, stack))
+        button.connect("clicked", lambda b: self._choose(cover, stack, found))
 
         def load():
             with limit:
@@ -262,27 +292,32 @@ class CoverSearch:
         in_thread(load, shown)
         return button
 
-    def _choose(self, cover, stack):
+    def _choose(self, cover, stack, found):
         stack.set_visible_child_name("busy")
         suffix = pathlib.PurePosixPath(cover["url"]).suffix.lower() or ".img"
         tmp = config.COVER_DIR / f"steamgriddb-download{suffix}"
 
+        game = self.game
+
         def done(path, error):
+            if self._closed:
+                return
             if error is not None:
                 log.warning("Downloading %s failed: %s", cover["url"], error)
                 stack.set_visible_child_name("covers")
                 self.page.window._notify(error_text(error))
                 return
-            ok = self.page.set_cover(self.game, str(path))
+            game["steamgriddb"] = found["id"]     # finds it again by itself
+            ok = self.page.set_cover(game, str(path))
             try:
                 path.unlink()
             except OSError:
                 pass
             if ok:
                 log.info("SteamGridDB cover %s chosen for %s", cover["url"],
-                         self.game["name"])
+                         game["name"])
                 self.page.window._notify(_("Cover from SteamGridDB set"))
-                self.window.close()
+                self._next()
             else:
                 stack.set_visible_child_name("covers")
 

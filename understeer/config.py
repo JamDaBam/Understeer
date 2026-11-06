@@ -128,7 +128,7 @@ def load_games():
       "preset": "GT3 Race.json", "auto": true}]
     "preset" is the file name of a preset in CONFIG_DIR, or None.
     "cover" (optional) is the file name of a picture the user chose, in
-    CUSTOM_COVER_DIR.
+    CUSTOM_COVER_DIR; "steamgriddb" (optional) the game's SteamGridDB id.
     """
     try:
         data = json.loads(GAMES_FILE.read_text())
@@ -147,6 +147,9 @@ def load_games():
             cover = g.get("cover")
             if isinstance(cover, str) and cover and "/" not in cover:
                 games[-1]["cover"] = cover
+            sgdb = g.get("steamgriddb")
+            if isinstance(sgdb, int) and not isinstance(sgdb, bool) and sgdb > 0:
+                games[-1]["steamgriddb"] = sgdb
     return games
 
 

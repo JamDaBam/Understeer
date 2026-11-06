@@ -106,13 +106,16 @@ def same_name(a, b):
     return bool(norm(a)) and norm(a) == norm(b)
 
 
-def find_cover(name, key, steam_appid=None):
+def find_cover(name, key, steam_appid=None, game_id=None):
     """URL of the best cover for a game, or None.
 
     Used without asking the user, so only an unambiguous match counts:
-    the Steam id, or a game whose name is exactly the given one.
+    the SteamGridDB id chosen before, the Steam id, or a game whose name
+    is exactly the given one.
     """
-    if steam_appid:
+    if game_id:
+        found = covers(game_id, key)
+    elif steam_appid:
         found = covers(None, key, steam_appid=steam_appid)
     else:
         matches = [g for g in search(name, key) if same_name(g["name"], name)]
