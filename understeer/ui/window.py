@@ -15,6 +15,7 @@ from ..settings import MAX_SLOT, PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
 from .setting_row import SettingRow
 
 LIVE_DELAY_MS = 120
+WATCH_MS = 500       # how often to look for changes made on the wheel base
 
 
 class TunerWindow(Adw.ApplicationWindow):
@@ -29,6 +30,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
         self.rows = {}           # attr id -> SettingRow
         self.pending = {}        # attr id -> value waiting to be written
+        self.device_values = {}  # attr id (and "SLOT") -> last value read or written
         self._live_timer = 0
         self._status = ""
 
@@ -50,7 +52,13 @@ class TunerWindow(Adw.ApplicationWindow):
         self._build_ui()
         self._refresh_device_state()
         self._start_inputs()
-        self.connect("close-request", lambda w: self.inputs.stop() and False)
+        self._watch = GLib.timeout_add(WATCH_MS, self._check_device)
+        self.connect("close-request", self._on_close)
+
+    def _on_close(self, window):
+        GLib.source_remove(self._watch)
+        self.inputs.stop()
+        return False
 
     # -----------------------------------------------------------------------
     # Layout
@@ -611,10 +619,13 @@ class TunerWindow(Adw.ApplicationWindow):
             entry.set_visible(n <= self.slot_count)
 
     def _show_device_slot(self):
-        """Select the slot the wheel base reports in the slot menu."""
+        """Select the slot the wheel base reports in the slot menu.
+
+        Returns the slot number, or None if it can't be read.
+        """
         slot = read_int(self._attr_file("SLOT"))
         if not slot or not 1 <= slot <= MAX_SLOT:
-            return
+            return None
         if slot > self.slot_count:
             # Some wheel bases have more slots than the driver can switch
             # to (a CSL DD has 6); remember that for this model.
@@ -625,6 +636,7 @@ class TunerWindow(Adw.ApplicationWindow):
             self._update_slot_dropdown()
         with self.slot_dropdown.handler_block(self._slot_handler):
             self.slot_dropdown.set_selected(slot - 1)
+        return slot
 
     def _on_slot_name_changed(self, n, text):
         if self._filling_slot_names or self.model is None:
@@ -636,9 +648,11 @@ class TunerWindow(Adw.ApplicationWindow):
             self.slot_names.pop(n, None)
         self._update_slot_dropdown()
 
+    def _slot_label(self, n):
+        return self.slot_names.get(n) or _("Slot {n}").format(n=n)
+
     def _update_slot_dropdown(self):
-        labels = [self.slot_names.get(n) or _("Slot {n}").format(n=n)
-                  for n in range(1, self.slot_count + 1)]
+        labels = [self._slot_label(n) for n in range(1, self.slot_count + 1)]
         model = self.slot_dropdown.get_model()
         # Changing the list must not switch the slot on the wheel base.
         with self.slot_dropdown.handler_block(self._slot_handler):
@@ -745,13 +759,15 @@ class TunerWindow(Adw.ApplicationWindow):
                 row.set_baseline(row.get())
             self._set_status(_("No device"))
             return
+        self.device_values = {}
         for attr_id, row in self.rows.items():
             value = read_int(self._attr_file(attr_id))
+            self.device_values[attr_id] = value
             row.set_supported(value is not None)
             if value is not None:
                 row.set(value)
             row.set_baseline(row.get())
-        self._show_device_slot()
+        self.device_values["SLOT"] = self._show_device_slot()
         self._set_status(_("In sync with device"))
         self._update_preset_indicator()
 
@@ -779,9 +795,13 @@ class TunerWindow(Adw.ApplicationWindow):
     def _flush_pending(self):
         if not self.pending:
             return
+        written = list(self.pending)
         writes = {self._attr_file(a): v for a, v in self.pending.items()}
         self.pending = {}
         failed = write_values(writes)
+        # What the device holds now; it may round, e.g. vibration to tens.
+        for attr_id in written:
+            self.device_values[attr_id] = read_int(self._attr_file(attr_id))
         self._update_pending_bar()
         if failed:
             names = ", ".join(os.path.basename(p) for p in failed)
@@ -849,9 +869,43 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _reload_value(self, attr_id):
         value = read_int(self._attr_file(attr_id))
+        self.device_values[attr_id] = value
         if value is not None:
             self.rows[attr_id].set(value)
         return GLib.SOURCE_REMOVE
+
+    def _check_device(self):
+        """Follow changes made on the wheel base itself.
+
+        Switching the slot there reloads everything; a value changed in its
+        tuning menu moves the matching control. Values the app wrote itself
+        are already in device_values, so they don't count as changes.
+        """
+        if not self.device_path or self._live_timer:
+            return GLib.SOURCE_CONTINUE
+        slot = read_int(self._attr_file("SLOT"))
+        if slot is not None and slot != self.device_values.get("SLOT"):
+            discarded = bool(self.pending)
+            self._load_from_device()
+            name = self._slot_label(slot)
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Slot changed on the wheel base: {name}. Unapplied changes "
+                  "were discarded.").format(name=name) if discarded else
+                _("Slot changed on the wheel base: {name}").format(name=name)))
+            return GLib.SOURCE_CONTINUE
+        if self.pending:            # don't overwrite changes waiting for Apply
+            return GLib.SOURCE_CONTINUE
+        changed = False
+        for attr_id, row in self.rows.items():
+            value = read_int(self._attr_file(attr_id))
+            if value is None or value == self.device_values.get(attr_id):
+                continue
+            self.device_values[attr_id] = value
+            row.set(value)
+            changed = True
+        if changed:
+            self._update_preset_indicator()
+        return GLib.SOURCE_CONTINUE
 
     def _on_slot_selected(self):
         if not self.device_path:
@@ -865,6 +919,7 @@ class TunerWindow(Adw.ApplicationWindow):
                 if slot > SLOTS else _("Could not switch slot")))
             self._show_device_slot()        # back to the slot that is active
             return
+        self.device_values["SLOT"] = slot   # not a change made on the wheel
         # Switching loads the slot's stored values into all attributes.
         GLib.timeout_add(150, lambda: self._load_from_device() and False)
 

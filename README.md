@@ -6,7 +6,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 
 ## Features
 
-- **Live tuning:** Changes reach the wheel base while you move a control, so you feel them immediately. Undo single settings or everything since loading.
+- **Live tuning:** Changes reach the wheel base while you move a control, so you feel them immediately. Undo single settings or everything since loading. Switching the slot or changing a value on the wheel base shows up in the app right away.
 - **Live input display:** See the current steering angle and how far each pedal is pressed, including the maximum reached. Useful to find the brake force you need for 100 %.
 - **Wheel & force feedback:** Steering angle with quick select, force feedback strength, force/spring/damper effects, scaling, intensity and interpolation.
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
