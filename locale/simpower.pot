@@ -271,338 +271,386 @@ msgstr ""
 msgid "Not supported by your hardware"
 msgstr ""
 
-#: FFB_Tuner.py:656
-msgid "Slot {n}"
-msgstr ""
-
-#: FFB_Tuner.py:658
-msgid "Tuning slot on the wheel base that is being edited"
-msgstr ""
-
-#: FFB_Tuner.py:665
-msgid "Apply or save a preset"
-msgstr ""
-
-#: FFB_Tuner.py:670
-msgid "Reload from Device"
-msgstr ""
-
-#: FFB_Tuner.py:671
-msgid "Save as Preset…"
-msgstr ""
-
-#: FFB_Tuner.py:677
-msgid "Undo all changes since the values were loaded"
-msgstr ""
-
-#: FFB_Tuner.py:693
-msgid "Apply"
-msgstr ""
-
-#: FFB_Tuner.py:696
-msgid "Discard"
-msgstr ""
-
-#: FFB_Tuner.py:760
-msgid "Live Input"
-msgstr ""
-
-#: FFB_Tuner.py:761
-msgid "Current Angle"
-msgstr ""
-
-#: FFB_Tuner.py:782
-msgid "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
-msgstr ""
-
-#: FFB_Tuner.py:785
-msgid "Reset Max"
-msgstr ""
-
-#: FFB_Tuner.py:804
-msgid "No read access to the input device. Set up permissions under Tools."
-msgstr ""
-
-#: FFB_Tuner.py:806
-msgid "No Fanatec input device found."
-msgstr ""
-
-#: FFB_Tuner.py:828
-msgid "Axis {name}"
-msgstr ""
-
-#: FFB_Tuner.py:846
-msgid "What this axis is"
-msgstr ""
-
-#: FFB_Tuner.py:856
-msgid "Show hidden axes ({n})"
-msgstr ""
-
-#: FFB_Tuner.py:896
-msgid "Turn the wheel to see the angle"
-msgstr ""
-
-#: FFB_Tuner.py:906
-msgid "Max {n} %"
-msgstr ""
-
-#: FFB_Tuner.py:910
-msgid "Quick Select"
-msgstr ""
-
-#: FFB_Tuner.py:919
+#: FFB_Tuner.py:587
 msgid "Auto"
 msgstr ""
 
-#: FFB_Tuner.py:920
+#: FFB_Tuner.py:663
+msgid "Slot {n}"
+msgstr ""
+
+#: FFB_Tuner.py:665
+msgid "Tuning slot on the wheel base that is being edited"
+msgstr ""
+
+#: FFB_Tuner.py:672
+msgid "Apply or save a preset"
+msgstr ""
+
+#: FFB_Tuner.py:677
+msgid "Reload from Device"
+msgstr ""
+
+#: FFB_Tuner.py:678
+msgid "Save as Preset…"
+msgstr ""
+
+#: FFB_Tuner.py:684
+msgid "Undo all changes since the values were loaded"
+msgstr ""
+
+#: FFB_Tuner.py:700
+msgid "Apply"
+msgstr ""
+
+#: FFB_Tuner.py:703
+msgid "Discard"
+msgstr ""
+
+#: FFB_Tuner.py:767
+msgid "Live Input"
+msgstr ""
+
+#: FFB_Tuner.py:768
+msgid "Current Angle"
+msgstr ""
+
+#: FFB_Tuner.py:789
+msgid "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
+msgstr ""
+
+#: FFB_Tuner.py:792
+msgid "Reset Max"
+msgstr ""
+
+#: FFB_Tuner.py:811
+msgid "No read access to the input device. Set up permissions under Tools."
+msgstr ""
+
+#: FFB_Tuner.py:813
+msgid "No Fanatec input device found."
+msgstr ""
+
+#: FFB_Tuner.py:835
+msgid "Axis {name}"
+msgstr ""
+
+#: FFB_Tuner.py:853
+msgid "What this axis is"
+msgstr ""
+
+#: FFB_Tuner.py:863
+msgid "Show hidden axes ({n})"
+msgstr ""
+
+#: FFB_Tuner.py:903
+msgid "Turn the wheel to see the angle"
+msgstr ""
+
+#: FFB_Tuner.py:913
+msgid "Max {n} %"
+msgstr ""
+
+#: FFB_Tuner.py:917
+msgid "Quick Select"
+msgstr ""
+
+#: FFB_Tuner.py:927
 msgid "Use the maximum range of the wheel base"
 msgstr ""
 
-#: FFB_Tuner.py:932
+#: FFB_Tuner.py:939
 msgid "Save Preset"
 msgstr ""
 
-#: FFB_Tuner.py:933
+#: FFB_Tuner.py:940
 msgid "Saves all current settings under a name in ~/.config/SimPower/."
 msgstr ""
 
-#: FFB_Tuner.py:935
+#: FFB_Tuner.py:942
 msgid "Current Settings"
 msgstr ""
 
-#: FFB_Tuner.py:962
+#: FFB_Tuner.py:969
 msgid "Saved Presets"
 msgstr ""
 
-#: FFB_Tuner.py:969
+#: FFB_Tuner.py:976
 msgid "No presets saved yet"
 msgstr ""
 
-#: FFB_Tuner.py:970
+#: FFB_Tuner.py:977
 msgid "Saved presets appear here and in the Presets menu at the top."
 msgstr ""
 
-#: FFB_Tuner.py:1001
+#: FFB_Tuner.py:984
+msgid "Active preset"
+msgstr ""
+
+#: FFB_Tuner.py:985
+msgid "Save Here"
+msgstr ""
+
+#: FFB_Tuner.py:986
+msgid "Save current settings to this preset"
+msgstr ""
+
+#: FFB_Tuner.py:1009
+msgid "Save to “{name}”"
+msgstr ""
+
+#: FFB_Tuner.py:1022
 msgid "Manage Presets"
 msgstr ""
 
-#: FFB_Tuner.py:1015
-msgid "Quick Setup"
-msgstr ""
-
-#: FFB_Tuner.py:1017
-msgid "Sim Racing Defaults"
-msgstr ""
-
-#: FFB_Tuner.py:1018
-msgid "Balanced steering values for sim racing: 900°, 70 % force feedback, no spring or damper."
-msgstr ""
-
-#: FFB_Tuner.py:1023
-msgid "Sim racing defaults applied"
-msgstr ""
-
-#: FFB_Tuner.py:1029
-msgid "Pedal Rumble Test"
-msgstr ""
-
-#: FFB_Tuner.py:1030
-msgid "Sends a single rumble command to ClubSport Pedals V3 or CSL Elite/LC pedals."
-msgstr ""
-
-#: FFB_Tuner.py:1033
-msgid "Throttle Motor"
-msgstr ""
-
-#: FFB_Tuner.py:1034
-msgid "Brake Motor"
-msgstr ""
-
-#: FFB_Tuner.py:1035
-msgid "Duration (×10 ms)"
-msgstr ""
-
-#: FFB_Tuner.py:1041
-msgid "Send Rumble"
-msgstr ""
-
-#: FFB_Tuner.py:1042
-msgid "Send"
-msgstr ""
-
-#: FFB_Tuner.py:1050
-msgid "System"
-msgstr ""
-
-#: FFB_Tuner.py:1052
-msgid "Write Permissions"
-msgstr ""
-
-#: FFB_Tuner.py:1053
-msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
-msgstr ""
-
-#: FFB_Tuner.py:1056
-msgid "Set Up"
-msgstr ""
-
-#: FFB_Tuner.py:1063
-msgid "Reset All Tuning Slots"
+#: FFB_Tuner.py:1054
+msgid "Preset “{name}” has unsaved changes"
 msgstr ""
 
 #: FFB_Tuner.py:1064
-msgid "Clears all 5 tuning slots stored on the wheel base."
+msgid "Quick Setup"
 msgstr ""
 
-#: FFB_Tuner.py:1065
-msgid "Reset…"
+#: FFB_Tuner.py:1066
+msgid "Sim Racing Defaults"
+msgstr ""
+
+#: FFB_Tuner.py:1067
+msgid "Balanced steering values for sim racing: 900°, 70 % force feedback, no spring or damper."
+msgstr ""
+
+#: FFB_Tuner.py:1072
+msgid "Sim racing defaults applied"
+msgstr ""
+
+#: FFB_Tuner.py:1078
+msgid "Pedal Rumble Test"
+msgstr ""
+
+#: FFB_Tuner.py:1079
+msgid "Sends a single rumble command to ClubSport Pedals V3 or CSL Elite/LC pedals."
+msgstr ""
+
+#: FFB_Tuner.py:1082
+msgid "Throttle Motor"
+msgstr ""
+
+#: FFB_Tuner.py:1083
+msgid "Brake Motor"
+msgstr ""
+
+#: FFB_Tuner.py:1084
+msgid "Duration (×10 ms)"
+msgstr ""
+
+#: FFB_Tuner.py:1090
+msgid "Send Rumble"
+msgstr ""
+
+#: FFB_Tuner.py:1091
+msgid "Send"
+msgstr ""
+
+#: FFB_Tuner.py:1099
+msgid "System"
+msgstr ""
+
+#: FFB_Tuner.py:1101
+msgid "Write Permissions"
+msgstr ""
+
+#: FFB_Tuner.py:1102
+msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr ""
 
 #: FFB_Tuner.py:1105
+msgid "Set Up"
+msgstr ""
+
+#: FFB_Tuner.py:1112
+msgid "Reset All Tuning Slots"
+msgstr ""
+
+#: FFB_Tuner.py:1113
+msgid "Clears all 5 tuning slots stored on the wheel base."
+msgstr ""
+
+#: FFB_Tuner.py:1114
+msgid "Reset…"
+msgstr ""
+
+#: FFB_Tuner.py:1157
 msgid "No Fanatec wheel base found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr ""
 
-#: FFB_Tuner.py:1107
+#: FFB_Tuner.py:1159
 msgid "Retry"
 msgstr ""
 
-#: FFB_Tuner.py:1111
+#: FFB_Tuner.py:1163
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr ""
 
-#: FFB_Tuner.py:1142
+#: FFB_Tuner.py:1194
 msgid "No device"
 msgstr ""
 
-#: FFB_Tuner.py:1154
+#: FFB_Tuner.py:1206
 msgid "In sync with device"
 msgstr ""
 
-#: FFB_Tuner.py:1164
+#: FFB_Tuner.py:1218
 msgid "Writing…"
 msgstr ""
 
-#: FFB_Tuner.py:1185
+#: FFB_Tuner.py:1239
 msgid "Write failed: {names}"
 msgstr ""
 
-#: FFB_Tuner.py:1187
+#: FFB_Tuner.py:1241
 msgid "Could not write: {names}"
 msgstr ""
 
-#: FFB_Tuner.py:1202
+#: FFB_Tuner.py:1256
 msgid "Pending changes: {n}"
 msgstr ""
 
-#: FFB_Tuner.py:1204
+#: FFB_Tuner.py:1258
 msgid "Changes not applied yet"
 msgstr ""
 
-#: FFB_Tuner.py:1238
+#: FFB_Tuner.py:1293
 msgid "Changes undone"
 msgstr ""
 
-#: FFB_Tuner.py:1258
+#: FFB_Tuner.py:1313
 msgid "Could not switch slot"
 msgstr ""
 
-#: FFB_Tuner.py:1270
+#: FFB_Tuner.py:1325
 msgid "Could not send rumble"
 msgstr ""
 
-#: FFB_Tuner.py:1277
+#: FFB_Tuner.py:1332
 msgid "Setting up permissions failed"
 msgstr ""
 
-#: FFB_Tuner.py:1287
+#: FFB_Tuner.py:1342
 msgid "Permissions set up — changes now apply live"
 msgstr ""
 
-#: FFB_Tuner.py:1302
+#: FFB_Tuner.py:1369
 msgid "Could not load preset"
 msgstr ""
 
-#: FFB_Tuner.py:1308
+#: FFB_Tuner.py:1375
 msgid "Preset “{name}” applied"
 msgstr ""
 
-#: FFB_Tuner.py:1309
+#: FFB_Tuner.py:1376
 msgid "Preset “{name}” loaded — click Apply to write it"
 msgstr ""
 
-#: FFB_Tuner.py:1312
+#: FFB_Tuner.py:1379
 msgid "e.g. GT3 Race"
 msgstr ""
 
-#: FFB_Tuner.py:1315
+#: FFB_Tuner.py:1382
 msgid "Save as Preset"
 msgstr ""
 
-#: FFB_Tuner.py:1316
+#: FFB_Tuner.py:1383
 msgid "Saves all current settings under this name."
 msgstr ""
 
-#: FFB_Tuner.py:1318
+#: FFB_Tuner.py:1385
 msgid "Cancel"
 msgstr ""
 
-#: FFB_Tuner.py:1319
+#: FFB_Tuner.py:1386
 msgid "Save"
 msgstr ""
 
-#: FFB_Tuner.py:1332
+#: FFB_Tuner.py:1399
 msgid "No Name"
 msgstr ""
 
-#: FFB_Tuner.py:1332
+#: FFB_Tuner.py:1399
 msgid "Enter a name for the preset."
 msgstr ""
 
-#: FFB_Tuner.py:1340
-msgid "Could not save preset"
-msgstr ""
-
-#: FFB_Tuner.py:1344
+#: FFB_Tuner.py:1407
 msgid "Preset “{name}” saved"
 msgstr ""
 
-#: FFB_Tuner.py:1349
+#: FFB_Tuner.py:1416
+msgid "Could not save preset"
+msgstr ""
+
+#: FFB_Tuner.py:1428
+msgid "and {n} more"
+msgstr ""
+
+#: FFB_Tuner.py:1439
+msgid "Settings that change:"
+msgstr ""
+
+#: FFB_Tuner.py:1440
+msgid "The preset already matches the current settings."
+msgstr ""
+
+#: FFB_Tuner.py:1444
+msgid "Overwrite “{name}”?"
+msgstr ""
+
+#: FFB_Tuner.py:1446
+msgid "Overwrite"
+msgstr ""
+
+#: FFB_Tuner.py:1470
+msgid "Saved to “{name}”"
+msgstr ""
+
+#: FFB_Tuner.py:1472
+msgid "Undo"
+msgstr ""
+
+#: FFB_Tuner.py:1488
 msgid "Delete “{name}”?"
 msgstr ""
 
-#: FFB_Tuner.py:1350
+#: FFB_Tuner.py:1489
 msgid "The preset file will be removed. This cannot be undone."
 msgstr ""
 
-#: FFB_Tuner.py:1352
+#: FFB_Tuner.py:1491
 msgid "Delete"
 msgstr ""
 
-#: FFB_Tuner.py:1361
+#: FFB_Tuner.py:1500
 msgid "Could not delete preset"
 msgstr ""
 
-#: FFB_Tuner.py:1374
+#: FFB_Tuner.py:1515
 msgid "Reset All Tuning Slots?"
 msgstr ""
 
-#: FFB_Tuner.py:1375
+#: FFB_Tuner.py:1516
 msgid "All 5 tuning slots stored on the wheel base will be cleared. This cannot be undone."
 msgstr ""
 
-#: FFB_Tuner.py:1378
+#: FFB_Tuner.py:1519
 msgid "Reset"
 msgstr ""
 
-#: FFB_Tuner.py:1387
+#: FFB_Tuner.py:1528
 msgid "Not Available"
 msgstr ""
 
-#: FFB_Tuner.py:1388
+#: FFB_Tuner.py:1529
 msgid "This wheel base does not support resetting."
 msgstr ""
 
-#: FFB_Tuner.py:1397
+#: FFB_Tuner.py:1538
 msgid "OK"
 msgstr ""

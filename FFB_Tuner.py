@@ -575,18 +575,22 @@ class SettingRow:
         if not self._silent:
             self.on_change(self)
 
+    def format(self, v):
+        """Human-readable value, e.g. "900°", "70 %", "Peak"."""
+        if hasattr(self, "combo"):
+            labels = dict(self.setting["choices"])
+            return _(labels[v]) if v in labels else str(v)
+        fmt = self.setting.get("fmt")
+        if fmt:
+            return fmt(v)
+        if self.setting["id"] == "SEN" and v == 0:
+            return _("Auto")
+        unit = self.setting.get("unit", "")
+        return f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()
+
     def _update_label(self):
         if hasattr(self, "value_label"):
-            v = self.get()
-            fmt = self.setting.get("fmt")
-            if fmt:
-                text = fmt(v)
-            elif self.setting["id"] == "SEN" and v == 0:
-                text = _("Auto")
-            else:
-                unit = self.setting.get("unit", "")
-                text = f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()
-            self.value_label.set_label(text)
+            self.value_label.set_label(self.format(self.get()))
         modified = self.baseline is not None and self.get() != self.baseline
         self.revert_btn.set_opacity(1 if modified else 0)
         self.revert_btn.set_sensitive(modified)
@@ -607,6 +611,9 @@ class TunerWindow(Adw.ApplicationWindow):
         self.pending = {}        # attr id -> value waiting to be written
         self._live_timer = 0
         self._status = ""
+
+        self.active_preset = None   # path of the last applied/saved preset
+        self.active_values = {}     # values stored in that preset
 
         self.inputs = InputMonitor(self._on_input)
         self.axis_roles = load_axis_roles()
@@ -971,7 +978,16 @@ class TunerWindow(Adw.ApplicationWindow):
                            "menu at the top.")))
             return
         for name, path in presets:
-            row = Adw.ActionRow(title=name, subtitle=path.name)
+            active = self.active_preset is not None and path == self.active_preset
+            row = Adw.ActionRow(
+                title=name,
+                subtitle=_("Active preset") if active else path.name)
+            save_btn = Gtk.Button(label=_("Save Here"))
+            save_btn.set_tooltip_text(_("Save current settings to this preset"))
+            save_btn.set_valign(Gtk.Align.CENTER)
+            save_btn.connect("clicked", lambda b, p=path:
+                             self._confirm_overwrite(p))
+            row.add_suffix(save_btn)
             apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
             apply_btn.set_valign(Gtk.Align.CENTER)
@@ -988,6 +1004,11 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _rebuild_preset_menu(self):
         menu = Gio.Menu()
+        if self.active_preset is not None:
+            update = Gio.Menu()
+            update.append(_("Save to “{name}”").format(
+                name=self._active_name()), "win.update-preset")
+            menu.append_section(None, update)
         presets = Gio.Menu()
         for name, path in self._preset_files():
             item = Gio.MenuItem.new(name, None)
@@ -1005,6 +1026,34 @@ class TunerWindow(Adw.ApplicationWindow):
     def _presets_changed(self):
         self._rebuild_presets_list()
         self._rebuild_preset_menu()
+        self._update_preset_indicator()
+
+    def _active_name(self):
+        for name, path in self._preset_files():
+            if path == self.active_preset:
+                return name
+        return self.active_preset.stem if self.active_preset else ""
+
+    def _preset_diff(self, stored):
+        """[(attr id, stored value or None, current value)] that differ."""
+        return [(a, stored.get(a), v) for a, v in self._collect_values().items()
+                if stored.get(a) != v]
+
+    def _update_preset_indicator(self):
+        if self.active_preset is None:
+            self.preset_button.set_label(_("Presets"))
+            self.update_action.set_enabled(False)
+            return
+        # Only settings stored in the preset count; older presets may hold
+        # just a few values.
+        modified = any(old is not None
+                       for _a, old, _v in self._preset_diff(self.active_values))
+        name = self._active_name()
+        self.preset_button.set_label(f"{name} •" if modified else name)
+        self.preset_button.set_tooltip_text(
+            _("Preset “{name}” has unsaved changes").format(name=name)
+            if modified else _("Apply or save a preset"))
+        self.update_action.set_enabled(modified)
 
     # -----------------------------------------------------------------------
     # Tools page
@@ -1087,6 +1136,9 @@ class TunerWindow(Adw.ApplicationWindow):
         add("apply-preset", lambda a, p: self._apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
+        self.update_action = add("update-preset",
+                                 lambda *a: self._update_active_preset())
+        self.update_action.set_enabled(False)
 
     def _select_page(self, key):
         i = 0
@@ -1152,11 +1204,13 @@ class TunerWindow(Adw.ApplicationWindow):
             with self.slot_dropdown.handler_block(self._slot_handler):
                 self.slot_dropdown.set_selected(slot - 1)
         self._set_status(_("In sync with device"))
+        self._update_preset_indicator()
 
     # -----------------------------------------------------------------------
     # Writing
     # -----------------------------------------------------------------------
     def _on_setting_changed(self, row):
+        self._update_preset_indicator()
         if not self.device_path or not row.row.get_sensitive():
             return
         self.pending[row.setting["id"]] = row.get()
@@ -1227,6 +1281,7 @@ class TunerWindow(Adw.ApplicationWindow):
         else:
             self._update_pending_bar()
             message = pending_message or message
+        self._update_preset_indicator()
         if message:
             self.toasts.add_toast(Adw.Toast.new(message))
 
@@ -1294,16 +1349,28 @@ class TunerWindow(Adw.ApplicationWindow):
         return {a: r.get() for a, r in self.rows.items()
                 if r.row.get_sensitive()}
 
+    def _read_preset(self, path):
+        """Return (name, values) of a preset file; raises on bad files."""
+        data = json.loads(pathlib.Path(path).read_text())
+        values = {k: v for k, v in data.get("values", {}).items()
+                  if k in self.rows}
+        return data.get("name", pathlib.Path(path).stem), values
+
+    def _set_active_preset(self, path, values):
+        self.active_preset = pathlib.Path(path) if path else None
+        self.active_values = dict(values)
+        self._presets_changed()
+
     def _apply_preset(self, path):
         path = pathlib.Path(path)
         try:
-            data = json.loads(path.read_text())
+            name, values = self._read_preset(path)
         except (OSError, json.JSONDecodeError) as e:
             self._error(_("Could not load preset"), str(e))
             return
-        values = {k: v for k, v in data.get("values", {}).items()
-                  if k in self.rows}
-        name = data.get("name", path.stem)
+        self.active_preset, self.active_values = path, dict(values)
+        self._rebuild_preset_menu()
+        self._rebuild_presets_list()
         self._apply_values(
             values, _("Preset “{name}” applied").format(name=name),
             _("Preset “{name}” loaded — click Apply to write it").format(name=name))
@@ -1331,17 +1398,89 @@ class TunerWindow(Adw.ApplicationWindow):
         if not name:
             self._error(_("No Name"), _("Enter a name for the preset."))
             return
-        safe = re.sub(r"[/\\]", "_", name)
+        path = CONFIG_DIR / (re.sub(r"[/\\]", "_", name) + ".json")
+        if path.exists():
+            self._confirm_overwrite(path, new_name=name)
+            return
+        if self._write_preset(path, name):
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Preset “{name}” saved").format(name=name)))
+
+    def _write_preset(self, path, name):
+        values = self._collect_values()
         try:
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            (CONFIG_DIR / f"{safe}.json").write_text(json.dumps(
-                {"name": name, "values": self._collect_values()}, indent=2))
+            pathlib.Path(path).write_text(json.dumps(
+                {"name": name, "values": values}, indent=2))
         except OSError as e:
             self._error(_("Could not save preset"), str(e))
+            return False
+        self._set_active_preset(path, values)
+        return True
+
+    def _describe_diff(self, diff, limit=6):
+        lines = []
+        for attr_id, old, new in diff[:limit]:
+            row = self.rows[attr_id]
+            before = row.format(old) if old is not None else "—"
+            lines.append(f"{_(row.setting['label'])}: {before} → {row.format(new)}")
+        if len(diff) > limit:
+            lines.append(_("and {n} more").format(n=len(diff) - limit))
+        return "\n".join(lines)
+
+    def _confirm_overwrite(self, path, new_name=None):
+        """Ask before replacing a preset file with the current settings."""
+        try:
+            name, stored = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            name, stored = path.stem, {}
+        name = new_name or name
+        diff = self._preset_diff(stored)
+        body = (_("Settings that change:") + "\n" + self._describe_diff(diff)
+                if diff else _("The preset already matches the current "
+                               "settings."))
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=_("Overwrite “{name}”?").format(name=name), body=body)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("overwrite", _("Overwrite"))
+        dialog.set_response_appearance("overwrite",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, response):
+            if response == "overwrite" and self._write_preset(path, name):
+                self.toasts.add_toast(Adw.Toast.new(
+                    _("Preset “{name}” saved").format(name=name)))
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _update_active_preset(self):
+        """Save to the active preset without asking; offer undo instead."""
+        path = self.active_preset
+        if path is None:
             return
-        self._presets_changed()
-        self.toasts.add_toast(Adw.Toast.new(
-            _("Preset “{name}” saved").format(name=name)))
+        try:
+            old_text = path.read_text()
+            name, old_values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            old_text, name, old_values = None, self._active_name(), {}
+        if not self._write_preset(path, name):
+            return
+        toast = Adw.Toast.new(_("Saved to “{name}”").format(name=name))
+        if old_text is not None:
+            toast.set_button_label(_("Undo"))
+
+            def undo(t):
+                try:
+                    path.write_text(old_text)
+                except OSError as e:
+                    self._error(_("Could not save preset"), str(e))
+                    return
+                self._set_active_preset(path, old_values)
+
+            toast.connect("button-clicked", undo)
+        self.toasts.add_toast(toast)
 
     def _confirm_delete_preset(self, path, name):
         dialog = Adw.MessageDialog(
@@ -1359,6 +1498,8 @@ class TunerWindow(Adw.ApplicationWindow):
                     pathlib.Path(path).unlink(missing_ok=True)
                 except OSError as e:
                     self._error(_("Could not delete preset"), str(e))
+                if self.active_preset == pathlib.Path(path):
+                    self.active_preset, self.active_values = None, {}
                 self._presets_changed()
 
         dialog.connect("response", on_response)
