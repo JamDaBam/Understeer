@@ -65,7 +65,7 @@ The live input display (current steering angle and pedal travel) reads the wheel
 
 ## Translations
 
-Understeer uses your system language when a translation is available and falls back to English otherwise. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them.
+Understeer uses your system language when a translation is available and falls back to English otherwise. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
 
 To add a language:
 
