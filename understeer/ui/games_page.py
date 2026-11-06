@@ -5,7 +5,7 @@ import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from .. import config, games
+from .. import config, games, steamgriddb
 from ..i18n import _
 from . import cover_search
 from .live import CoverView
@@ -28,7 +28,7 @@ class GamesPage:
         self.window = window
         self.games = config.load_games()
         self.running = set()
-        self._downloading = set()   # steam app ids being fetched
+        self._downloading = set()   # ids of games whose cover is being fetched
         self._failed = set()        # ... or that had no cover online
         self._search = None         # [asked, found] of a search the user started
         roots = games.steam_roots()
@@ -57,13 +57,13 @@ class GamesPage:
                                 max_children_per_line=8, column_spacing=12,
                                 row_spacing=12, valign=Gtk.Align.START)
 
-        options = Adw.PreferencesGroup()
+        options = Adw.PreferencesGroup(title=_("Covers"))
         options.set_margin_top(18)
         self.download_row = Adw.SwitchRow(
             title=_("Download Missing Covers"),
-            subtitle=_("Loads covers of Steam games from Steam's servers when "
-                       "Steam has none stored. When off, Understeer uses only "
-                       "the pictures Steam already keeps on this computer."))
+            subtitle=_("Steam games from Steam, other games from SteamGridDB "
+                       "if an API key is entered below. When off, Understeer "
+                       "uses only the pictures already on this computer."))
         self.download_row.set_active(bool(config.get_setting("download_covers", False)))
         self.search_btn = Gtk.Button(icon_name="view-refresh-symbolic",
                                      valign=Gtk.Align.CENTER)
@@ -84,14 +84,9 @@ class GamesPage:
         get_key.connect("clicked", lambda b: cover_search.open_key_page(self.window))
         self.key_row.add_suffix(get_key)
         self.key_row.connect("apply", self._on_key_applied)
-        key_group = Adw.PreferencesGroup(
-            title="SteamGridDB",
-            description=_("Covers for games without a Steam cover, chosen in the "
-                          "tile's menu. SteamGridDB needs a free personal API key."))
-        key_group.set_margin_top(18)
-        key_group.add(self.key_row)
+        options.add(self.key_row)
 
-        for w in (title, desc, self.flow, options, key_group):
+        for w in (title, desc, self.flow, options):
             column.append(w)
         clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
         clamp.set_child(column)
@@ -136,6 +131,9 @@ class GamesPage:
             config.set_setting(cover_search.KEY_SETTING, key)
             log.info("SteamGridDB API key saved")
             self.window._notify(_("SteamGridDB API key saved"))
+            self._failed.clear()                # may find more now
+            if config.get_setting("download_covers", False):
+                self.refresh()
         cover_search.check_key(key, done)
 
     def key_changed(self):
@@ -176,33 +174,33 @@ class GamesPage:
         return path
 
     def _cover(self, game):
-        appid = _steam_appid(game)
         path = self._cover_file(game)
-        if path is None and appid and config.get_setting("download_covers", False):
-            self._download(appid)
+        if path is None and config.get_setting("download_covers", False) \
+                and self._can_download(game):
+            self._download(game)
         if path is not None:
             child = Gtk.Picture.new_for_filename(str(path))
             child.set_content_fit(Gtk.ContentFit.COVER)
             child.set_can_shrink(True)
         else:
-            child = self._placeholder(appid)
+            child = self._placeholder(game)
         cover = CoverView(child)                # portrait, like Steam's library
         cover.add_css_class("game-cover")
         return cover
 
-    def _placeholder(self, appid):
+    def _placeholder(self, game):
         """Empty cover that tells whether a cover is being searched."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.add_css_class("cover-placeholder")
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
                         valign=Gtk.Align.CENTER, vexpand=True)
-        if appid in self._downloading:
+        if game["game"] in self._downloading:
             icon = Gtk.Spinner(spinning=True, width_request=32, height_request=32)
             text = _("Searching for a cover…")
         else:
             icon = Gtk.Image.new_from_icon_name("applications-games-symbolic")
             icon.set_pixel_size(48)
-            text = (_("No cover found online") if appid in self._failed
+            text = (_("No cover found online") if game["game"] in self._failed
                     else _("No cover"))
         icon.set_halign(Gtk.Align.CENTER)
         label = Gtk.Label(label=text, wrap=True, justify=Gtk.Justification.CENTER,
@@ -234,7 +232,7 @@ class GamesPage:
         if config.game_cover_path(game) is not None:
             pictures.append(_("Use Steam Cover") if _steam_appid(game)
                             else _("Remove Picture"), "game.remove-cover")
-        elif _steam_appid(game) and self._cover_file(game) is None:
+        elif self._cover_file(game) is None and self._can_download(game):
             pictures.append(_("Download Cover"), "game.find-cover")
         pictures.append(_("Search SteamGridDB…"), "game.steamgriddb")
         menu.append_section(None, pictures)
@@ -338,20 +336,22 @@ class GamesPage:
         if path is not None:
             self.set_cover(game, path)
 
-    def set_cover(self, game, path):
+    def set_cover(self, game, path, quiet=False):
         """Use the picture at path for game; returns whether it worked."""
         try:
             Gdk.Texture.new_from_filename(path)
         except GLib.Error as e:
             log.warning("Picture %s for %s can't be shown: %s", path,
                         game["name"], e.message)
-            self.window._notify(_("This picture can't be opened"))
+            if not quiet:
+                self.window._notify(_("This picture can't be opened"))
             return False
         try:
             config.set_game_cover(game, path)
         except OSError as e:
             log.warning("Could not copy picture %s: %s", path, e)
-            self.window._notify(_("Could not save the picture"))
+            if not quiet:
+                self.window._notify(_("Could not save the picture"))
             return False
         log.info("Picture for %s set from %s", game["name"], path)
         self._save()
@@ -365,73 +365,119 @@ class GamesPage:
         self.refresh()
 
     # -- downloaded covers ---------------------------------------------------
+    @staticmethod
+    def _can_download(game):
+        """Steam games always; others only through SteamGridDB."""
+        return bool(_steam_appid(game) or config.get_setting(cover_search.KEY_SETTING))
+
     def search_covers(self, which=None):
-        """Download the missing covers of Steam games and report the result.
+        """Download missing covers and report the result.
 
         Started by the user (switch, refresh button or tile menu), so it
         always says what happens, also when there is nothing to search.
         """
         which = self.games if which is None else which
-        missing = [_steam_appid(g) for g in which
-                   if _steam_appid(g) and self._cover_file(g) is None]
-        others = [g for g in which
-                  if not _steam_appid(g) and self._cover_file(g) is None]
+        missing = [g for g in which if self._cover_file(g) is None]
+        possible = [g for g in missing if self._can_download(g)]
         if not missing:
-            self.window._notify(
-                _("Steam has covers only for Steam games. For other games, "
-                  "search SteamGridDB or choose a picture in the tile's "
-                  "menu.") if others
-                else _("All games already have a cover"))
+            self.window._notify(_("All games already have a cover"))
             return
-        self._failed.difference_update(missing)
-        self._search = [set(missing), 0]
-        log.info("Searching covers of Steam apps %s", ", ".join(missing))
-        self.window._notify(_("Searching covers for {n} games…").format(n=len(missing))
-                            if len(missing) > 1 else _("Searching for a cover…"))
-        for appid in missing:
-            self._download(appid)
+        if not possible:
+            self.window._notify(_("Covers of games not on Steam come from "
+                                  "SteamGridDB. Enter an API key under "
+                                  "Covers to search them."))
+            return
+        ids = {g["game"] for g in possible}
+        self._failed.difference_update(ids)
+        self._search = [ids, 0, len(missing) - len(possible)]
+        log.info("Searching covers of %s", ", ".join(sorted(ids)))
+        self.window._notify(_("Searching covers for {n} games…").format(n=len(ids))
+                            if len(ids) > 1 else _("Searching for a cover…"))
+        for game in possible:
+            self._download(game)
         self.refresh()                          # shows the spinners
 
-    def _download(self, appid):
-        if appid in self._downloading or appid in self._failed:
+    def _download(self, game):
+        """Fetch a missing cover: Steam's own, else SteamGridDB's."""
+        game_id = game["game"]
+        if game_id in self._downloading or game_id in self._failed:
             return
-        self._downloading.add(appid)
+        self._downloading.add(game_id)
+        appid = _steam_appid(game)
+        key = config.get_setting(cover_search.KEY_SETTING)
 
         def work():
-            path = games.download_cover(appid, config.COVER_DIR)
-            GLib.idle_add(done, path)
+            if appid:
+                path = games.download_cover(appid, config.COVER_DIR)
+                if path is not None:
+                    return "steam", path, None
+            if not key:
+                return None, None, None
+            try:
+                url = steamgriddb.find_cover(game["name"], key, steam_appid=appid)
+                if url is None:
+                    return None, None, None
+                suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
+                tmp = config.COVER_DIR / f"steamgriddb-{abs(hash(game_id))}{suffix}"
+                return "steamgriddb", steamgriddb.download(url, tmp), None
+            except steamgriddb.Error as e:
+                return None, None, e
 
-        def done(path):
-            self._downloading.discard(appid)
-            if path is None:
-                log.info("No cover online for Steam app %s", appid)
-                self._failed.add(appid)
+        def done(result):
+            source, path, error = result
+            self._downloading.discard(game_id)
+            if error is not None:
+                log.warning("SteamGridDB cover for %s: %s", game["name"], error)
+            if source == "steamgriddb":
+                if game in self.games and self._cover_file(game) is None:
+                    self.set_cover(game, str(path), quiet=True)
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+            found = source is not None and self._cover_file(game) is not None
+            if found:
+                log.info("Downloaded cover for %s from %s", game["name"], source)
             else:
-                log.info("Downloaded cover for Steam app %s", appid)
-            self._report_search(appid, path is not None)
+                log.info("No cover online for %s", game["name"])
+                self._failed.add(game_id)
+            self._report_search(game_id, found, error)
             self.refresh()
             return False
 
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=lambda: GLib.idle_add(done, work()),
+                         daemon=True).start()
 
-    def _report_search(self, appid, found):
-        if self._search is None or appid not in self._search[0]:
+    def _report_search(self, game_id, found, error=None):
+        if self._search is None or game_id not in self._search[0]:
             return
-        asked = self._search[0]
         if found:
             self._search[1] += 1
+        if error is not None and error.kind == "key":
+            self._search.append(error)
+        asked, found_n, skipped = self._search[:3]
         if asked & self._downloading:
             return                              # still waiting for others
-        found_n, total = self._search[1], len(asked)
+        key_error = len(self._search) > 3
         self._search = None
-        if found_n == total:
+        total = len(asked)
+        if key_error:
+            text = cover_search.error_text(steamgriddb.Error("key", ""))
+        elif found_n == total:
             text = (_("Found all {n} covers").format(n=total) if total > 1
                     else _("Cover found"))
         elif found_n == 0:
-            text = (_("Steam has no covers for these games") if total > 1
-                    else _("Steam has no cover for this game"))
+            text = (_("No covers found. Choose one with “Search SteamGridDB…” "
+                      "in the tile's menu.") if total > 1 else
+                    _("No cover found. Choose one with “Search SteamGridDB…” "
+                      "in the tile's menu."))
         else:
-            text = _("Found {found} of {n} covers").format(found=found_n, n=total)
+            text = _("Found {found} of {n} covers. Choose the others with "
+                     "“Search SteamGridDB…” in the tile's menu.").format(
+                         found=found_n, n=total)
+        if skipped and not key_error:
+            text = text.rstrip(".") + ". " + _(
+                "Games not on Steam need a SteamGridDB API key.")
         self.window._notify(text)
 
     # -- adding games --------------------------------------------------------

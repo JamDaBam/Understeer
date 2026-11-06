@@ -9,7 +9,9 @@ Nothing here runs unless the user searches for a cover.
 import json
 import logging
 import pathlib
+import re
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -73,13 +75,16 @@ def search(term, key):
     return found
 
 
-def covers(game_id, key):
+def covers(game_id, key, steam_appid=None):
     """Portrait covers (600x900) of a SteamGridDB game, best rated first.
 
+    Pass steam_appid instead of game_id to look a game up by its Steam id.
     [{"url", "thumb", "author"}]; animated and adult pictures are left out.
     """
-    log.info("Loading SteamGridDB covers of game %s", game_id)
-    grids = _get(f"/grids/game/{int(game_id)}", key, {
+    path = (f"/grids/steam/{int(steam_appid)}" if steam_appid
+            else f"/grids/game/{int(game_id)}")
+    log.info("Loading SteamGridDB covers: %s", path)
+    grids = _get(path, key, {
         "dimensions": "600x900", "types": "static", "nsfw": "false",
         "mimes": "image/png,image/jpeg"})
     result = []
@@ -90,6 +95,32 @@ def covers(game_id, key):
         result.append({"url": g["url"], "thumb": g.get("thumb") or g["url"],
                        "author": author.get("name") or ""})
     return result
+
+
+def same_name(a, b):
+    """Whether two game names are the same, ignoring case, accents,
+    punctuation and signs like ™: "DiRT Rally 2.0™" == "Dirt Rally 2.0"."""
+    def norm(name):
+        name = unicodedata.normalize("NFKD", re.sub("[™®©]", "", name)).casefold()
+        return re.sub(r"[^\w]|_", "", name)
+    return bool(norm(a)) and norm(a) == norm(b)
+
+
+def find_cover(name, key, steam_appid=None):
+    """URL of the best cover for a game, or None.
+
+    Used without asking the user, so only an unambiguous match counts:
+    the Steam id, or a game whose name is exactly the given one.
+    """
+    if steam_appid:
+        found = covers(None, key, steam_appid=steam_appid)
+    else:
+        matches = [g for g in search(name, key) if same_name(g["name"], name)]
+        if not matches:
+            log.info("No SteamGridDB game named exactly %r", name)
+            return None
+        found = covers(matches[0]["id"], key)
+    return found[0]["url"] if found else None
 
 
 def fetch(url, timeout=20, limit=20 * 1024 * 1024):

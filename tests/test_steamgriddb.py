@@ -117,3 +117,33 @@ def test_download_too_large(tmp_path, monkeypatch):
     patch, _asked = serve(lambda req: b"x" * 50)
     with patch, pytest.raises(steamgriddb.Error):
         steamgriddb.fetch("https://cdn2.steamgriddb.com/a.png", limit=10)
+
+
+@pytest.mark.parametrize("a, b, same", [
+    ("DiRT Rally 2.0™", "Dirt Rally 2.0", True),
+    ("Pokémon", "pokemon", True),
+    ("Diablo II", "Diablo II: Resurrected", False),
+    ("", "", False),
+])
+def test_same_name(a, b, same):
+    assert steamgriddb.same_name(a, b) is same
+
+
+def test_find_cover_needs_exact_name():
+    def answer(req):
+        if "/search/" in req.full_url:
+            return {"success": True, "data": [{"id": 2, "name": "Diablo II: Resurrected"},
+                                              {"id": 1, "name": "Diablo II"}]}
+        assert "/grids/game/1?" in req.full_url
+        return {"success": True, "data": [{"url": "https://cdn2.steamgriddb.com/a.png"}]}
+    patch, _asked = serve(answer)
+    with patch:
+        assert steamgriddb.find_cover("diablo ii", "k") == "https://cdn2.steamgriddb.com/a.png"
+        assert steamgriddb.find_cover("Diablo", "k") is None
+
+
+def test_find_cover_by_steam_id():
+    patch, asked = serve(lambda req: {"success": True, "data": []})
+    with patch:
+        assert steamgriddb.find_cover("whatever", "k", steam_appid="1161040") is None
+    assert "/grids/steam/1161040?" in asked[0].full_url
