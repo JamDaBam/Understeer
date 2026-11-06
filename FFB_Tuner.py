@@ -2,99 +2,243 @@
 """
 SimPower — a GNOME-aligned GUI for adjusting Fanatec force-feedback
 settings exposed by the hid-fanatecff kernel driver via sysfs.
+
+Changes are written to the wheel base live while you move a control.
+All user-visible text goes through _() and is translated from
+locale/<lang>.po (see README for adding a language).
 """
 
 import glob
 import json
 import os
 import pathlib
+import re
+import shlex
 import shutil
 import subprocess
 import sys
-import gi
+
+# ---------------------------------------------------------------------------
+# Translations
+# ---------------------------------------------------------------------------
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+LOCALE_DIRS = [
+    _SCRIPT_DIR / "locale",                            # source checkout
+    _SCRIPT_DIR.parent / "share" / "simpower" / "locale",  # AppImage layout
+]
+
+
+def _unquote_po(s):
+    s = s.strip()
+    if not (s.startswith('"') and s.endswith('"')):
+        return ""
+    return (s[1:-1].replace('\\n', '\n').replace('\\t', '\t')
+            .replace('\\"', '"').replace('\\\\', '\\'))
+
+
+def parse_po(text):
+    """Minimal .po reader (msgid/msgstr with continuation lines)."""
+    catalog, msgid, msgstr, field = {}, None, None, None
+
+    def flush():
+        if msgid and msgstr:
+            catalog[msgid] = msgstr
+
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("msgid "):
+            flush()
+            msgid, msgstr, field = _unquote_po(line[6:]), None, "id"
+        elif line.startswith("msgstr "):
+            msgstr, field = _unquote_po(line[7:]), "str"
+        elif line.startswith('"'):
+            if field == "id":
+                msgid += _unquote_po(line)
+            elif field == "str":
+                msgstr += _unquote_po(line)
+        elif not line or line.startswith("#"):
+            field = None if not line else field
+    flush()
+    return catalog
+
+
+def _wanted_languages():
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(var, "")
+        if value:
+            langs = []
+            for entry in value.split(":"):
+                entry = entry.split(".")[0].split("@")[0]
+                if entry and entry not in ("C", "POSIX"):
+                    langs += [entry, entry.split("_")[0]]
+            return langs
+    return []
+
+
+def load_catalog():
+    for lang in _wanted_languages():
+        for d in LOCALE_DIRS:
+            po = d / f"{lang}.po"
+            if po.is_file():
+                try:
+                    return parse_po(po.read_text(encoding="utf-8"))
+                except OSError:
+                    pass
+    return {}
+
+
+_CATALOG = load_catalog()
+
+
+def _(text):
+    return _CATALOG.get(text, text)
+
+
+def N_(text):
+    """Mark a string for translation; it is translated where it is shown."""
+    return text
+
+
+import gi  # noqa: E402
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio
+from gi.repository import Gtk, Adw, GLib, Gio  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# sysfs paths
+# sysfs paths and storage
 # ---------------------------------------------------------------------------
-SYSFS_GLOB   = "/sys/class/ftec_tuning/*"
-RUMBLE_GLOB  = "/sys/bus/hid/devices/*/rumble"
+SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
+RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
+CONFIG_DIR  = pathlib.Path.home() / ".config" / "SimPower"
+
+UDEV_RULE = """ACTION!="add|change", GOTO="fanatec_tuner_end"
+
+SUBSYSTEM=="ftec_tuning", RUN+="/bin/sh -c 'find /sys%p -type f -exec chmod 666 {} +'"
+SUBSYSTEM=="hid", DRIVER=="fanatec", RUN+="/bin/sh -c 'chmod 666 /sys%p/rumble 2>/dev/null'"
+
+LABEL="fanatec_tuner_end"
+"""
+UDEV_RULE_PATH = "/etc/udev/rules.d/99-fanatec-tuner.rules"
 
 # ---------------------------------------------------------------------------
-# Preset storage
+# Settings
+#
+# Each entry describes one sysfs attribute. "kind" is "slider" or "choice".
+# Sliders may have a "unit" and a "fmt" function for special values;
+# choices list (value, label) pairs.
 # ---------------------------------------------------------------------------
-CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"
-
-# ---------------------------------------------------------------------------
-# Tab 1 — Wheel & FFB
-# Core FFB output and steering feel attributes
-# ---------------------------------------------------------------------------
-WHEEL_ATTRS = [
-    ("SEN", "Sensitivity",               90, 1080,
-     "Wheel rotation range in degrees. 0 = auto/max base range.", "slider"),
-    ("FF",  "Force Feedback Strength",    0,  100,
-     "Master FFB output strength from the wheel base.", "slider"),
-    ("FOR", "Force Effect Strength",      0,  120,
-     "Strength of constant-force effects (core game FFB).", "slider"),
-    ("SPR", "Spring Effect Strength",     0,  120,
-     "Centering spring effect strength.", "slider"),
-    ("DPR", "Damper Effect Strength",     0,  120,
-     "Damping effect strength.", "slider"),
-    ("SHO", "Wheel Vibration (Shock)",    0,  100,
-     "Curb/shock rumble motor strength.", "slider"),
-    ("FFS", "Force Feedback Scaling",     0,    1,
-     "0 = linear FFB taper (Lin). 1 = peak scaling (default).", "toggle"),
-    ("FEI", "Force Effect Intensity",     0,  100,
-     "Smooths/filters the FFB signal. Higher = sharper transients.", "slider"),
-    ("INT", "FFB Interpolation Filter",   0,   20,
-     "Interpolation smoothing between FFB updates. 0 = off.", "slider"),
+PAGES = [
+    ("steering", N_("Steering"),       "input-gaming-symbolic"),
+    ("feel",     N_("Wheel Feel"),     "emblem-system-symbolic"),
+    ("pedals",   N_("Pedals"),         "media-playback-start-symbolic"),
+    ("paddles",  N_("Paddles"),        "view-dual-symbolic"),
+    ("presets",  N_("Presets"),        "document-save-symbolic"),
+    ("tools",    N_("Tools"),          "applications-utilities-symbolic"),
 ]
 
-# ---------------------------------------------------------------------------
-# Tab 2 — Pedals & Brake
-# Load-cell brake tuning + CSP rumble motor
-# ---------------------------------------------------------------------------
-PEDAL_ATTRS = [
-    ("brF", "Brake Force (Load-Cell Stiffness)", 0, 100,
-     "Load-cell brake pedal stiffness. Higher = firmer pedal feel. "
-     "Only active with CSL/ClubSport load-cell brake.", "slider"),
-    ("BLI", "Brake Level Indicator",             0, 101,
-     "Brake force % at which the LED indicator triggers. "
-     "101 = always on; 0 = always off.", "slider"),
-    ("FUL", "FullForce (Pedal Vibration)",        0, 100,
-     "Routes pedal-load vibration through the wheel motor. "
-     "Requires a FullForce-compatible game.", "slider"),
+
+def _fmt_drift(v):
+    if v == 0:
+        return _("Off")
+    if v < 0:
+        return _("Counter-steer {n}").format(n=-v)
+    return _("Centering +{n}").format(n=v)
+
+
+def _fmt_brake_led(v):
+    if v == 0:
+        return _("Off")
+    if v >= 101:
+        return _("Always on")
+    return f"{v} %"
+
+
+SETTINGS = [
+    # --- Steering --------------------------------------------------------
+    dict(id="SEN", page="steering", group=N_("Rotation"),
+         label=N_("Steering Angle"), lo=90, hi=1080, unit="°",
+         desc=N_("Total wheel rotation in degrees. Auto uses the maximum "
+                 "range of the wheel base."),
+         quick=[540, 720, 900, 1080]),
+    dict(id="FF", page="steering", group=N_("Force Feedback"),
+         label=N_("Force Feedback Strength"), lo=0, hi=100, unit="%",
+         desc=N_("Master force feedback output of the wheel base.")),
+    dict(id="FOR", page="steering", group=N_("Force Feedback"),
+         label=N_("Force Effects"), lo=0, hi=120, unit="%",
+         desc=N_("Strength of constant-force effects, the core of the game's "
+                 "force feedback.")),
+    dict(id="SPR", page="steering", group=N_("Force Feedback"),
+         label=N_("Spring Effects"), lo=0, hi=120, unit="%",
+         desc=N_("Strength of centering spring effects sent by the game.")),
+    dict(id="DPR", page="steering", group=N_("Force Feedback"),
+         label=N_("Damper Effects"), lo=0, hi=120, unit="%",
+         desc=N_("Strength of damper effects sent by the game.")),
+    dict(id="FFS", page="steering", group=N_("Signal"),
+         label=N_("Force Feedback Scaling"), kind="choice",
+         choices=[(0, N_("Linear")), (1, N_("Peak"))],
+         desc=N_("Linear keeps a constant taper. Peak scales to the strongest "
+                 "force (default).")),
+    dict(id="FEI", page="steering", group=N_("Signal"),
+         label=N_("Force Effect Intensity"), lo=0, hi=100, unit="%",
+         desc=N_("Filters the force feedback signal. Higher values give "
+                 "sharper details.")),
+    dict(id="INT", page="steering", group=N_("Signal"),
+         label=N_("Interpolation Filter"), lo=0, hi=20,
+         desc=N_("Smooths between force feedback updates. 0 turns it off.")),
+    # --- Wheel feel ------------------------------------------------------
+    dict(id="NDP", page="feel", group=N_("Natural Feel"),
+         label=N_("Natural Damper"), lo=0, hi=100, unit="%",
+         desc=N_("Mechanical damping added by the wheel base itself, "
+                 "independent of the game.")),
+    dict(id="NFR", page="feel", group=N_("Natural Feel"),
+         label=N_("Natural Friction"), lo=0, hi=100, unit="%",
+         desc=N_("Mechanical friction added by the wheel base itself, "
+                 "independent of the game.")),
+    dict(id="NIN", page="feel", group=N_("Natural Feel"),
+         label=N_("Natural Inertia"), lo=0, hi=100, unit="%",
+         desc=N_("Mechanical inertia added by the wheel base itself, "
+                 "independent of the game.")),
+    dict(id="SHO", page="feel", group=N_("Effects"),
+         label=N_("Wheel Vibration"), lo=0, hi=100, unit="%",
+         desc=N_("Strength of the rumble on curbs and impacts.")),
+    dict(id="DRI", page="feel", group=N_("Effects"),
+         label=N_("Drift Mode"), lo=-5, hi=3, fmt=_fmt_drift,
+         desc=N_("Negative values help with counter-steering, positive values "
+                 "add centering force. 0 turns it off.")),
+    # --- Pedals ----------------------------------------------------------
+    dict(id="brF", page="pedals", group=N_("Load Cell Brake"),
+         label=N_("Brake Force"), lo=0, hi=100, unit="%",
+         desc=N_("Pedal stiffness. Higher values need more force for full "
+                 "braking. Requires a load cell brake.")),
+    dict(id="BLI", page="pedals", group=N_("Load Cell Brake"),
+         label=N_("Brake Level Indicator"), lo=0, hi=101, fmt=_fmt_brake_led,
+         desc=N_("Brake force at which the LED lights up.")),
+    dict(id="FUL", page="pedals", group=N_("Vibration"),
+         label=N_("FullForce"), lo=0, hi=100, unit="%",
+         desc=N_("Pedal vibration routed through the wheel motor. Requires a "
+                 "game with FullForce support.")),
+    # --- Paddles ---------------------------------------------------------
+    dict(id="ACP", page="paddles", group=N_("Analogue Paddles"),
+         label=N_("Paddle Mode"), kind="choice",
+         choices=[(1, N_("Independent (CbP)")),
+                  (2, N_("Clutch / Handbrake (CH)")),
+                  (3, N_("Brake / Throttle (Bt)")),
+                  (4, N_("Analogue Axes (AnA)"))],
+         desc=N_("How the analogue clutch paddles behave. Read-only on wheels "
+                 "with a physical mode switch.")),
 ]
+SETTINGS_BY_ID = {s["id"]: s for s in SETTINGS}
+
+SIM_DEFAULTS = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0,
+                "SHO": 80, "FFS": 1, "FEI": 30, "INT": 0}
+
+SLOTS = 5
+LIVE_DELAY_MS = 120
+
 
 # ---------------------------------------------------------------------------
-# Tab 3 — Advanced
-# Wheel-feel naturals, drift assist, analogue paddles, slot management
-# ---------------------------------------------------------------------------
-ADVANCED_ATTRS = [
-    ("NDP", "Natural Damper",   0, 100,
-     "Mechanical-feel damper baked into the wheel base.", "slider"),
-    ("NFR", "Natural Friction", 0, 100,
-     "Mechanical-feel friction baked into the wheel base.", "slider"),
-    ("NIN", "Natural Inertia",  0, 100,
-     "Mechanical-feel inertia baked into the wheel base.", "slider"),
-    ("DRI", "Drift Mode",      -5,   3,
-     "Drift counter-force assist. Negative = counter-steer aid, "
-     "0 = off, positive = extra centering force.", "slider"),
-    ("ACP", "Analogue Paddle Mode", 1, 4,
-     "Clutch paddle bite-point mode:\n"
-     "  1 = CbP — both paddles independent (default)\n"
-     "  2 = CH  — clutch / handbrake\n"
-     "  3 = Bt  — brake / throttle\n"
-     "  4 = AnA — mappable analogue axes", "slider"),
-]
-
-ACP_LABELS = {1: "CbP — Independent", 2: "CH — Clutch/Handbrake",
-              3: "Bt — Brake/Throttle", 4: "AnA — Analogue Axes"}
-
-
+# Device access
 # ---------------------------------------------------------------------------
 def find_device_path():
     candidates = [p for p in glob.glob(SYSFS_GLOB) if os.path.isdir(p)]
@@ -107,60 +251,176 @@ def find_rumble_path():
     return matches[0] if matches else None
 
 
-def can_write(path):
-    """Return True if the sysfs attrs for this device are user-writable.
+def can_write(device_path):
+    """sysfs dirs are rarely writable even when their files are, so test FF."""
+    attr = os.path.join(device_path, "FF")
+    return os.access(attr if os.path.exists(attr) else device_path, os.W_OK)
 
-    Checking the directory itself is misleading — sysfs dirs are typically
-    not writable even when the attribute files inside them are.  Test a
-    known-present attribute file (FF) instead, falling back to the directory
-    if the file doesn't exist yet.
+
+def read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def write_values(writes):
+    """Write {path: int}. Paths without permission go through one pkexec call.
+
+    Returns the list of paths that could not be written.
     """
-    attr = os.path.join(path, "FF")
-    target = attr if os.path.exists(attr) else path
-    return os.access(target, os.W_OK)
+    denied, failed = {}, []
+    for path, value in writes.items():
+        try:
+            with open(path, "w") as f:
+                f.write(str(int(value)))
+        except PermissionError:
+            denied[path] = value
+        except OSError:
+            failed.append(path)
+    if denied:
+        script = "; ".join(f"echo {int(v)} > {shlex.quote(p)}"
+                           for p, v in denied.items())
+        if not run_privileged(script):
+            failed += list(denied)
+    return failed
+
+
+def run_privileged(script):
+    tool = "pkexec" if shutil.which("pkexec") else "sudo"
+    try:
+        subprocess.run([tool, "/bin/sh", "-c", script], check=True,
+                       capture_output=True, text=True)
+        return True
+    except (subprocess.CalledProcessError, OSError):
+        return False
 
 
 # ---------------------------------------------------------------------------
-def build_attr_rows(pref_group, attrs, widgets, write_cb, extra_rows_cb=None):
-    for attr_id, label, lo, hi, desc, kind in attrs:
-        row = Adw.ActionRow()
-        row.set_title(f"{label}  ({attr_id})")
-        row.set_subtitle(desc)
-        pref_group.add(row)
+# One row per setting
+# ---------------------------------------------------------------------------
+class SettingRow:
+    """Wraps the widgets of one setting and exposes get/set of its value."""
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        box.set_valign(Gtk.Align.CENTER)
+    def __init__(self, setting, on_change):
+        self.setting = setting
+        self.on_change = on_change
+        self.baseline = None
+        self._silent = False
+        kind = setting.get("kind", "slider")
 
-        if kind == "toggle":
-            sw = Gtk.Switch()
-            sw.set_valign(Gtk.Align.CENTER)
-            box.append(sw)
-            widgets[attr_id] = sw
+        if kind == "choice":
+            self.values = [v for v, _l in setting["choices"]]
+            row = Adw.ComboRow()
+            row.set_model(Gtk.StringList.new(
+                [_(label) for _v, label in setting["choices"]]))
+            row.connect("notify::selected", lambda *a: self._changed())
+            self.combo = row
         else:
-            adj = Gtk.Adjustment(value=max(lo, 0), lower=lo, upper=hi,
-                                 step_increment=1, page_increment=10)
+            row = Adw.ActionRow()
+            lo, hi = setting["lo"], setting["hi"]
+            self.adj = Gtk.Adjustment(value=max(lo, 0), lower=lo, upper=hi,
+                                      step_increment=1, page_increment=10)
             scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
-                              adjustment=adj)
-            scale.set_size_request(180, -1)
+                              adjustment=self.adj)
+            scale.set_size_request(240, -1)
             scale.set_valign(Gtk.Align.CENTER)
             scale.set_draw_value(False)
-            box.append(scale)
+            if lo < 0 < hi:
+                # No fill from the left: 0 ("off") sits in the middle.
+                scale.set_has_origin(False)
+                scale.add_mark(0, Gtk.PositionType.BOTTOM, None)
+            self.value_label = Gtk.Label(xalign=1)
+            self.value_label.set_width_chars(9)
+            self.value_label.add_css_class("numeric")
+            row.add_suffix(scale)
+            row.add_suffix(self.value_label)
+            self.adj.connect("value-changed", lambda *a: self._changed())
 
-            spin = Gtk.SpinButton(adjustment=adj, climb_rate=1.0, digits=0)
-            spin.set_valign(Gtk.Align.CENTER)
-            box.append(spin)
-            widgets[attr_id] = adj
+        row.set_title(_(setting["label"]))
+        row.set_subtitle(setting["id"])
+        row.set_tooltip_text(_(setting["desc"]))
 
-        btn = Gtk.Button(label="Set")
-        btn.add_css_class("suggested-action")
-        btn.set_valign(Gtk.Align.CENTER)
-        btn.connect("clicked", lambda b, aid=attr_id: write_cb(aid))
-        box.append(btn)
+        self.revert_btn = Gtk.Button(icon_name="edit-undo-symbolic")
+        self.revert_btn.set_tooltip_text(_("Undo changes to this setting"))
+        self.revert_btn.set_valign(Gtk.Align.CENTER)
+        self.revert_btn.add_css_class("flat")
+        self.revert_btn.connect("clicked", lambda b: self.revert())
+        row.add_suffix(self.revert_btn)
 
-        row.add_suffix(box)
+        info = Gtk.MenuButton(icon_name="help-about-symbolic")
+        info.set_valign(Gtk.Align.CENTER)
+        info.add_css_class("flat")
+        info.set_tooltip_text(_("About this setting"))
+        pop_label = Gtk.Label(label=_(setting["desc"]), wrap=True,
+                              max_width_chars=40)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(pop_label, f"set_margin_{side}")(8)
+        popover = Gtk.Popover()
+        popover.set_child(pop_label)
+        info.set_popover(popover)
+        row.add_suffix(info)
 
-        if extra_rows_cb:
-            extra_rows_cb(pref_group, attr_id)
+        self.row = row
+        self._update_label()
+        self.revert_btn.set_opacity(0)
+        self.revert_btn.set_sensitive(False)
+
+    # -- value access ------------------------------------------------------
+    def get(self):
+        if hasattr(self, "combo"):
+            return self.values[self.combo.get_selected()]
+        return int(round(self.adj.get_value()))
+
+    def set(self, value, silent=True):
+        self._silent = silent
+        try:
+            if hasattr(self, "combo"):
+                if value in self.values:
+                    self.combo.set_selected(self.values.index(value))
+            else:
+                self.adj.set_value(value)
+        finally:
+            self._silent = False
+        self._update_label()
+
+    def set_baseline(self, value):
+        self.baseline = value
+        self._update_label()
+
+    def revert(self):
+        if self.baseline is not None and self.baseline != self.get():
+            self.set(self.baseline, silent=False)
+            self.on_change(self)
+
+    def set_supported(self, supported):
+        self.row.set_sensitive(supported)
+        self.row.set_subtitle(
+            self.setting["id"] if supported else
+            _("Not supported by your hardware") + f"  ·  {self.setting['id']}")
+
+    # -- internals ---------------------------------------------------------
+    def _changed(self):
+        self._update_label()
+        if not self._silent:
+            self.on_change(self)
+
+    def _update_label(self):
+        if hasattr(self, "value_label"):
+            v = self.get()
+            fmt = self.setting.get("fmt")
+            if fmt:
+                text = fmt(v)
+            elif self.setting["id"] == "SEN" and v == 0:
+                text = _("Auto")
+            else:
+                unit = self.setting.get("unit", "")
+                text = f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()
+            self.value_label.set_label(text)
+        modified = self.baseline is not None and self.get() != self.baseline
+        self.revert_btn.set_opacity(1 if modified else 0)
+        self.revert_btn.set_sensitive(modified)
 
 
 # ===========================================================================
@@ -168,794 +428,637 @@ class TunerWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("SimPower")
-        self.set_default_size(700, 780)
+        self.set_default_size(860, 720)
 
         self.device_path = find_device_path()
         self.rumble_path = find_rumble_path()
+        self.writable = bool(self.device_path) and can_write(self.device_path)
 
-        self.wheel_w    = {}
-        self.pedal_w    = {}
-        self.advanced_w = {}
+        self.rows = {}           # attr id -> SettingRow
+        self.pending = {}        # attr id -> value waiting to be written
+        self._live_timer = 0
+        self._status = ""
 
+        self._build_actions()
         self._build_ui()
-        self._load_current_values()
+        self._refresh_device_state()
 
+    # -----------------------------------------------------------------------
+    # Layout
     # -----------------------------------------------------------------------
     def _build_ui(self):
-        toolbar_view = Adw.ToolbarView()
-        self.set_content(toolbar_view)
+        self.toasts = Adw.ToastOverlay()
+        self.set_content(self.toasts)
 
+        self.split = Adw.NavigationSplitView()
+        self.toasts.set_child(self.split)
+
+        bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 640sp"))
+        bp.add_setter(self.split, "collapsed", True)
+        self.add_breakpoint(bp)
+
+        # Sidebar
+        side_view = Adw.ToolbarView()
+        side_view.add_top_bar(Adw.HeaderBar())
+        self.sidebar = Gtk.ListBox()
+        self.sidebar.add_css_class("navigation-sidebar")
+        self.sidebar.connect("row-selected", self._on_page_selected)
+        side_scroll = Gtk.ScrolledWindow(vexpand=True)
+        side_scroll.set_child(self.sidebar)
+        side_view.set_content(side_scroll)
+        self.split.set_sidebar(Adw.NavigationPage.new(side_view, "SimPower"))
+
+        # Content
+        content_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        toolbar_view.add_top_bar(header)
+        self.window_title = Adw.WindowTitle(title="SimPower")
+        header.set_title_widget(self.window_title)
+        content_view.add_top_bar(header)
 
-        apply_everything_btn = Gtk.Button(label="Apply All")
-        apply_everything_btn.add_css_class("suggested-action")
-        apply_everything_btn.set_tooltip_text(
-            "Write the settings from all tabs (Wheel, Pedals, Advanced) to the device")
-        apply_everything_btn.connect("clicked", lambda b: self._apply_everything())
-        header.pack_start(apply_everything_btn)
+        self.slot_dropdown = Gtk.DropDown.new_from_strings(
+            [_("Slot {n}").format(n=i) for i in range(1, SLOTS + 1)])
+        self.slot_dropdown.set_tooltip_text(
+            _("Tuning slot on the wheel base that is being edited"))
+        self._slot_handler = self.slot_dropdown.connect(
+            "notify::selected", lambda *a: self._on_slot_selected())
+        header.pack_start(self.slot_dropdown)
 
-        tab_bar  = Adw.TabBar()
-        tab_view = Adw.TabView()
-        tab_bar.set_view(tab_view)
-        toolbar_view.add_top_bar(tab_bar)
-        toolbar_view.set_content(tab_view)
+        self.preset_button = Gtk.MenuButton(
+            label=_("Presets"), always_show_arrow=True)
+        self.preset_button.set_tooltip_text(_("Apply or save a preset"))
+        header.pack_start(self.preset_button)
 
-        p = tab_view.append(self._build_wheel_page())
-        p.set_title("Wheel & FFB")
+        menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic")
+        menu = Gio.Menu()
+        menu.append(_("Reload from Device"), "win.reload")
+        menu.append(_("Save as Preset…"), "win.save-preset")
+        menu_btn.set_menu_model(menu)
+        header.pack_end(menu_btn)
 
-        p = tab_view.append(self._build_pedal_page())
-        p.set_title("Pedals & Brake")
+        self.undo_btn = Gtk.Button(icon_name="edit-undo-symbolic")
+        self.undo_btn.set_tooltip_text(
+            _("Undo all changes since the values were loaded"))
+        self.undo_btn.set_action_name("win.undo-all")
+        header.pack_end(self.undo_btn)
 
-        p = tab_view.append(self._build_advanced_page())
-        p.set_title("Advanced")
+        self.banner = Adw.Banner()
+        self.banner.connect("button-clicked", lambda b: self._on_banner_button())
+        content_view.add_top_bar(self.banner)
 
-        p = tab_view.append(self._build_presets_page())
-        p.set_title("Presets")
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        content_view.set_content(self.stack)
+
+        # Shown instead of live writing when every write would ask for a password
+        self.pending_bar = Gtk.ActionBar()
+        self.pending_label = Gtk.Label()
+        self.pending_bar.pack_start(self.pending_label)
+        apply_btn = Gtk.Button(label=_("Apply"))
+        apply_btn.add_css_class("suggested-action")
+        apply_btn.connect("clicked", lambda b: self._flush_pending())
+        discard_btn = Gtk.Button(label=_("Discard"))
+        discard_btn.set_action_name("win.undo-all")
+        self.pending_bar.pack_end(apply_btn)
+        self.pending_bar.pack_end(discard_btn)
+        self.pending_bar.set_revealed(False)
+        content_view.add_bottom_bar(self.pending_bar)
+
+        self.content_page = Adw.NavigationPage.new(content_view, "")
+        self.split.set_content(self.content_page)
+
+        builders = {"presets": self._build_presets_page,
+                    "tools": self._build_tools_page}
+        for key, title, icon in PAGES:
+            page = builders.get(key, lambda k=key: self._build_settings_page(k))()
+            self.stack.add_named(page, key)
+            self.sidebar.append(self._sidebar_row(key, _(title), icon))
+
+        self._rebuild_preset_menu()
+        self.sidebar.select_row(self.sidebar.get_row_at_index(0))
+
+    def _sidebar_row(self, key, title, icon):
+        box = Gtk.Box(spacing=12)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{side}")(6)
+        box.append(Gtk.Image.new_from_icon_name(icon))
+        box.append(Gtk.Label(label=title, xalign=0))
+        row = Gtk.ListBoxRow()
+        row.set_child(box)
+        row.page_key = key
+        row.page_title = title
+        return row
+
+    def _on_page_selected(self, listbox, row):
+        if row is None:
+            return
+        self.stack.set_visible_child_name(row.page_key)
+        self.content_page.set_title(row.page_title)
+        self.split.set_show_content(True)
+
+    def _build_settings_page(self, page_key):
+        page = Adw.PreferencesPage()
+        groups = {}
+        for s in SETTINGS:
+            if s["page"] != page_key:
+                continue
+            if s["group"] not in groups:
+                grp = Adw.PreferencesGroup(title=_(s["group"]))
+                page.add(grp)
+                groups[s["group"]] = grp
+            row = SettingRow(s, self._on_setting_changed)
+            self.rows[s["id"]] = row
+            groups[s["group"]].add(row.row)
+            if s.get("quick"):
+                groups[s["group"]].add(self._quick_angle_row(s))
+        return page
+
+    def _quick_angle_row(self, setting):
+        row = Adw.ActionRow(title=_("Quick Select"))
+        box = Gtk.Box()
+        box.add_css_class("linked")
+        box.set_valign(Gtk.Align.CENTER)
+        for value in setting["quick"]:
+            b = Gtk.Button(label=f"{value}°")
+            b.connect("clicked", lambda b, v=value:
+                      self._set_setting(setting["id"], v))
+            box.append(b)
+        auto = Gtk.Button(label=_("Auto"))
+        auto.set_tooltip_text(_("Use the maximum range of the wheel base"))
+        auto.connect("clicked", lambda b: self._set_angle_auto())
+        box.append(auto)
+        row.add_suffix(box)
+        return row
 
     # -----------------------------------------------------------------------
-    # Shared page scaffold
+    # Presets page and menu
     # -----------------------------------------------------------------------
-    def _make_page_scroll(self):
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_hexpand(True)
-        scrolled.set_vexpand(True)
-        clamp = Adw.Clamp()
-        clamp.set_maximum_size(600)
-        scrolled.set_child(clamp)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        box.set_margin_top(16)
-        box.set_margin_bottom(16)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-        clamp.set_child(box)
-        return scrolled, box
+    def _build_presets_page(self):
+        self.presets_page = Adw.PreferencesPage()
+        save_grp = Adw.PreferencesGroup(
+            title=_("Save Preset"),
+            description=_("Saves all current settings under a name in "
+                          "~/.config/SimPower/."))
+        save_row = Adw.ActionRow(title=_("Current Settings"))
+        save_btn = Gtk.Button(label=_("Save as Preset…"))
+        save_btn.set_valign(Gtk.Align.CENTER)
+        save_btn.set_action_name("win.save-preset")
+        save_row.add_suffix(save_btn)
+        save_grp.add(save_row)
+        self.presets_page.add(save_grp)
+        self.presets_list_grp = None
+        self._rebuild_presets_list()
+        return self.presets_page
 
-    def _make_action_bar(self, reload_cb, apply_cb, extra_btn=None):
-        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        bar.set_margin_top(8)
+    def _preset_files(self):
+        if not CONFIG_DIR.exists():
+            return []
+        result = []
+        for f in sorted(CONFIG_DIR.glob("*.json")):
+            try:
+                name = json.loads(f.read_text()).get("name", f.stem)
+            except (OSError, json.JSONDecodeError):
+                name = f.stem
+            result.append((name, f))
+        return result
 
-        rb = Gtk.Button(label="Reload from Device")
-        rb.connect("clicked", lambda b: reload_cb())
-        bar.append(rb)
+    def _rebuild_presets_list(self):
+        # PreferencesGroup has no row removal, so replace the whole group.
+        if self.presets_list_grp is not None:
+            self.presets_page.remove(self.presets_list_grp)
+        grp = Adw.PreferencesGroup(title=_("Saved Presets"))
+        self.presets_list_grp = grp
+        self.presets_page.add(grp)
 
-        ab = Gtk.Button(label="Apply Page")
-        ab.set_tooltip_text("Write only the settings on this tab to the device")
-        ab.add_css_class("pill")
-        ab.connect("clicked", lambda b: apply_cb())
-        bar.append(ab)
+        presets = self._preset_files()
+        if not presets:
+            grp.add(Adw.ActionRow(
+                title=_("No presets saved yet"),
+                subtitle=_("Saved presets appear here and in the Presets "
+                           "menu at the top.")))
+            return
+        for name, path in presets:
+            row = Adw.ActionRow(title=name, subtitle=path.name)
+            apply_btn = Gtk.Button(label=_("Apply"))
+            apply_btn.add_css_class("suggested-action")
+            apply_btn.set_valign(Gtk.Align.CENTER)
+            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
+            del_btn = Gtk.Button(icon_name="user-trash-symbolic")
+            del_btn.set_tooltip_text(_("Delete"))
+            del_btn.add_css_class("flat")
+            del_btn.set_valign(Gtk.Align.CENTER)
+            del_btn.connect("clicked", lambda b, p=path, n=name:
+                            self._confirm_delete_preset(p, n))
+            row.add_suffix(apply_btn)
+            row.add_suffix(del_btn)
+            grp.add(row)
 
-        spacer = Gtk.Box()
-        spacer.set_hexpand(True)
-        bar.append(spacer)
+    def _rebuild_preset_menu(self):
+        menu = Gio.Menu()
+        presets = Gio.Menu()
+        for name, path in self._preset_files():
+            item = Gio.MenuItem.new(name, None)
+            item.set_action_and_target_value(
+                "win.apply-preset", GLib.Variant.new_string(str(path)))
+            presets.append_item(item)
+        if presets.get_n_items():
+            menu.append_section(None, presets)
+        manage = Gio.Menu()
+        manage.append(_("Save as Preset…"), "win.save-preset")
+        manage.append(_("Manage Presets"), "win.show-presets")
+        menu.append_section(None, manage)
+        self.preset_button.set_menu_model(menu)
 
-        if extra_btn:
-            bar.append(extra_btn)
-
-        return bar
+    def _presets_changed(self):
+        self._rebuild_presets_list()
+        self._rebuild_preset_menu()
 
     # -----------------------------------------------------------------------
-    # Tab 1 — Wheel & FFB
+    # Tools page
     # -----------------------------------------------------------------------
-    def _build_wheel_page(self):
-        scrolled, box = self._make_page_scroll()
+    def _build_tools_page(self):
+        page = Adw.PreferencesPage()
 
-        self.wheel_banner = Adw.Banner()
-        box.append(self.wheel_banner)
-        self._update_wheel_banner()
+        defaults = Adw.PreferencesGroup(title=_("Quick Setup"))
+        row = Adw.ActionRow(
+            title=_("Sim Racing Defaults"),
+            subtitle=_("Balanced steering values for sim racing: 900°, "
+                       "70 % force feedback, no spring or damper."))
+        btn = Gtk.Button(label=_("Apply"))
+        btn.set_valign(Gtk.Align.CENTER)
+        btn.connect("clicked", lambda b: self._apply_values(
+            SIM_DEFAULTS, _("Sim racing defaults applied")))
+        row.add_suffix(btn)
+        defaults.add(row)
+        page.add(defaults)
 
-        grp = Adw.PreferencesGroup()
-        grp.set_title("Wheel Base Tuning")
-        box.append(grp)
-
-        def extra(group, attr_id):
-            if attr_id == "SEN":
-                row = Adw.ActionRow()
-                row.set_title("Auto Sensitivity")
-                row.set_subtitle(
-                    "Write 0 to SEN, forcing the base to its absolute maximum range.")
-                btn = Gtk.Button(label="Auto-Max")
-                btn.set_valign(Gtk.Align.CENTER)
-                btn.connect("clicked", lambda b: self._set_sen_auto())
-                row.add_suffix(btn)
-                group.add(row)
-
-        build_attr_rows(grp, WHEEL_ATTRS, self.wheel_w,
-                        self._write_wheel_attr, extra_rows_cb=extra)
-
-        def_btn = Gtk.Button(label="Sim-Racing Defaults")
-        def_btn.add_css_class("accent")
-        def_btn.connect("clicked", lambda b: self._apply_sim_defaults())
-
-        box.append(self._make_action_bar(
-            self._load_current_values,
-            self._apply_all_wheel,
-            extra_btn=def_btn,
-        ))
-        return scrolled
-
-    # -----------------------------------------------------------------------
-    # Tab 2 — Pedals & Brake
-    # -----------------------------------------------------------------------
-    def _build_pedal_page(self):
-        scrolled, box = self._make_page_scroll()
-
-        self.pedal_banner = Adw.Banner()
-        box.append(self.pedal_banner)
-        self._update_pedal_banner()
-
-        # Brake tuning group
-        grp = Adw.PreferencesGroup()
-        grp.set_title("Brake Tuning")
-        grp.set_description(
-            "brF (Brake Force) and BLI require a CSL/ClubSport load-cell brake. "
-            "FUL (FullForce) routes pedal-load vibration through the wheel motor "
-            "and requires a compatible game."
-        )
-        box.append(grp)
-        build_attr_rows(grp, PEDAL_ATTRS, self.pedal_w, self._write_pedal_attr)
-
-        # CSP rumble group
-        rumble_grp = Adw.PreferencesGroup()
-        rumble_grp.set_title("ClubSport Pedals Rumble Motor")
-        rumble_grp.set_description(
-            "One-shot rumble command for ClubSport Pedals V3 or CSL Elite/LC Pedals. "
-            "Motor A = throttle pedal, Motor B = brake pedal. "
-            "Duration is in ~10 ms ticks (0–255)."
-        )
-        box.append(rumble_grp)
-
-        for key, title in [("rumble_a", "Motor A — Throttle Pedal"),
-                            ("rumble_b", "Motor B — Brake Pedal")]:
-            row = Adw.ActionRow()
-            row.set_title(title)
-            row.set_subtitle("Motor strength 0–255.")
-            adj = Gtk.Adjustment(value=0, lower=0, upper=255,
-                                 step_increment=1, page_increment=10)
-            scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
-                              adjustment=adj)
-            scale.set_size_request(180, -1)
-            scale.set_valign(Gtk.Align.CENTER)
-            scale.set_draw_value(False)
-            spin = Gtk.SpinButton(adjustment=adj, climb_rate=1.0, digits=0)
-            spin.set_valign(Gtk.Align.CENTER)
-            hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            hb.set_valign(Gtk.Align.CENTER)
-            hb.append(scale)
-            hb.append(spin)
-            row.add_suffix(hb)
-            rumble_grp.add(row)
-            self.pedal_w[key] = adj
-
-        dur_row = Adw.ActionRow()
-        dur_row.set_title("Duration")
-        dur_row.set_subtitle("Duration in ~10 ms ticks (0–255).")
-        dur_adj = Gtk.Adjustment(value=20, lower=0, upper=255,
-                                 step_increment=1, page_increment=10)
-        dur_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
-                              adjustment=dur_adj)
-        dur_scale.set_size_request(180, -1)
-        dur_scale.set_valign(Gtk.Align.CENTER)
-        dur_scale.set_draw_value(False)
-        dur_spin = Gtk.SpinButton(adjustment=dur_adj, climb_rate=1.0, digits=0)
-        dur_spin.set_valign(Gtk.Align.CENTER)
-        dur_hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        dur_hb.set_valign(Gtk.Align.CENTER)
-        dur_hb.append(dur_scale)
-        dur_hb.append(dur_spin)
-        dur_row.add_suffix(dur_hb)
-        rumble_grp.add(dur_row)
-        self.pedal_w["rumble_dur"] = dur_adj
-
-        fire_row = Adw.ActionRow()
-        fire_row.set_title("Send Rumble Command")
-        fire_row.set_subtitle(
-            "Packs Motor A, Motor B, and Duration into a 24-bit value and writes "
-            "to the rumble sysfs node.")
-        fire_btn = Gtk.Button(label="Fire Rumble")
-        fire_btn.add_css_class("suggested-action")
+        rumble = Adw.PreferencesGroup(
+            title=_("Pedal Rumble Test"),
+            description=_("Sends a single rumble command to ClubSport Pedals "
+                          "V3 or CSL Elite/LC pedals."))
+        self.rumble_adj = {}
+        for key, title in [("a", _("Throttle Motor")),
+                           ("b", _("Brake Motor")),
+                           ("dur", _("Duration (×10 ms)"))]:
+            r = Adw.SpinRow.new_with_range(0, 255, 1)
+            r.set_title(title)
+            r.set_value(20 if key == "dur" else 128)
+            self.rumble_adj[key] = r
+            rumble.add(r)
+        fire = Adw.ActionRow(title=_("Send Rumble"))
+        fire_btn = Gtk.Button(label=_("Send"))
         fire_btn.set_valign(Gtk.Align.CENTER)
         fire_btn.connect("clicked", lambda b: self._send_rumble())
-        fire_row.add_suffix(fire_btn)
-        rumble_grp.add(fire_row)
+        fire.add_suffix(fire_btn)
+        rumble.add(fire)
+        self.rumble_group = rumble
+        page.add(rumble)
 
-        box.append(self._make_action_bar(
-            self._load_current_values,
-            self._apply_all_pedal,
-        ))
-        return scrolled
+        system = Adw.PreferencesGroup(title=_("System"))
+        self.perm_row = Adw.ActionRow(
+            title=_("Write Permissions"),
+            subtitle=_("Installs a udev rule so settings can be changed "
+                       "without a password prompt."))
+        perm_btn = Gtk.Button(label=_("Set Up"))
+        perm_btn.set_valign(Gtk.Align.CENTER)
+        perm_btn.connect("clicked", lambda b: self._setup_permissions())
+        self.perm_row.add_suffix(perm_btn)
+        system.add(self.perm_row)
 
-    # -----------------------------------------------------------------------
-    # Tab 3 — Advanced
-    # -----------------------------------------------------------------------
-    def _build_advanced_page(self):
-        scrolled, box = self._make_page_scroll()
-
-        # Natural feel group
-        nat_grp = Adw.PreferencesGroup()
-        nat_grp.set_title("Natural Wheel Feel")
-        nat_grp.set_description(
-            "Mechanical-feel effects baked into the wheel base independent of "
-            "game FFB output. Set all to 0 for pure game-driven FFB."
-        )
-        box.append(nat_grp)
-
-        nat_attrs = [a for a in ADVANCED_ATTRS if a[0] in ("NDP", "NFR", "NIN")]
-        build_attr_rows(nat_grp, nat_attrs, self.advanced_w,
-                        self._write_advanced_attr)
-
-        # Drift & assist group
-        assist_grp = Adw.PreferencesGroup()
-        assist_grp.set_title("Drift & Steering Assist")
-        box.append(assist_grp)
-
-        drift_attrs = [a for a in ADVANCED_ATTRS if a[0] == "DRI"]
-        build_attr_rows(assist_grp, drift_attrs, self.advanced_w,
-                        self._write_advanced_attr)
-
-        # Analogue paddles group
-        paddle_grp = Adw.PreferencesGroup()
-        paddle_grp.set_title("Analogue Paddles (ACP)")
-        paddle_grp.set_description(
-            "Controls how the clutch paddles behave. Read-only on wheels with "
-            "a physical mode selector switch."
-        )
-        box.append(paddle_grp)
-
-        acp_attrs = [a for a in ADVANCED_ATTRS if a[0] == "ACP"]
-
-        def acp_extra(group, attr_id):
-            if attr_id == "ACP":
-                info_row = Adw.ActionRow()
-                info_row.set_title("Current Mode")
-                info_row.set_subtitle("Updates as you move the ACP slider above.")
-                self._acp_label = Gtk.Label(label="—")
-                self._acp_label.add_css_class("dim-label")
-                self._acp_label.set_valign(Gtk.Align.CENTER)
-                info_row.add_suffix(self._acp_label)
-                group.add(info_row)
-                self.advanced_w["ACP"].connect(
-                    "value-changed",
-                    lambda adj: self._acp_label.set_label(
-                        ACP_LABELS.get(int(adj.get_value()), "—")
-                    ),
-                )
-
-        build_attr_rows(paddle_grp, acp_attrs, self.advanced_w,
-                        self._write_advanced_attr, extra_rows_cb=acp_extra)
-
-        # Tuning slots group
-        slot_grp = Adw.PreferencesGroup()
-        slot_grp.set_title("Tuning Slots")
-        slot_grp.set_description(
-            "The wheel base stores up to 5 independent tuning profiles (slots). "
-            "Switching slots loads that profile's values into all tuning attrs. "
-            "Reset clears all slots on the device."
-        )
-        box.append(slot_grp)
-
-        slot_row = Adw.ActionRow()
-        slot_row.set_title("Active Slot  (SLOT)")
-        slot_row.set_subtitle("Select the tuning profile slot to read/write (1–5).")
-        slot_adj = Gtk.Adjustment(value=1, lower=1, upper=5,
-                                  step_increment=1, page_increment=1)
-        slot_spin = Gtk.SpinButton(adjustment=slot_adj, climb_rate=1.0, digits=0)
-        slot_spin.set_valign(Gtk.Align.CENTER)
-        slot_set = Gtk.Button(label="Switch Slot")
-        slot_set.add_css_class("suggested-action")
-        slot_set.set_valign(Gtk.Align.CENTER)
-        slot_set.connect("clicked", lambda b: self._switch_slot(
-            int(slot_adj.get_value())))
-        slot_hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        slot_hb.set_valign(Gtk.Align.CENTER)
-        slot_hb.append(slot_spin)
-        slot_hb.append(slot_set)
-        slot_row.add_suffix(slot_hb)
-        slot_grp.add(slot_row)
-        self.advanced_w["SLOT"] = slot_adj
-
-        reset_row = Adw.ActionRow()
-        reset_row.set_title("Reset All Tuning Slots")
-        reset_row.set_subtitle(
-            "Writes to the RESET sysfs node, clearing all 5 slots on the device.")
-        reset_btn = Gtk.Button(label="Reset Device Tuning")
+        reset = Adw.ActionRow(
+            title=_("Reset All Tuning Slots"),
+            subtitle=_("Clears all 5 tuning slots stored on the wheel base."))
+        reset_btn = Gtk.Button(label=_("Reset…"))
         reset_btn.add_css_class("destructive-action")
         reset_btn.set_valign(Gtk.Align.CENTER)
         reset_btn.connect("clicked", lambda b: self._confirm_reset())
-        reset_row.add_suffix(reset_btn)
-        slot_grp.add(reset_row)
-
-        box.append(self._make_action_bar(
-            self._load_current_values,
-            self._apply_all_advanced,
-        ))
-        return scrolled
+        reset.add_suffix(reset_btn)
+        system.add(reset)
+        page.add(system)
+        return page
 
     # -----------------------------------------------------------------------
-    # Tab 4 — Presets
+    # Actions
     # -----------------------------------------------------------------------
-    def _build_presets_page(self):
-        scrolled, box = self._make_page_scroll()
+    def _build_actions(self):
+        def add(name, cb, param=None):
+            action = Gio.SimpleAction.new(name, param)
+            action.connect("activate", cb)
+            self.add_action(action)
+            return action
 
-        # ── Save current settings ──────────────────────────────────────────
-        save_grp = Adw.PreferencesGroup()
-        save_grp.set_title("Save Preset")
-        save_grp.set_description(
-            "Snapshots all current Wheel & FFB, Pedals, and Advanced values "
-            "into a named preset file in ~/.config/SimPower/."
-        )
-        box.append(save_grp)
+        add("reload", lambda *a: self._load_from_device())
+        add("save-preset", lambda *a: self._ask_preset_name())
+        add("show-presets", lambda *a: self._select_page("presets"))
+        add("apply-preset", lambda a, p: self._apply_preset(p.get_string()),
+            GLib.VariantType.new("s"))
+        self.undo_action = add("undo-all", lambda *a: self._undo_all())
 
-        name_row = Adw.ActionRow()
-        name_row.set_title("Preset Name")
-        name_row.set_subtitle("Enter a name, then click Save.")
-        self._preset_name_entry = Gtk.Entry()
-        self._preset_name_entry.set_placeholder_text("e.g. GT3 Race")
-        self._preset_name_entry.set_valign(Gtk.Align.CENTER)
-        self._preset_name_entry.set_size_request(200, -1)
-        save_btn = Gtk.Button(label="Save")
-        save_btn.add_css_class("suggested-action")
-        save_btn.set_valign(Gtk.Align.CENTER)
-        save_btn.connect("clicked", lambda b: self._save_preset())
-        hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        hb.set_valign(Gtk.Align.CENTER)
-        hb.append(self._preset_name_entry)
-        hb.append(save_btn)
-        name_row.add_suffix(hb)
-        save_grp.add(name_row)
-
-        # ── Saved presets list ─────────────────────────────────────────────
-        # _presets_box holds the PreferencesGroup so we can swap it out on
-        # refresh (Adw.PreferencesGroup doesn't support row removal).
-        self._presets_list_box = box
-        self._presets_grp = None
-        self._refresh_presets_list()
-        return scrolled
+    def _select_page(self, key):
+        i = 0
+        while (row := self.sidebar.get_row_at_index(i)) is not None:
+            if row.page_key == key:
+                self.sidebar.select_row(row)
+                return
+            i += 1
 
     # -----------------------------------------------------------------------
-    # Preset helpers
+    # Device state
     # -----------------------------------------------------------------------
-    def _collect_all_values(self):
-        """Return a dict of all tunable attr IDs → current widget values."""
-        result = {}
-        for attrs, widgets in [
-            (WHEEL_ATTRS,    self.wheel_w),
-            (PEDAL_ATTRS,    self.pedal_w),
-            (ADVANCED_ATTRS, self.advanced_w),
-        ]:
-            for attr_id, *_, kind in attrs:
-                w = widgets.get(attr_id)
-                if w is None:
-                    continue
-                if kind == "toggle":
-                    result[attr_id] = int(w.get_active())
-                else:
-                    result[attr_id] = int(w.get_value())
-        # Also save current SLOT value
-        slot_w = self.advanced_w.get("SLOT")
-        if slot_w:
-            result["SLOT"] = int(slot_w.get_value())
-        return result
+    def _refresh_device_state(self):
+        if not self.device_path:
+            self.banner.set_title(
+                _("No Fanatec wheel base found. Check that it is switched on "
+                  "and the hid-fanatecff driver is loaded."))
+            self.banner.set_button_label(_("Retry"))
+            self.banner.set_revealed(True)
+        elif not self.writable:
+            self.banner.set_title(
+                _("Changes need a password each time. Set up write "
+                  "permissions to tune live."))
+            self.banner.set_button_label(_("Set Up"))
+            self.banner.set_revealed(True)
+        else:
+            self.banner.set_revealed(False)
 
-    def _apply_preset_values(self, values):
-        """Push a dict of attr IDs → values back into all widgets."""
-        for attrs, widgets in [
-            (WHEEL_ATTRS,    self.wheel_w),
-            (PEDAL_ATTRS,    self.pedal_w),
-            (ADVANCED_ATTRS, self.advanced_w),
-        ]:
-            for attr_id, *_, kind in attrs:
-                if attr_id not in values:
-                    continue
-                w = widgets.get(attr_id)
-                if w is None:
-                    continue
-                if kind == "toggle":
-                    w.set_active(bool(values[attr_id]))
-                else:
-                    w.set_value(values[attr_id])
-        slot_w = self.advanced_w.get("SLOT")
-        if slot_w and "SLOT" in values:
-            slot_w.set_value(values["SLOT"])
+        self.slot_dropdown.set_sensitive(bool(self.device_path))
+        self.perm_row.set_visible(bool(self.device_path) and not self.writable)
+        self.rumble_group.set_sensitive(bool(self.rumble_path))
+        self._load_from_device()
 
-    def _preset_path(self, name):
-        safe = name.strip().replace("/", "_").replace("\\", "_")
-        return CONFIG_DIR / f"{safe}.json"
+    def _on_banner_button(self):
+        if self.device_path:
+            self._setup_permissions()
+        else:
+            self.device_path = find_device_path()
+            self.rumble_path = find_rumble_path()
+            self.writable = bool(self.device_path) and can_write(self.device_path)
+            self._refresh_device_state()
 
-    def _save_preset(self):
-        name = self._preset_name_entry.get_text().strip()
-        if not name:
-            self._err("No Name", "Enter a preset name before saving.")
+    def _attr_file(self, attr_id):
+        return os.path.join(self.device_path, attr_id)
+
+    def _load_from_device(self):
+        """Read every setting from the device and make it the undo baseline."""
+        self._cancel_pending()
+        if not self.device_path:
+            for row in self.rows.values():
+                row.set_baseline(row.get())
+            self._set_status(_("No device"))
             return
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        path = self._preset_path(name)
-        data = {"name": name, "values": self._collect_all_values()}
-        try:
-            path.write_text(json.dumps(data, indent=2))
-        except OSError as e:
-            self._err("Save Failed", str(e))
-            return
-        self._preset_name_entry.set_text("")
-        self._refresh_presets_list()
+        for attr_id, row in self.rows.items():
+            value = read_int(self._attr_file(attr_id))
+            row.set_supported(value is not None)
+            if value is not None:
+                row.set(value)
+            row.set_baseline(row.get())
+        slot = read_int(self._attr_file("SLOT"))
+        if slot and 1 <= slot <= SLOTS:
+            with self.slot_dropdown.handler_block(self._slot_handler):
+                self.slot_dropdown.set_selected(slot - 1)
+        self._set_status(_("In sync with device"))
 
-    def _load_preset(self, path):
+    # -----------------------------------------------------------------------
+    # Writing
+    # -----------------------------------------------------------------------
+    def _on_setting_changed(self, row):
+        if not self.device_path or not row.row.get_sensitive():
+            return
+        self.pending[row.setting["id"]] = row.get()
+        if self.writable:
+            self._set_status(_("Writing…"))
+            if self._live_timer:
+                GLib.source_remove(self._live_timer)
+            self._live_timer = GLib.timeout_add(LIVE_DELAY_MS, self._flush_live)
+        else:
+            self._update_pending_bar()
+
+    def _flush_live(self):
+        self._live_timer = 0
+        self._flush_pending()
+        return GLib.SOURCE_REMOVE
+
+    def _flush_pending(self):
+        if not self.pending:
+            return
+        writes = {self._attr_file(a): v for a, v in self.pending.items()}
+        self.pending = {}
+        failed = write_values(writes)
+        self._update_pending_bar()
+        if failed:
+            names = ", ".join(os.path.basename(p) for p in failed)
+            self._set_status(_("Write failed: {names}").format(names=names))
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Could not write: {names}").format(names=names)))
+        else:
+            self._set_status(_("In sync with device"))
+
+    def _cancel_pending(self):
+        if self._live_timer:
+            GLib.source_remove(self._live_timer)
+            self._live_timer = 0
+        self.pending = {}
+        self._update_pending_bar()
+
+    def _update_pending_bar(self):
+        n = len(self.pending)
+        waiting = n > 0 and not self.writable
+        self.pending_bar.set_revealed(waiting)
+        self.pending_label.set_label(_("Pending changes: {n}").format(n=n))
+        if waiting:
+            self._set_status(_("Changes not applied yet"))
+        elif self.device_path and not self._live_timer:
+            self._set_status(_("In sync with device"))
+
+    def _set_status(self, text):
+        self.window_title.set_subtitle(text)
+
+    def _set_setting(self, attr_id, value):
+        row = self.rows.get(attr_id)
+        if row and row.get() != value:
+            row.set(value, silent=False)
+
+    def _apply_values(self, values, message=None, pending_message=None):
+        """Set several settings at once and write them in one go."""
+        for attr_id, value in values.items():
+            row = self.rows.get(attr_id)
+            if row is None or not row.row.get_sensitive():
+                continue
+            row.set(value)
+            if self.device_path:
+                self.pending[attr_id] = row.get()
+        if self.writable or not self.device_path:
+            self._flush_pending()
+        else:
+            self._update_pending_bar()
+            message = pending_message or message
+        if message:
+            self.toasts.add_toast(Adw.Toast.new(message))
+
+    def _undo_all(self):
+        self._cancel_pending()
+        changed = {a: r.baseline for a, r in self.rows.items()
+                   if r.baseline is not None and r.get() != r.baseline}
+        if changed:
+            self._apply_values(changed, _("Changes undone"))
+
+    def _set_angle_auto(self):
+        if not self.device_path:
+            return
+        if not write_values({self._attr_file("SEN"): 0}):
+            GLib.timeout_add(150, self._reload_value, "SEN")
+
+    def _reload_value(self, attr_id):
+        value = read_int(self._attr_file(attr_id))
+        if value is not None:
+            self.rows[attr_id].set(value)
+        return GLib.SOURCE_REMOVE
+
+    def _on_slot_selected(self):
+        if not self.device_path:
+            return
+        self._flush_pending()
+        slot = self.slot_dropdown.get_selected() + 1
+        if write_values({self._attr_file("SLOT"): slot}):
+            self.toasts.add_toast(Adw.Toast.new(_("Could not switch slot")))
+            return
+        # Switching loads the slot's stored values into all attributes.
+        GLib.timeout_add(150, lambda: self._load_from_device() and False)
+
+    def _send_rumble(self):
+        if not self.rumble_path:
+            return
+        a = int(self.rumble_adj["a"].get_value())
+        b = int(self.rumble_adj["b"].get_value())
+        dur = int(self.rumble_adj["dur"].get_value())
+        if write_values({self.rumble_path: (a << 16) | (b << 8) | dur}):
+            self.toasts.add_toast(Adw.Toast.new(_("Could not send rumble")))
+
+    def _setup_permissions(self):
+        script = (f"printf %s {shlex.quote(UDEV_RULE)} > {UDEV_RULE_PATH} && "
+                  "udevadm control --reload-rules && udevadm trigger")
+        if not run_privileged(script):
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Setting up permissions failed")))
+            return
+        GLib.timeout_add(1000, self._recheck_permissions)
+
+    def _recheck_permissions(self):
+        self.writable = bool(self.device_path) and can_write(self.device_path)
+        self._refresh_device_state()
+        if self.writable:
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Permissions set up — changes now apply live")))
+        return GLib.SOURCE_REMOVE
+
+    # -----------------------------------------------------------------------
+    # Presets
+    # -----------------------------------------------------------------------
+    def _collect_values(self):
+        return {a: r.get() for a, r in self.rows.items()
+                if r.row.get_sensitive()}
+
+    def _apply_preset(self, path):
+        path = pathlib.Path(path)
         try:
-            data = json.loads(pathlib.Path(path).read_text())
+            data = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as e:
-            self._err("Load Failed", str(e))
+            self._error(_("Could not load preset"), str(e))
             return
-        self._apply_preset_values(data.get("values", {}))
+        values = {k: v for k, v in data.get("values", {}).items()
+                  if k in self.rows}
+        name = data.get("name", path.stem)
+        self._apply_values(
+            values, _("Preset “{name}” applied").format(name=name),
+            _("Preset “{name}” loaded — click Apply to write it").format(name=name))
+
+    def _ask_preset_name(self):
+        entry = Gtk.Entry(placeholder_text=_("e.g. GT3 Race"),
+                          activates_default=True)
+        dialog = Adw.MessageDialog(
+            transient_for=self, heading=_("Save as Preset"),
+            body=_("Saves all current settings under this name."))
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("save", _("Save"))
+        dialog.set_default_response("save")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+
+        def on_response(d, response):
+            if response == "save":
+                self._save_preset(entry.get_text().strip())
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _save_preset(self, name):
+        if not name:
+            self._error(_("No Name"), _("Enter a name for the preset."))
+            return
+        safe = re.sub(r"[/\\]", "_", name)
+        try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            (CONFIG_DIR / f"{safe}.json").write_text(json.dumps(
+                {"name": name, "values": self._collect_values()}, indent=2))
+        except OSError as e:
+            self._error(_("Could not save preset"), str(e))
+            return
+        self._presets_changed()
+        self.toasts.add_toast(Adw.Toast.new(
+            _("Preset “{name}” saved").format(name=name)))
 
     def _confirm_delete_preset(self, path, name):
         dialog = Adw.MessageDialog(
             transient_for=self,
-            heading=f'Delete "{name}"?',
-            body="This removes the saved preset file. This cannot be undone.",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("delete", "Delete")
-        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+            heading=_("Delete “{name}”?").format(name=name),
+            body=_("The preset file will be removed. This cannot be undone."))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("delete", _("Delete"))
+        dialog.set_response_appearance("delete",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
 
-        def on_response(d, rid):
-            if rid == "delete":
+        def on_response(d, response):
+            if response == "delete":
                 try:
                     pathlib.Path(path).unlink(missing_ok=True)
                 except OSError as e:
-                    self._err("Delete Failed", str(e))
-                self._refresh_presets_list()
-            dialog.destroy()
+                    self._error(_("Could not delete preset"), str(e))
+                self._presets_changed()
 
         dialog.connect("response", on_response)
-        dialog.choose(None, None)
-
-    def _refresh_presets_list(self):
-        # Remove the old group widget entirely and build a fresh one.
-        # Adw.PreferencesGroup does not support programmatic row removal, so
-        # attempting get_first_child()/remove() on it causes CRITICAL errors.
-        if self._presets_grp is not None:
-            self._presets_list_box.remove(self._presets_grp)
-
-        grp = Adw.PreferencesGroup()
-        grp.set_title("Saved Presets")
-        self._presets_list_box.append(grp)
-        self._presets_grp = grp
-
-        files = sorted(CONFIG_DIR.glob("*.json")) if CONFIG_DIR.exists() else []
-
-        if not files:
-            empty_row = Adw.ActionRow()
-            empty_row.set_title("No presets saved yet")
-            empty_row.set_subtitle(
-                "Save a preset above and it will appear here.")
-            grp.add(empty_row)
-            return
-
-        for preset_file in files:
-            try:
-                data = json.loads(preset_file.read_text())
-                display_name = data.get("name", preset_file.stem)
-                keys = list(data.get("values", {}).keys())
-                subtitle = f"{len(keys)} attributes  •  {preset_file.name}"
-            except (OSError, json.JSONDecodeError):
-                display_name = preset_file.stem
-                subtitle = "⚠ Could not read file"
-
-            row = Adw.ActionRow()
-            row.set_title(display_name)
-            row.set_subtitle(subtitle)
-
-            hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            hb.set_valign(Gtk.Align.CENTER)
-
-            load_btn = Gtk.Button(label="Load")
-            load_btn.add_css_class("suggested-action")
-            load_btn.set_valign(Gtk.Align.CENTER)
-            load_btn.connect(
-                "clicked",
-                lambda b, p=str(preset_file): self._load_preset(p),
-            )
-            hb.append(load_btn)
-
-            del_btn = Gtk.Button(label="Delete")
-            del_btn.add_css_class("destructive-action")
-            del_btn.set_valign(Gtk.Align.CENTER)
-            del_btn.connect(
-                "clicked",
-                lambda b, p=str(preset_file), n=display_name:
-                    self._confirm_delete_preset(p, n),
-            )
-            hb.append(del_btn)
-
-            row.add_suffix(hb)
-            grp.add(row)
+        dialog.present()
 
     # -----------------------------------------------------------------------
-    # Banners
-    # -----------------------------------------------------------------------
-    def _update_wheel_banner(self):
-        if not self.device_path:
-            self.wheel_banner.set_title(
-                "No hid-fanatecff sysfs device found. Ensure the base is powered on.")
-            self.wheel_banner.set_button_label("Retry")
-            self.wheel_banner.connect("button-clicked",
-                                      lambda b: self._retry_discovery())
-            self.wheel_banner.set_revealed(True)
-        elif not can_write(self.device_path):
-            self.wheel_banner.set_title(
-                "No write permission on sysfs. Writes will request root authorisation.")
-            self.wheel_banner.set_revealed(True)
-        else:
-            self.wheel_banner.set_revealed(False)
-
-    def _update_pedal_banner(self):
-        if not self.rumble_path:
-            self.pedal_banner.set_title(
-                "No CSP rumble node found — rumble unavailable. "
-                "Brake tuning attrs are shared with the wheel base sysfs.")
-            self.pedal_banner.set_revealed(True)
-        else:
-            self.pedal_banner.set_title(
-                f"CSP rumble node: {self.rumble_path}")
-            self.pedal_banner.set_revealed(True)
-
-    def _retry_discovery(self):
-        self.device_path = find_device_path()
-        self.rumble_path = find_rumble_path()
-        self._update_wheel_banner()
-        self._update_pedal_banner()
-        if self.device_path:
-            self._load_current_values()
-
-    # -----------------------------------------------------------------------
-    # sysfs read/write
-    # -----------------------------------------------------------------------
-    def _attr_file(self, attr_id):
-        return os.path.join(self.device_path, attr_id) if self.device_path else ""
-
-    def _load_current_values(self):
-        if not self.device_path:
-            return
-        for attrs, widgets in [
-            (WHEEL_ATTRS,    self.wheel_w),
-            (PEDAL_ATTRS,    self.pedal_w),
-            (ADVANCED_ATTRS, self.advanced_w),
-        ]:
-            for attr_id, *_, kind in attrs:
-                path = self._attr_file(attr_id)
-                if not os.path.exists(path):
-                    continue
-                try:
-                    with open(path) as f:
-                        val = int(f.read().strip())
-                    w = widgets.get(attr_id)
-                    if w is None:
-                        continue
-                    if kind == "toggle":
-                        w.set_active(bool(val))
-                    else:
-                        w.set_value(val)
-                except (OSError, ValueError):
-                    pass
-
-        # Also sync SLOT spinner
-        slot_path = self._attr_file("SLOT")
-        if os.path.exists(slot_path):
-            try:
-                with open(slot_path) as f:
-                    self.advanced_w["SLOT"].set_value(int(f.read().strip()))
-            except (OSError, ValueError):
-                pass
-
-    def _write_value(self, path, value):
-        try:
-            with open(path, "w") as f:
-                f.write(str(int(value)))
-            return True
-        except PermissionError:
-            return self._write_privileged(path, value)
-
-    def _write_privileged(self, path, value):
-        cmd_str = f'echo {int(value)} > "{path}"'
-        cmd = (["pkexec", "/bin/sh", "-c", cmd_str]
-               if shutil.which("pkexec")
-               else ["sudo", "/bin/sh", "-c", cmd_str])
-        try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-            return True
-        except subprocess.CalledProcessError as e:
-            self._err("Privilege Escalation Failed", e.stderr or "Permission denied.")
-            return False
-
-    def _write_attr(self, attr_id, widgets):
-        if not self.device_path:
-            self._err("No Device", "No active wheel interface detected.")
-            return
-        path = self._attr_file(attr_id)
-        if not os.path.exists(path):
-            self._err("Attribute Not Found",
-                      f"'{attr_id}' not present in sysfs.\n"
-                      "This may require specific pedal hardware.")
-            return
-        w = widgets[attr_id]
-        val = w.get_active() if isinstance(w, Gtk.Switch) else w.get_value()
-        self._write_value(path, val)
-
-    def _write_wheel_attr(self, aid):
-        self._write_attr(aid, self.wheel_w)
-
-    def _write_pedal_attr(self, aid):
-        self._write_attr(aid, self.pedal_w)
-
-    def _write_advanced_attr(self, aid):
-        self._write_attr(aid, self.advanced_w)
-
-    def _set_sen_auto(self):
-        if not self.device_path:
-            return
-        if self._write_value(self._attr_file("SEN"), 0):
-            GLib.timeout_add(150, self._load_current_values)
-
-    def _switch_slot(self, slot):
-        if not self.device_path:
-            return
-        path = self._attr_file("SLOT")
-        if self._write_value(path, slot):
-            GLib.timeout_add(150, self._load_current_values)
-
-    def _send_rumble(self):
-        if not self.rumble_path:
-            self._err("No Rumble Hardware",
-                      "No CSP/ClubSport rumble sysfs node was found.\n"
-                      "Requires ClubSport Pedals V3 or CSL Elite/LC Pedals.")
-            return
-        a   = int(self.pedal_w["rumble_a"].get_value())
-        b   = int(self.pedal_w["rumble_b"].get_value())
-        dur = int(self.pedal_w["rumble_dur"].get_value())
-        self._write_value(self.rumble_path, (a << 16) | (b << 8) | dur)
-
-    # -----------------------------------------------------------------------
-    # Apply-all helpers
-    # -----------------------------------------------------------------------
-    def _write_group(self, attrs, widgets):
-        """Write every attr in the group; return the ids that failed."""
-        failures = []
-        for attr_id, *_, kind in attrs:
-            path = self._attr_file(attr_id)
-            if not os.path.exists(path):
-                continue
-            w = widgets[attr_id]
-            val = w.get_active() if isinstance(w, Gtk.Switch) else w.get_value()
-            if not self._write_value(path, val):
-                failures.append(attr_id)
-        return failures
-
-    def _apply_group(self, attrs, widgets):
-        if not self.device_path:
-            return
-        failures = self._write_group(attrs, widgets)
-        if failures:
-            self._err("Write Errors", f"Failed syncing: {', '.join(failures)}")
-
-    def _apply_all_wheel(self):
-        self._apply_group(WHEEL_ATTRS, self.wheel_w)
-
-    def _apply_all_pedal(self):
-        self._apply_group(PEDAL_ATTRS, self.pedal_w)
-
-    def _apply_all_advanced(self):
-        # Write SLOT first: switching loads that slot's stored values, so
-        # doing it last would discard the values written below.
-        if self.device_path:
-            slot_path = self._attr_file("SLOT")
-            if os.path.exists(slot_path):
-                self._write_value(slot_path,
-                                  int(self.advanced_w["SLOT"].get_value()))
-        self._apply_group(ADVANCED_ATTRS, self.advanced_w)
-
-    def _apply_everything(self):
-        if not self.device_path:
-            self._err("No Device", "No active wheel interface detected.")
-            return
-        failures = []
-        # Switch slot first: switching loads that slot's stored values, so
-        # doing it last would discard the values written below.
-        slot_path = self._attr_file("SLOT")
-        if os.path.exists(slot_path):
-            if not self._write_value(slot_path,
-                                     int(self.advanced_w["SLOT"].get_value())):
-                failures.append("SLOT")
-        failures += self._write_group(WHEEL_ATTRS, self.wheel_w)
-        failures += self._write_group(PEDAL_ATTRS, self.pedal_w)
-        failures += self._write_group(ADVANCED_ATTRS, self.advanced_w)
-        if failures:
-            self._err("Write Errors", f"Failed syncing: {', '.join(failures)}")
-
-    # -----------------------------------------------------------------------
-    # Sim-racing defaults (wheel tab)
-    # -----------------------------------------------------------------------
-    def _apply_sim_defaults(self):
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Load Sim-Racing Defaults?",
-            body="Applies balanced sim-racing values to all Wheel & FFB settings immediately.",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("apply", "Apply")
-        dialog.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
-
-        def on_response(d, rid):
-            if rid == "apply":
-                defaults = {
-                    "SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0,
-                    "SHO": 80,  "FFS": 1, "FEI": 30,  "INT": 0,
-                }
-                for aid, val in defaults.items():
-                    w = self.wheel_w.get(aid)
-                    if w is None:
-                        continue
-                    if isinstance(w, Gtk.Switch):
-                        w.set_active(bool(val))
-                    else:
-                        w.set_value(val)
-                self._apply_all_wheel()
-            dialog.destroy()
-
-        dialog.connect("response", on_response)
-        dialog.choose(None, None)
-
-    # -----------------------------------------------------------------------
-    # Reset all tuning slots
+    # Reset
     # -----------------------------------------------------------------------
     def _confirm_reset(self):
+        if not self.device_path:
+            return
         dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Reset All Tuning Slots?",
-            body="This clears all 5 tuning profiles stored on the device and "
-                 "cannot be undone.",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("reset", "Reset Device Tuning")
-        dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
+            transient_for=self, heading=_("Reset All Tuning Slots?"),
+            body=_("All 5 tuning slots stored on the wheel base will be "
+                   "cleared. This cannot be undone."))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("reset", _("Reset"))
+        dialog.set_response_appearance("reset",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
 
-        def on_response(d, rid):
-            if rid == "reset":
-                path = self._attr_file("RESET")
-                if os.path.exists(path):
-                    self._write_value(path, 1)
-                    GLib.timeout_add(300, self._load_current_values)
-                else:
-                    self._err("Not Available",
-                              "RESET sysfs node not found on this device.")
-            dialog.destroy()
+        def on_response(d, response):
+            if response != "reset":
+                return
+            path = self._attr_file("RESET")
+            if not os.path.exists(path):
+                self._error(_("Not Available"),
+                            _("This wheel base does not support resetting."))
+            elif not write_values({path: 1}):
+                GLib.timeout_add(300, lambda: self._load_from_device() and False)
 
         dialog.connect("response", on_response)
-        dialog.choose(None, None)
+        dialog.present()
 
-    # -----------------------------------------------------------------------
-    def _err(self, title, message):
-        d = Adw.MessageDialog(transient_for=self, heading=title, body=message)
-        d.add_response("ok", "Dismiss")
-        d.choose(None, None)
+    def _error(self, heading, body):
+        d = Adw.MessageDialog(transient_for=self, heading=heading, body=body)
+        d.add_response("ok", _("OK"))
+        d.present()
 
 
 # ===========================================================================

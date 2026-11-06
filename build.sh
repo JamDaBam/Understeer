@@ -15,6 +15,10 @@ echo "=== Step 3: Copying project assets into the layout ==="
 cp FFB_Tuner.py AppDir/usr/bin/
 chmod +x AppDir/usr/bin/FFB_Tuner.py
 
+# Translations (looked up at usr/share/simpower/locale by the app)
+mkdir -p AppDir/usr/share/simpower/locale
+cp locale/*.po AppDir/usr/share/simpower/locale/
+
 # App metadata files
 cp io.github.benryboi.FanatecLinux.desktop AppDir/
 cp io.github.benryboi.FanatecLinux.desktop AppDir/usr/share/applications/
