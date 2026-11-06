@@ -1,0 +1,4 @@
+AppDir/
+appimagetool-*.AppImage
+*.AppImage
+__pycache__/
