@@ -2,7 +2,7 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, config, i18n
+from . import DATA_DIR, config, i18n, log
 from .ui.window import TunerWindow  # also selects the GTK version
 
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
@@ -48,6 +48,13 @@ class TunerApplication(Adw.Application):
 
 
 def main():
+    log.setup()
     config.migrate_config()
     i18n.set_language(config.get_setting("language"))
+    log.log.info("GTK %s.%s.%s, Libadwaita %s.%s.%s, language %s, layout %s",
+                 Gtk.get_major_version(), Gtk.get_minor_version(),
+                 Gtk.get_micro_version(), Adw.get_major_version(),
+                 Adw.get_minor_version(), Adw.get_micro_version(),
+                 config.get_setting("language") or "system",
+                 config.get_setting("layout") or "full")
     return TunerApplication().run(sys.argv)

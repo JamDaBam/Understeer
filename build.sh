@@ -65,6 +65,9 @@ export VERSION="${VERSION#v}"
 # It also produces a .zsync file that must be uploaded next to the AppImage.
 UPDATE_INFO="gh-releases-zsync|JamDaBam|Understeer|latest|Understeer-*x86_64.AppImage.zsync"
 
+# Shown in the log file
+echo "$VERSION" > AppDir/usr/share/understeer/VERSION
+
 "./$TOOL" -u "$UPDATE_INFO" AppDir "Understeer-$VERSION-$ARCH.AppImage"
 
 echo "=== Success: AppImage compilation sequence completed ==="

@@ -4,6 +4,7 @@ Works without GTK. Steam can be installed in several ways (distribution
 package, Flatpak, Snap) and keep games in several libraries, so all of
 them are searched.
 """
+import logging
 import pathlib
 import re
 import struct
@@ -18,6 +19,7 @@ STEAM_ROOTS = [
     HOME / "snap" / "steam" / "common" / ".local" / "share" / "Steam",
 ]
 PROC = pathlib.Path("/proc")
+log = logging.getLogger("understeer.games")
 CDN_URLS = [
     "https://shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{file}",
     "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/{file}",
@@ -207,14 +209,16 @@ def download_cover(appid, cache_dir, timeout=10):
                             "Content-Type", "").startswith("image/"):
                         continue
                     data = resp.read()
-            except (OSError, ValueError):
+            except (OSError, ValueError) as e:
+                log.debug("Cover %s for app %s: %s", file, appid, e)
                 continue
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 tmp = dest.with_suffix(".part")
                 tmp.write_bytes(data)
                 tmp.replace(dest)
-            except OSError:
+            except OSError as e:
+                log.warning("Could not save cover of app %s: %s", appid, e)
                 return None
             return dest
     return None

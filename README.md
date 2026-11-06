@@ -65,6 +65,10 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 The live input display (current steering angle and pedal travel) reads the wheel's input device. On most desktops your user can already read it; the rule's last line makes sure of that.
 
+## Reporting Problems
+
+Understeer writes a log file for every session to `~/.local/state/Understeer/understeer.log`; the one of the previous start is kept as `understeer.previous.log`. It records the wheel base, the driver version, the access rights of the tuning settings and every value written, including the reason when the driver rejects one. Open it under *Tools → System → Log File*, or with **Show Log** on an error message, and attach it to your issue.
+
 ## Translations
 
 Understeer uses your system language when a translation is available and falls back to English otherwise. You can also pick a language under *Tools → Appearance*. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
@@ -88,6 +92,8 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 | `device.py` | Finding the wheel base, reading and writing sysfs, permissions and udev rule |
 | `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
 | `config.py` | Presets and app settings in `~/.config/Understeer/` |
+| `games.py` | Installed Steam games, their covers and which games are running |
+| `log.py` | Session log file |
 | `i18n.py` | Loading translations from `locale/` |
 | `ui/` | GTK window and widgets |
 | `app.py` | Application start |

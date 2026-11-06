@@ -1,6 +1,7 @@
 """Reading and writing the wheel base settings in sysfs, without GTK."""
 import glob
 import grp
+import logging
 import os
 import pwd
 import re
@@ -11,6 +12,8 @@ import subprocess
 
 SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
 RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
+
+log = logging.getLogger("understeer.device")
 
 UDEV_RULE = """ACTION!="add|change", GOTO="fanatec_tuner_end"
 
@@ -86,19 +89,30 @@ def write_values(writes):
 
     Returns the list of paths that could not be written.
     """
-    denied, failed = {}, []
+    denied, failed, written = {}, [], []
     for path, value in writes.items():
+        name = f"{os.path.basename(path)}={int(value)}"
         try:
             with open(path, "w") as f:
                 f.write(str(int(value)))
+            written.append(name)
         except PermissionError:
             denied[path] = value
-        except OSError:
+        except OSError as e:
+            # The driver answers e.g. EINVAL for values it does not accept
+            # and ENODEV once the wheel base is gone.
+            log.warning("Could not write %s to %s: %s", name, path,
+                        e.strerror or e)
             failed.append(path)
+    if written:
+        log.debug("Wrote %s", ", ".join(written))
     if denied:
+        names = ", ".join(f"{os.path.basename(p)}={int(v)}" for p, v in denied.items())
+        log.info("No write access, asking for a password to write %s", names)
         script = "; ".join(f"echo {int(v)} > {shlex.quote(p)}"
                            for p, v in denied.items())
         if not run_privileged(script):
+            log.warning("Could not write %s with a password either", names)
             failed += list(denied)
     return failed
 
@@ -109,8 +123,39 @@ def run_privileged(script):
         subprocess.run([tool, "/bin/sh", "-c", script], check=True,
                        capture_output=True, text=True)
         return True
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError as e:
+        # pkexec: 126 = password dialog cancelled, 127 = not authorised
+        log.warning("%s failed (exit code %s) running: %s\n%s", tool,
+                    e.returncode, script, (e.stderr or "").strip())
         return False
+    except OSError as e:
+        log.warning("Could not run %s: %s", tool, e)
+        return False
+
+
+def describe_access(device_path):
+    """One line about who may write the tuning settings, for the log."""
+    try:
+        st = os.stat(os.path.join(device_path, "FF"))
+        try:
+            owner = pwd.getpwuid(st.st_uid).pw_name
+        except KeyError:
+            owner = str(st.st_uid)
+        try:
+            group = grp.getgrgid(st.st_gid).gr_name
+        except KeyError:
+            group = str(st.st_gid)
+        mode = stat.filemode(st.st_mode)
+    except OSError as e:
+        return f"settings not readable: {e}"
+    groups = []
+    for gid in os.getgroups():
+        try:
+            groups.append(grp.getgrgid(gid).gr_name)
+        except KeyError:
+            groups.append(str(gid))
+    return (f"settings {mode} {owner}:{group}, user in groups "
+            f"{', '.join(sorted(groups)) or '-'}")
 
 
 def install_udev_rule():

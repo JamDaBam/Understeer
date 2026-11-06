@@ -1,14 +1,16 @@
 """The main window."""
 import json
+import logging
 import os
 import pathlib
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config, games
-from ..device import (can_write, find_device_path, find_rumble_path,
-                      install_udev_rule, join_group, model_id, permission_hint,
-                      read_int, write_values)
+from .. import log as session_log
+from ..device import (can_write, describe_access, find_device_path,
+                      find_rumble_path, install_udev_rule, join_group, model_id,
+                      permission_hint, read_int, write_values)
 from .. import i18n
 from ..i18n import _
 from ..inputs import AXIS_ROLES, InputMonitor
@@ -22,6 +24,8 @@ LAYOUTS = ["full", "compact"]
 WATCH_MS = 250       # how often to look for changes made on the wheel base
 GAMES_WATCH_MS = 2000   # how often to look for started games
 SLOT_TOAST_MS = 3000
+
+log = logging.getLogger("understeer.window")
 
 
 class TunerWindow(Adw.ApplicationWindow):
@@ -661,6 +665,18 @@ class TunerWindow(Adw.ApplicationWindow):
         reset_btn.connect("clicked", lambda b: self._confirm_reset())
         reset.add_suffix(reset_btn)
         system.add(reset)
+
+        log_row = Adw.ActionRow(
+            title=_("Log File"),
+            subtitle=_("Records what happened in this session. Attach it "
+                       "when you report a problem."))
+        log_row.set_tooltip_text(str(session_log.LOG_FILE))
+        for label, callback in ((_("Open"), self._open_log),
+                                (_("Show Folder"), self._open_log_folder)):
+            button = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+            button.connect("clicked", lambda b, cb=callback: cb())
+            log_row.add_suffix(button)
+        system.add(log_row)
         page.add(system)
         return page
 
@@ -716,6 +732,14 @@ class TunerWindow(Adw.ApplicationWindow):
     # Device state
     # -----------------------------------------------------------------------
     def _refresh_device_state(self):
+        if self.device_path:
+            log.info("Wheel base %s (model %s), %s", self.device_path,
+                     model_id(self.device_path),
+                     "writable" if self.writable else "no write access")
+            log.info("Access: %s", describe_access(self.device_path))
+            log.info("Rumble: %s", self.rumble_path or "not available")
+        else:
+            log.info("No wheel base found")
         self._update_banner()
         self.slot_dropdown.set_sensitive(bool(self.device_path))
         self.rumble_group.set_sensitive(bool(self.rumble_path))
@@ -904,6 +928,12 @@ class TunerWindow(Adw.ApplicationWindow):
                 row.set(value)
             row.set_baseline(row.get())
         self.device_values["SLOT"] = self._show_device_slot()
+        log.info("Read from wheel base (slot %s): %s", self.device_values["SLOT"],
+                 " ".join(f"{a}={v}" for a, v in self.device_values.items()
+                          if a != "SLOT" and v is not None))
+        missing = [a for a, v in self.device_values.items() if v is None]
+        if missing:
+            log.info("Not supported by this wheel base: %s", ", ".join(missing))
         self._set_status(_("In sync with device"))
         self._update_preset_indicator()
 
@@ -942,8 +972,11 @@ class TunerWindow(Adw.ApplicationWindow):
         if failed:
             names = ", ".join(os.path.basename(p) for p in failed)
             self._set_status(_("Write failed: {names}").format(names=names))
-            self.toasts.add_toast(Adw.Toast.new(
-                _("Could not write: {names}").format(names=names)))
+            log.warning("Shown to the user: could not write %s", names)
+            toast = Adw.Toast.new(_("Could not write: {names}").format(names=names))
+            toast.set_button_label(_("Show Log"))
+            toast.connect("button-clicked", lambda t: self._open_log())
+            self.toasts.add_toast(toast)
         else:
             self._set_status(_("In sync with device"))
 
@@ -1055,6 +1088,9 @@ class TunerWindow(Adw.ApplicationWindow):
         slot = read_int(self._attr_file("SLOT"))
         if slot is not None and slot != self.device_values.get("SLOT"):
             discarded = bool(self.pending)
+            log.info("Slot changed on the wheel base: %s -> %s%s",
+                     self.device_values.get("SLOT"), slot,
+                     ", unapplied changes discarded" if discarded else "")
             self._load_from_device()
             name = self._slot_label(slot)
             self._show_slot_toast(
@@ -1069,6 +1105,8 @@ class TunerWindow(Adw.ApplicationWindow):
             value = read_int(self._attr_file(attr_id))
             if value is None or value == self.device_values.get(attr_id):
                 continue
+            log.info("Changed on the wheel base: %s %s -> %s", attr_id,
+                     self.device_values.get(attr_id), value)
             self.device_values[attr_id] = value
             row.set(value)
             changed = True
@@ -1081,6 +1119,7 @@ class TunerWindow(Adw.ApplicationWindow):
             return
         self._flush_pending()
         slot = self.slot_dropdown.get_selected() + 1
+        log.info("Switching to slot %s", slot)
         if write_values({self._attr_file("SLOT"): slot}):
             self._show_slot_toast(
                 _("The driver can only switch to slots 1–{n}. Choose this "
@@ -1140,15 +1179,29 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _check_games(self):
         """Apply a game's preset when it starts (while the app is open)."""
-        running = games.running_games()
+        try:
+            running = games.running_games()
+        except OSError as e:
+            log.warning("Could not look for running games: %s", e)
+            return GLib.SOURCE_CONTINUE
         started = running - self._running_games
+        stopped = self._running_games - running
         self._running_games = running
         self.games_page.set_running(running)
         for game in self.games_page.games:
-            if game["game"] in started and game["auto"]:
-                path = config.game_preset_path(game)
-                if path is not None:
-                    self._apply_preset(path, game=game["name"])
+            if game["game"] in stopped:
+                log.info("Game stopped: %s (%s)", game["name"], game["game"])
+            if game["game"] not in started:
+                continue
+            path = config.game_preset_path(game)
+            log.info("Game started: %s (%s), preset %s, auto-apply %s",
+                     game["name"], game["game"], game["preset"],
+                     "on" if game["auto"] else "off")
+            if game["auto"] and game["preset"] and path is None:
+                log.warning("Preset %s of %s no longer exists", game["preset"],
+                            game["name"])
+            if game["auto"] and path is not None:
+                self._apply_preset(path, game=game["name"])
         return GLib.SOURCE_CONTINUE
 
     def _apply_preset(self, path, game=None):
@@ -1158,6 +1211,9 @@ class TunerWindow(Adw.ApplicationWindow):
         except (OSError, json.JSONDecodeError) as e:
             self._error(_("Could not load preset"), str(e))
             return
+        log.info("Applying preset %s (%s)%s: %s", name, path.name,
+                 f" for {game}" if game else "",
+                 " ".join(f"{a}={v}" for a, v in values.items()))
         self.active_preset, self.active_values = path, dict(values)
         self._rebuild_preset_menu()
         self._rebuild_presets_list()
@@ -1330,7 +1386,18 @@ class TunerWindow(Adw.ApplicationWindow):
         dialog.connect("response", on_response)
         dialog.present()
 
+    def _open_log(self):
+        """Open the session log in the default text editor."""
+        if session_log.LOG_FILE.exists():
+            Gtk.FileLauncher.new(Gio.File.new_for_path(
+                str(session_log.LOG_FILE))).launch(self, None, None)
+
+    def _open_log_folder(self):
+        Gtk.FileLauncher.new(Gio.File.new_for_path(
+            str(session_log.LOG_FILE))).open_containing_folder(self, None, None)
+
     def _error(self, heading, body):
+        log.error("%s: %s", heading, body)
         d = Adw.MessageDialog(transient_for=self, heading=heading, body=body)
         d.add_response("ok", _("OK"))
         d.present()

@@ -1,4 +1,5 @@
 """The Games page: one tile per game with its cover and preset."""
+import logging
 import threading
 
 from gi.repository import Adw, GLib, Gtk
@@ -6,6 +7,8 @@ from gi.repository import Adw, GLib, Gtk
 from .. import config, games
 from ..i18n import _
 from .live import CoverView
+
+log = logging.getLogger("understeer.games")
 
 
 class GamesPage:
@@ -18,6 +21,13 @@ class GamesPage:
         self.window = window
         self.games = config.load_games()
         self.running = set()
+        roots = games.steam_roots()
+        log.info("Steam installations: %s", ", ".join(map(str, roots)) or "none")
+        for root in roots:
+            log.info("Steam libraries in %s: %s", root,
+                     ", ".join(map(str, games.library_folders(root))))
+        log.info("%d games set up, cover downloads %s", len(self.games),
+                 "on" if config.get_setting("download_covers", False) else "off")
         self._downloading = set()   # steam app ids being fetched
         self._failed = set()        # ... or that had no cover online
 
@@ -169,14 +179,17 @@ class GamesPage:
         return tile
 
     def _set_preset(self, game, preset):
+        log.info("Preset of %s set to %s", game["name"], preset)
         game["preset"] = preset
         self._save()
 
     def _set_auto(self, game, auto):
+        log.info("Auto-apply for %s %s", game["name"], "on" if auto else "off")
         game["auto"] = auto
         self._save()
 
     def _remove(self, game):
+        log.info("Removed game %s (%s)", game["name"], game["game"])
         self.games = [g for g in self.games if g is not game]
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
@@ -184,6 +197,7 @@ class GamesPage:
     def _add(self, game_id, name):
         if any(g["game"] == game_id for g in self.games):
             return
+        log.info("Added game %s (%s)", name, game_id)
         self.games.append({"game": game_id, "name": name, "preset": None,
                            "auto": True})
         self.games.sort(key=lambda g: g["name"].lower())
@@ -203,8 +217,10 @@ class GamesPage:
         def done(path):
             self._downloading.discard(appid)
             if path is None:
+                log.info("No cover online for Steam app %s", appid)
                 self._failed.add(appid)
             else:
+                log.info("Downloaded cover for Steam app %s", appid)
                 self.refresh()
             return False
 
