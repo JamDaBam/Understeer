@@ -71,8 +71,24 @@ To add a language:
 
 1. Copy `locale/understeer.pot` to `locale/<code>.po`, for example `locale/fr.po`.
 2. Fill in every `msgstr`. Keep placeholders such as `{name}` or `{n}` unchanged.
-3. Test it with `LANGUAGE=fr python3 understeer.py`.
+3. Test it with `LANGUAGE=fr python3 -m understeer`.
 
 After changing text in the code, run `python3 tools/update_translations.py`. It updates the template and adds new strings to every `.po` file while keeping existing translations.
+
+## Development
+
+Run the app from a checkout with `python3 -m understeer` (needs PyGObject with GTK 4 and Libadwaita). The code lives in the `understeer/` package:
+
+| Module | Contents |
+|---|---|
+| `settings.py` | The settings shown in the app (sysfs attribute, range, page, description) |
+| `device.py` | Finding the wheel base, reading and writing sysfs, permissions and udev rule |
+| `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
+| `config.py` | Presets and app settings in `~/.config/Understeer/` |
+| `i18n.py` | Loading translations from `locale/` |
+| `ui/` | GTK window and widgets |
+| `app.py` | Application start |
+
+Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 
 *Disclaimer: This software is provided as-is. I am not responsible for any damage to hardware or personal injury resulting from misconfigured settings. Use at your own risk.*

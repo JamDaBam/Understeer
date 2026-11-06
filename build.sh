@@ -14,13 +14,20 @@ mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 mkdir -p AppDir/usr/share/understeer/locale AppDir/usr/share/understeer/icons
 
 echo "=== Step 3: Copying project assets into the layout ==="
-# App execution script
-cp understeer.py AppDir/usr/bin/
-chmod +x AppDir/usr/bin/understeer.py
-
-# Translations and custom symbolic icons (found by the app under usr/share/understeer)
+# Python package; translations and custom symbolic icons sit next to it,
+# just like in the source checkout
+cp -r understeer AppDir/usr/share/understeer/
+find AppDir -name __pycache__ -prune -exec rm -rf {} +
 cp locale/*.po AppDir/usr/share/understeer/locale/
 cp icons/*.svg AppDir/usr/share/understeer/icons/
+
+# Launcher
+cat << 'EOF' > AppDir/usr/bin/understeer
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "${0}")")"
+PYTHONPATH="$HERE/../share/understeer${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m understeer "$@"
+EOF
+chmod +x AppDir/usr/bin/understeer
 
 # App metadata files
 cp $APP_ID.desktop AppDir/
@@ -37,7 +44,7 @@ echo "=== Step 4: Creating the core AppRun launch script ==="
 cat << 'EOF' > AppDir/AppRun
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
-exec python3 "$HERE/usr/bin/understeer.py" "$@"
+exec "$HERE/usr/bin/understeer" "$@"
 EOF
 chmod +x AppDir/AppRun
 

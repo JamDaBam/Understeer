@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect all _("...") and N_("...") strings from understeer.py.
+"""Collect all _("...") and N_("...") strings from the understeer package.
 
 Writes locale/understeer.pot and adds new strings to every locale/*.po
 (existing translations are kept, removed strings are dropped).
@@ -11,49 +11,28 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-SOURCE = ROOT / "understeer.py"
+from understeer.i18n import parse_po  # noqa: E402  (no GTK needed)
+
+PACKAGE = ROOT / "understeer"
 LOCALE = ROOT / "locale"
 
 
-def parse_po(text):
-    # Same reader the app uses, copied to avoid importing GTK here.
-    catalog, msgid, msgstr, field = {}, None, None, None
-
-    def unq(s):
-        s = s.strip()
-        return (s[1:-1].replace('\\n', '\n').replace('\\"', '"')
-                .replace('\\\\', '\\')) if s.startswith('"') else ""
-
-    def flush():
-        if msgid:
-            catalog[msgid] = msgstr or ""
-
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("msgid "):
-            flush()
-            msgid, msgstr, field = unq(line[6:]), None, "id"
-        elif line.startswith("msgstr "):
-            msgstr, field = unq(line[7:]), "str"
-        elif line.startswith('"'):
-            if field == "id":
-                msgid += unq(line)
-            elif field == "str":
-                msgstr += unq(line)
-    flush()
-    return catalog
-
-
 def extract():
-    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
+    """[(msgid, "file:line")] in order of first appearance."""
     found = {}
-    for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id in ("_", "N_") and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)):
-            found.setdefault(node.args[0].value, node.lineno)
-    return sorted(found.items(), key=lambda kv: kv[1])
+    for source in sorted(PACKAGE.rglob("*.py")):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        calls = sorted((node.lineno, node.args[0].value)
+                       for node in ast.walk(tree)
+                       if isinstance(node, ast.Call)
+                       and isinstance(node.func, ast.Name)
+                       and node.func.id in ("_", "N_") and node.args
+                       and isinstance(node.args[0], ast.Constant)
+                       and isinstance(node.args[0].value, str))
+        where = source.relative_to(ROOT).as_posix()
+        for line, msgid in calls:
+            found.setdefault(msgid, f"{where}:{line}")
+    return list(found.items())
 
 
 def quote(s):
@@ -62,8 +41,8 @@ def quote(s):
 
 def render(strings, translations, header):
     out = [header]
-    for msgid, line in strings:
-        out.append(f"#: understeer.py:{line}")
+    for msgid, ref in strings:
+        out.append(f"#: {ref}")
         out.append(f"msgid {quote(msgid)}")
         out.append(f"msgstr {quote(translations.get(msgid, ''))}")
         out.append("")
@@ -85,6 +64,6 @@ if __name__ == "__main__":
         old = parse_po(po.read_text(encoding="utf-8"))
         po.write_text(render(strings, old, HEADER.format(lang=po.stem)),
                       encoding="utf-8")
-        missing = [s for s, _l in strings if not old.get(s)]
+        missing = [s for s, _ref in strings if not old.get(s)]
         print(f"{po.name}: {len(strings) - len(missing)}/{len(strings)} translated")
     print(f"understeer.pot: {len(strings)} strings")

@@ -1,0 +1,112 @@
+"""Reading and writing the wheel base settings in sysfs, without GTK."""
+import glob
+import grp
+import os
+import pwd
+import shlex
+import shutil
+import stat
+import subprocess
+
+SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
+RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
+
+UDEV_RULE = """ACTION!="add|change", GOTO="fanatec_tuner_end"
+
+SUBSYSTEM=="ftec_tuning", RUN+="/bin/sh -c 'find /sys%p -type f -exec chmod 666 {} +'"
+SUBSYSTEM=="hid", DRIVER=="fanatec", RUN+="/bin/sh -c 'chmod 666 /sys%p/rumble 2>/dev/null'"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="0eb7", MODE="0644"
+
+LABEL="fanatec_tuner_end"
+"""
+UDEV_RULE_PATH = "/etc/udev/rules.d/99-fanatec-tuner.rules"
+
+
+def find_device_path():
+    candidates = [p for p in glob.glob(SYSFS_GLOB) if os.path.isdir(p)]
+    valid = [p for p in candidates if os.path.exists(os.path.join(p, "FF"))]
+    return valid[0] if valid else (candidates[0] if candidates else None)
+
+
+def find_rumble_path():
+    matches = glob.glob(RUMBLE_GLOB)
+    return matches[0] if matches else None
+
+
+def can_write(device_path):
+    """sysfs dirs are rarely writable even when their files are, so test FF."""
+    attr = os.path.join(device_path, "FF")
+    return os.access(attr if os.path.exists(attr) else device_path, os.W_OK)
+
+
+def permission_hint(device_path):
+    """How the user can get write access to the tuning settings.
+
+    The hid-fanatecff udev rule hands the settings to the "games" group.
+    Returns ("join", group) if joining that group would help,
+    ("relogin", group) if the user already joined but must log in again,
+    or ("udev", None) if a separate udev rule is needed.
+    """
+    try:
+        st = os.stat(os.path.join(device_path, "FF"))
+        group = grp.getgrgid(st.st_gid)
+    except (OSError, KeyError):
+        return "udev", None
+    if group.gr_gid == 0 or not st.st_mode & stat.S_IWGRP:
+        return "udev", None
+    user = pwd.getpwuid(os.getuid())
+    member = user.pw_name in group.gr_mem or user.pw_gid == group.gr_gid
+    return ("relogin" if member else "join"), group.gr_name
+
+
+def read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def write_values(writes):
+    """Write {path: int}. Paths without permission go through one pkexec call.
+
+    Returns the list of paths that could not be written.
+    """
+    denied, failed = {}, []
+    for path, value in writes.items():
+        try:
+            with open(path, "w") as f:
+                f.write(str(int(value)))
+        except PermissionError:
+            denied[path] = value
+        except OSError:
+            failed.append(path)
+    if denied:
+        script = "; ".join(f"echo {int(v)} > {shlex.quote(p)}"
+                           for p, v in denied.items())
+        if not run_privileged(script):
+            failed += list(denied)
+    return failed
+
+
+def run_privileged(script):
+    tool = "pkexec" if shutil.which("pkexec") else "sudo"
+    try:
+        subprocess.run([tool, "/bin/sh", "-c", script], check=True,
+                       capture_output=True, text=True)
+        return True
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+
+def install_udev_rule():
+    """Install UDEV_RULE with one password prompt. Returns True on success."""
+    return run_privileged(
+        f"printf %s {shlex.quote(UDEV_RULE)} > {UDEV_RULE_PATH} && "
+        "udevadm control --reload-rules && udevadm trigger")
+
+
+def join_group(group):
+    """Add the current user to group. Returns True on success."""
+    user = pwd.getpwuid(os.getuid()).pw_name
+    return run_privileged(f"usermod -aG {shlex.quote(group)} {shlex.quote(user)}")
