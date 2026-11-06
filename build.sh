@@ -53,7 +53,7 @@ export VERSION="${VERSION#v}"
 
 # Update information lets tools like Gear Lever find new releases on GitHub.
 # It also produces a .zsync file that must be uploaded next to the AppImage.
-UPDATE_INFO="gh-releases-zsync|JamDaBam|FanatecLinux|latest|Understeer-*x86_64.AppImage.zsync"
+UPDATE_INFO="gh-releases-zsync|JamDaBam|Understeer|latest|Understeer-*x86_64.AppImage.zsync"
 
 "./$TOOL" -u "$UPDATE_INFO" AppDir "Understeer-$VERSION-$ARCH.AppImage"
 

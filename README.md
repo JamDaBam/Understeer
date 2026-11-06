@@ -22,19 +22,30 @@ This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanat
 
 ## Installation
 
-Download `Understeer-<version>-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/FanatecLinux/releases/latest), make it executable (`chmod +x Understeer-*-x86_64.AppImage`) and run it.
+Download `Understeer-<version>-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/Understeer/releases/latest), make it executable (`chmod +x Understeer-*-x86_64.AppImage`) and run it.
 
 The AppImage contains embedded update information, so AppImage managers such as [Gear Lever](https://github.com/mijorus/gearlever) detect new releases automatically.
 
 ## Hardware Permissions
 
-Understeer writes changes to the wheel base live while you move a control. This needs write access to the device. If it is missing, the app shows a banner with a **Set Up** button that installs the udev rule below for you (it asks for your password once). Without it, changes are collected and written with a single password prompt when you click **Apply**.
+Understeer writes changes to the wheel base live while you move a control, which needs write access to the device. Without it, the app collects your changes and writes them with a single password prompt when you click **Apply**.
 
-The live input display (current steering angle and pedal travel) reads the wheel's input device. The rule's last line makes it readable; on most desktops your user can already read it.
+### Recommended: join the `games` group
 
-To set it up manually instead: by default, Linux restricts writing to device configurations in the `/sys` directory to the root user. To allow this application to save settings seamlessly without needing `sudo` or `pkexec` prompts every single time, you must add a local `udev` hardware rule.
+The `hid-fanatecff` driver already installs a udev rule (`fanatec.rules`) that gives the `games` group write access to the tuning settings. Usually you only need to add your user to that group; no udev changes are needed:
 
-Open a terminal and run the following combined command:
+```bash
+getent group games                # check that the group exists
+sudo usermod -aG games "$USER"    # add yourself to it
+```
+
+Log out and back in (or reboot), then check with `id -nG` that `games` is listed. Start Understeer again and the permission banner should be gone.
+
+To undo it later: `sudo gpasswd -d "$USER" games`, then log out and back in.
+
+### Alternative: a separate udev rule
+
+If the driver's rule is not installed or you do not want to use the group, the **Set Up** button in the app's banner (or under *Tools*) installs the rule below for you. It asks for your password once. You can also add it manually:
 
 ```bash
 sudo tee /etc/udev/rules.d/99-fanatec-tuner.rules > /dev/null << 'EOF'
@@ -49,6 +60,8 @@ EOF
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
+
+The live input display (current steering angle and pedal travel) reads the wheel's input device. On most desktops your user can already read it; the rule's last line makes sure of that.
 
 ## Translations
 
