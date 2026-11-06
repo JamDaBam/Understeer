@@ -15,7 +15,8 @@ from ..settings import MAX_SLOT, PAGES, SETTINGS, SIM_DEFAULTS, SLOTS
 from .setting_row import SettingRow
 
 LIVE_DELAY_MS = 120
-WATCH_MS = 500       # how often to look for changes made on the wheel base
+WATCH_MS = 250       # how often to look for changes made on the wheel base
+SLOT_TOAST_MS = 3000
 
 
 class TunerWindow(Adw.ApplicationWindow):
@@ -31,6 +32,8 @@ class TunerWindow(Adw.ApplicationWindow):
         self.rows = {}           # attr id -> SettingRow
         self.pending = {}        # attr id -> value waiting to be written
         self.device_values = {}  # attr id (and "SLOT") -> last value read or written
+        self._slot_toast = None  # shown slot message, updated by the next one
+        self._slot_toast_timer = 0
         self._live_timer = 0
         self._status = ""
 
@@ -874,6 +877,39 @@ class TunerWindow(Adw.ApplicationWindow):
             self.rows[attr_id].set(value)
         return GLib.SOURCE_REMOVE
 
+    def _show_slot_toast(self, text):
+        """Show a slot message right away.
+
+        Toasts normally queue up, so switching slots quickly would show each
+        message for its full time, one after another. Instead the shown
+        message gets the new text and its time starts again.
+        """
+        if self._slot_toast is None:
+            toast = Adw.Toast.new("")
+            toast.set_use_markup(False)     # slot names are plain text
+            toast.set_timeout(0)            # hidden by our own timer
+            toast.connect("dismissed", self._on_slot_toast_dismissed)
+            self._slot_toast = toast
+            self.toasts.add_toast(toast)
+        self._slot_toast.set_title(text)
+        if self._slot_toast_timer:
+            GLib.source_remove(self._slot_toast_timer)
+        self._slot_toast_timer = GLib.timeout_add(SLOT_TOAST_MS,
+                                                  self._hide_slot_toast)
+
+    def _hide_slot_toast(self):
+        self._slot_toast_timer = 0
+        if self._slot_toast is not None:
+            self._slot_toast.dismiss()
+        return GLib.SOURCE_REMOVE
+
+    def _on_slot_toast_dismissed(self, toast):
+        if self._slot_toast is toast:
+            self._slot_toast = None
+            if self._slot_toast_timer:          # closed by the user
+                GLib.source_remove(self._slot_toast_timer)
+                self._slot_toast_timer = 0
+
     def _check_device(self):
         """Follow changes made on the wheel base itself.
 
@@ -888,10 +924,10 @@ class TunerWindow(Adw.ApplicationWindow):
             discarded = bool(self.pending)
             self._load_from_device()
             name = self._slot_label(slot)
-            self.toasts.add_toast(Adw.Toast.new(
+            self._show_slot_toast(
                 _("Slot changed on the wheel base: {name}. Unapplied changes "
                   "were discarded.").format(name=name) if discarded else
-                _("Slot changed on the wheel base: {name}").format(name=name)))
+                _("Slot changed on the wheel base: {name}").format(name=name))
             return GLib.SOURCE_CONTINUE
         if self.pending:            # don't overwrite changes waiting for Apply
             return GLib.SOURCE_CONTINUE
@@ -913,10 +949,10 @@ class TunerWindow(Adw.ApplicationWindow):
         self._flush_pending()
         slot = self.slot_dropdown.get_selected() + 1
         if write_values({self._attr_file("SLOT"): slot}):
-            self.toasts.add_toast(Adw.Toast.new(
+            self._show_slot_toast(
                 _("The driver can only switch to slots 1–{n}. Choose this "
                   "slot on the wheel base.").format(n=SLOTS)
-                if slot > SLOTS else _("Could not switch slot")))
+                if slot > SLOTS else _("Could not switch slot"))
             self._show_device_slot()        # back to the slot that is active
             return
         self.device_values["SLOT"] = slot   # not a change made on the wheel
