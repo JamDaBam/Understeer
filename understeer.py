@@ -10,12 +10,15 @@ locale/<lang>.po (see README for adding a language).
 
 import fcntl
 import glob
+import grp
 import json
 import os
 import pathlib
+import pwd
 import re
 import shlex
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -263,6 +266,26 @@ def can_write(device_path):
     """sysfs dirs are rarely writable even when their files are, so test FF."""
     attr = os.path.join(device_path, "FF")
     return os.access(attr if os.path.exists(attr) else device_path, os.W_OK)
+
+
+def permission_hint(device_path):
+    """How the user can get write access to the tuning settings.
+
+    The hid-fanatecff udev rule hands the settings to the "games" group.
+    Returns ("join", group) if joining that group would help,
+    ("relogin", group) if the user already joined but must log in again,
+    or ("udev", None) if a separate udev rule is needed.
+    """
+    try:
+        st = os.stat(os.path.join(device_path, "FF"))
+        group = grp.getgrgid(st.st_gid)
+    except (OSError, KeyError):
+        return "udev", None
+    if group.gr_gid == 0 or not st.st_mode & stat.S_IWGRP:
+        return "udev", None
+    user = pwd.getpwuid(os.getuid())
+    member = user.pw_name in group.gr_mem or user.pw_gid == group.gr_gid
+    return ("relogin" if member else "join"), group.gr_name
 
 
 def read_int(path):
@@ -812,9 +835,7 @@ class TunerWindow(Adw.ApplicationWindow):
         self.inputs.start()
         self._rebuild_axes_list()
         self._update_inputs()
-        self.perm_row.set_visible(
-            bool(self.inputs.denied) or
-            (bool(self.device_path) and not self.writable))
+        self._update_permission_row()
 
     def _input_problem(self):
         if self.inputs.denied:
@@ -1109,13 +1130,11 @@ class TunerWindow(Adw.ApplicationWindow):
         system = Adw.PreferencesGroup(title=_("System"))
         self.perm_row = Adw.ActionRow(
             title=_("Write Permissions"),
-            subtitle=_("Installs a udev rule so settings can be changed "
-                       "without a password prompt and live input can be "
-                       "shown."))
-        perm_btn = Gtk.Button(label=_("Set Up"))
-        perm_btn.set_valign(Gtk.Align.CENTER)
-        perm_btn.connect("clicked", lambda b: self._setup_permissions())
-        self.perm_row.add_suffix(perm_btn)
+            subtitle="")
+        self.perm_btn = Gtk.Button(label=_("Set Up"))
+        self.perm_btn.set_valign(Gtk.Align.CENTER)
+        self.perm_btn.connect("clicked", lambda b: self._fix_permissions())
+        self.perm_row.add_suffix(self.perm_btn)
         system.add(self.perm_row)
 
         reset = Adw.ActionRow(
@@ -1162,6 +1181,12 @@ class TunerWindow(Adw.ApplicationWindow):
     # Device state
     # -----------------------------------------------------------------------
     def _refresh_device_state(self):
+        self._update_banner()
+        self.slot_dropdown.set_sensitive(bool(self.device_path))
+        self.rumble_group.set_sensitive(bool(self.rumble_path))
+        self._load_from_device()
+
+    def _update_banner(self):
         if not self.device_path:
             self.banner.set_title(
                 _("No Fanatec wheel base found. Check that it is switched on "
@@ -1169,22 +1194,81 @@ class TunerWindow(Adw.ApplicationWindow):
             self.banner.set_button_label(_("Retry"))
             self.banner.set_revealed(True)
         elif not self.writable:
-            self.banner.set_title(
-                _("Changes need a password each time. Set up write "
-                  "permissions to tune live."))
-            self.banner.set_button_label(_("Set Up"))
+            mode, group = permission_hint(self.device_path)
+            if mode == "join":
+                self.banner.set_title(_(
+                    "Changes need a password each time. Join the “{group}” "
+                    "group to tune live.").format(group=group))
+                self.banner.set_button_label(_("Join Group"))
+            elif mode == "relogin":
+                self.banner.set_title(_(
+                    "Log out and back in to finish joining the “{group}” "
+                    "group. Until then, changes need a password.").format(
+                        group=group))
+                self.banner.set_button_label(None)
+            else:
+                self.banner.set_title(
+                    _("Changes need a password each time. Set up write "
+                      "permissions to tune live."))
+                self.banner.set_button_label(_("Set Up"))
             self.banner.set_revealed(True)
         else:
             self.banner.set_revealed(False)
+        self._update_permission_row()
 
-        self.slot_dropdown.set_sensitive(bool(self.device_path))
-        self.perm_row.set_visible(bool(self.device_path) and not self.writable)
-        self.rumble_group.set_sensitive(bool(self.rumble_path))
-        self._load_from_device()
+    def _permission_mode(self):
+        """("join"|"relogin"|"udev", group) or None if nothing is missing."""
+        if self.device_path and not self.writable:
+            return permission_hint(self.device_path)
+        if self.inputs.denied:
+            return "udev", None
+        return None
+
+    def _update_permission_row(self):
+        mode = self._permission_mode()
+        self.perm_row.set_visible(mode is not None)
+        if mode is None:
+            return
+        kind, group = mode
+        if kind == "join":
+            self.perm_row.set_subtitle(_(
+                "Your user is not in the “{group}” group that the "
+                "hid-fanatecff driver uses for the tuning settings.").format(
+                    group=group))
+            self.perm_btn.set_label(_("Join Group"))
+        elif kind == "relogin":
+            self.perm_row.set_subtitle(_(
+                "Log out and back in to finish joining the “{group}” "
+                "group.").format(group=group))
+        else:
+            self.perm_row.set_subtitle(_(
+                "Installs a udev rule so settings can be changed without a "
+                "password prompt and live input can be shown."))
+            self.perm_btn.set_label(_("Set Up"))
+        self.perm_btn.set_visible(kind != "relogin")
+
+    def _fix_permissions(self):
+        mode = self._permission_mode()
+        if mode and mode[0] == "join":
+            self._join_group(mode[1])
+        elif mode:
+            self._setup_permissions()
+
+    def _join_group(self, group):
+        user = pwd.getpwuid(os.getuid()).pw_name
+        if not run_privileged(f"usermod -aG {shlex.quote(group)} "
+                              f"{shlex.quote(user)}"):
+            self.toasts.add_toast(Adw.Toast.new(
+                _("Setting up permissions failed")))
+            return
+        self._update_banner()     # keeps pending changes, unlike a reload
+        self.toasts.add_toast(Adw.Toast.new(_(
+            "Added to “{group}”. Log out and back in to tune live.").format(
+                group=group)))
 
     def _on_banner_button(self):
         if self.device_path:
-            self._setup_permissions()
+            self._fix_permissions()
         else:
             self.device_path = find_device_path()
             self.rumble_path = find_rumble_path()
