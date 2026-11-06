@@ -8,6 +8,7 @@ All user-visible text goes through _() and is translated from
 locale/<lang>.po (see README for adding a language).
 """
 
+import fcntl
 import glob
 import json
 import os
@@ -15,6 +16,7 @@ import pathlib
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -103,7 +105,7 @@ import gi  # noqa: E402
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio  # noqa: E402
+from gi.repository import Gtk, Gdk, Adw, GLib, Gio  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # sysfs paths and storage
@@ -111,11 +113,16 @@ from gi.repository import Gtk, Adw, GLib, Gio  # noqa: E402
 SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
 RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
 CONFIG_DIR  = pathlib.Path.home() / ".config" / "SimPower"
+# Kept in a subfolder: every *.json directly in CONFIG_DIR is a preset.
+AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
+ICON_DIRS   = [_SCRIPT_DIR / "icons",
+               _SCRIPT_DIR.parent / "share" / "simpower" / "icons"]
 
 UDEV_RULE = """ACTION!="add|change", GOTO="fanatec_tuner_end"
 
 SUBSYSTEM=="ftec_tuning", RUN+="/bin/sh -c 'find /sys%p -type f -exec chmod 666 {} +'"
 SUBSYSTEM=="hid", DRIVER=="fanatec", RUN+="/bin/sh -c 'chmod 666 /sys%p/rumble 2>/dev/null'"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="0eb7", MODE="0644"
 
 LABEL="fanatec_tuner_end"
 """
@@ -131,7 +138,7 @@ UDEV_RULE_PATH = "/etc/udev/rules.d/99-fanatec-tuner.rules"
 PAGES = [
     ("steering", N_("Steering"),       "input-gaming-symbolic"),
     ("feel",     N_("Wheel Feel"),     "emblem-system-symbolic"),
-    ("pedals",   N_("Pedals"),         "media-playback-start-symbolic"),
+    ("pedals",   N_("Pedals"),         "simpower-pedals-symbolic"),
     ("paddles",  N_("Paddles"),        "view-dual-symbolic"),
     ("presets",  N_("Presets"),        "document-save-symbolic"),
     ("tools",    N_("Tools"),          "applications-utilities-symbolic"),
@@ -298,6 +305,168 @@ def run_privileged(script):
 
 
 # ---------------------------------------------------------------------------
+# Live input (steering angle, pedal travel) read from /dev/input/event*
+# ---------------------------------------------------------------------------
+EV_ABS = 3
+ABS_X = 0
+ABS_NAMES = {0: "X", 1: "Y", 2: "Z", 3: "RX", 4: "RY", 5: "RZ",
+             6: "Throttle", 7: "Rudder", 8: "Wheel", 9: "Gas", 10: "Brake"}
+EVENT = struct.Struct("llHHi")      # struct input_event on 64-bit systems
+FANATEC_VENDOR = "0eb7"
+
+AXIS_ROLES = [
+    ("", N_("Not assigned")),
+    ("throttle", N_("Throttle")),
+    ("brake", N_("Brake")),
+    ("clutch", N_("Clutch")),
+    ("handbrake", N_("Handbrake")),
+    ("hidden", N_("Hidden")),
+]
+
+
+def _ioc_read(nr, size):
+    return (2 << 30) | (size << 16) | (ord("E") << 8) | nr
+
+
+def find_input_devices():
+    """Return [(devnode, name)] for all Fanatec evdev nodes."""
+    result = []
+    for ev in sorted(glob.glob("/sys/class/input/event*")):
+        try:
+            vendor = open(os.path.join(ev, "device/id/vendor")).read().strip()
+            name = open(os.path.join(ev, "device/name")).read().strip()
+        except OSError:
+            continue
+        if vendor.lower() == FANATEC_VENDOR:
+            result.append(("/dev/input/" + os.path.basename(ev), name))
+    return result
+
+
+class Axis:
+    def __init__(self, device, code, lo, hi, value):
+        self.device, self.code = device, code
+        self.lo, self.hi, self.value = lo, hi, value
+        # Some pedals rest at the maximum value; treat the end nearest to
+        # the first reading as "released".
+        self.inverted = abs(value - hi) < abs(value - lo)
+        self.peak = 0.0
+
+    @property
+    def key(self):
+        return f"{self.device}:{self.code}"
+
+    @property
+    def name(self):
+        return ABS_NAMES.get(self.code, str(self.code))
+
+    def fraction(self):
+        """Pedal travel 0..1 from the released position."""
+        span = (self.hi - self.lo) or 1
+        f = (self.value - self.lo) / span
+        return min(max(1 - f if self.inverted else f, 0.0), 1.0)
+
+    def centered(self):
+        """Steering position -1..1 around the centre."""
+        span = (self.hi - self.lo) or 1
+        return min(max((self.value - self.lo) / span * 2 - 1, -1.0), 1.0)
+
+
+class InputMonitor:
+    """Watches Fanatec evdev nodes and reports absolute axis changes."""
+
+    def __init__(self, on_change):
+        self.on_change = on_change
+        self.axes = {}          # key -> Axis
+        self.denied = []        # devnodes without read permission
+        self._open = []         # (fd, watch id)
+
+    def start(self):
+        self.stop()
+        for devnode, name in find_input_devices():
+            try:
+                fd = os.open(devnode, os.O_RDONLY | os.O_NONBLOCK)
+            except PermissionError:
+                self.denied.append(devnode)
+                continue
+            except OSError:
+                continue
+            try:
+                self._read_axes(fd, name)
+            except OSError:
+                os.close(fd)
+                continue
+            watch = GLib.unix_fd_add_full(
+                GLib.PRIORITY_DEFAULT, fd,
+                GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR,
+                self._on_readable, name)
+            self._open.append((fd, watch))
+
+    def stop(self):
+        for fd, watch in self._open:
+            GLib.source_remove(watch)
+            os.close(fd)
+        self._open, self.axes, self.denied = [], {}, []
+
+    def _read_axes(self, fd, name):
+        bits = bytearray(8)
+        fcntl.ioctl(fd, _ioc_read(0x20 + EV_ABS, len(bits)), bits, True)
+        mask = int.from_bytes(bits, "little")
+        for code in range(0x10):        # 0x10+ are hats (d-pad), skip them
+            if not mask & (1 << code):
+                continue
+            info = bytearray(24)
+            fcntl.ioctl(fd, _ioc_read(0x40 + code, 24), info, True)
+            value, lo, hi = struct.unpack("6i", info)[:3]
+            if hi > lo:
+                axis = Axis(name, code, lo, hi, value)
+                self.axes[axis.key] = axis
+
+    def _on_readable(self, fd, condition, name):
+        try:
+            data = os.read(fd, EVENT.size * 64)
+        except BlockingIOError:
+            return GLib.SOURCE_CONTINUE
+        except OSError:
+            data = b""
+        if not data:            # device unplugged
+            self._open = [(f, w) for f, w in self._open if f != fd]
+            os.close(fd)
+            return GLib.SOURCE_REMOVE
+        changed = False
+        for _s, _us, etype, code, value in EVENT.iter_unpack(
+                data[:len(data) - len(data) % EVENT.size]):
+            axis = self.axes.get(f"{name}:{code}") if etype == EV_ABS else None
+            if axis:
+                axis.value = value
+                axis.peak = max(axis.peak, axis.fraction())
+                changed = True
+        if changed:
+            self.on_change()
+        return GLib.SOURCE_CONTINUE
+
+    def steering_axis(self):
+        for axis in self.axes.values():
+            if axis.code == ABS_X and "pedal" not in axis.device.lower():
+                return axis
+        return None
+
+
+def load_axis_roles():
+    try:
+        return json.loads(AXES_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_axis_roles(roles):
+    try:
+        AXES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        AXES_FILE.write_text(json.dumps(roles, indent=2))
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # One row per setting
 # ---------------------------------------------------------------------------
 class SettingRow:
@@ -439,9 +608,17 @@ class TunerWindow(Adw.ApplicationWindow):
         self._live_timer = 0
         self._status = ""
 
+        self.inputs = InputMonitor(self._on_input)
+        self.axis_roles = load_axis_roles()
+        self.show_hidden_axes = False
+        self.axis_widgets = {}   # axis key -> (level bar, value label, max label)
+        self._input_timer = 0
+
         self._build_actions()
         self._build_ui()
         self._refresh_device_state()
+        self._start_inputs()
+        self.connect("close-request", lambda w: self.inputs.stop() and False)
 
     # -----------------------------------------------------------------------
     # Layout
@@ -557,6 +734,10 @@ class TunerWindow(Adw.ApplicationWindow):
 
     def _build_settings_page(self, page_key):
         page = Adw.PreferencesPage()
+        if page_key == "steering":
+            page.add(self._build_live_steering())
+        elif page_key == "pedals":
+            page.add(self._build_live_pedals())
         groups = {}
         for s in SETTINGS:
             if s["page"] != page_key:
@@ -571,6 +752,159 @@ class TunerWindow(Adw.ApplicationWindow):
             if s.get("quick"):
                 groups[s["group"]].add(self._quick_angle_row(s))
         return page
+
+    # -----------------------------------------------------------------------
+    # Live input display
+    # -----------------------------------------------------------------------
+    def _build_live_steering(self):
+        grp = Adw.PreferencesGroup(title=_("Live Input"))
+        self.steer_row = Adw.ActionRow(title=_("Current Angle"))
+        self.steer_adj = Gtk.Adjustment(lower=-1, upper=1)
+        scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
+                          adjustment=self.steer_adj)
+        scale.set_size_request(240, -1)
+        scale.set_valign(Gtk.Align.CENTER)
+        scale.set_draw_value(False)
+        scale.set_has_origin(False)
+        scale.add_mark(0, Gtk.PositionType.BOTTOM, None)
+        scale.set_can_target(False)     # display only
+        scale.set_focusable(False)
+        self.steer_label = Gtk.Label(xalign=1, width_chars=9)
+        self.steer_label.add_css_class("numeric")
+        self.steer_row.add_suffix(scale)
+        self.steer_row.add_suffix(self.steer_label)
+        grp.add(self.steer_row)
+        return grp
+
+    def _build_live_pedals(self):
+        grp = Adw.PreferencesGroup(
+            title=_("Live Input"),
+            description=_("Press a pedal to see which bar moves and choose "
+                          "what it is. Max shows the highest value since the "
+                          "last reset."))
+        reset = Gtk.Button(label=_("Reset Max"))
+        reset.add_css_class("flat")
+        reset.connect("clicked", lambda b: self._reset_peaks())
+        grp.set_header_suffix(reset)
+        self.axes_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.axes_list.add_css_class("boxed-list")
+        grp.add(self.axes_list)
+        return grp
+
+    def _start_inputs(self):
+        self.inputs.start()
+        self._rebuild_axes_list()
+        self._update_inputs()
+        self.perm_row.set_visible(
+            bool(self.inputs.denied) or
+            (bool(self.device_path) and not self.writable))
+
+    def _input_problem(self):
+        if self.inputs.denied:
+            return _("No read access to the input device. Set up permissions "
+                     "under Tools.")
+        return _("No Fanatec input device found.")
+
+    def _rebuild_axes_list(self):
+        self.axes_list.remove_all()
+        self.axis_widgets = {}
+        steering = self.inputs.steering_axis()
+        axes = [a for a in self.inputs.axes.values() if a is not steering]
+        if not axes:
+            self.axes_list.append(Adw.ActionRow(title=self._input_problem()))
+            return
+
+        role_keys = [k for k, _l in AXIS_ROLES]
+        hidden = 0
+        for axis in axes:
+            role = self.axis_roles.get(axis.key, "")
+            if role == "hidden":
+                hidden += 1
+                if not self.show_hidden_axes:
+                    continue
+            label = dict(AXIS_ROLES).get(role) if role and role != "hidden" else None
+            row = Adw.ActionRow(
+                title=_(label) if label else
+                _("Axis {name}").format(name=axis.name),
+                subtitle=f"{axis.device} · {axis.name}")
+            bar = Gtk.LevelBar(min_value=0, max_value=1)
+            for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
+                           Gtk.LEVEL_BAR_OFFSET_FULL):
+                bar.remove_offset_value(offset)
+            bar.set_size_request(150, -1)
+            bar.set_valign(Gtk.Align.CENTER)
+            value = Gtk.Label(xalign=1, width_chars=6)
+            value.add_css_class("numeric")
+            peak = Gtk.Label(xalign=1, width_chars=10)
+            peak.add_css_class("numeric")
+            peak.add_css_class("dim-label")
+            choose = Gtk.DropDown.new_from_strings(
+                [_(l) for _k, l in AXIS_ROLES])
+            choose.set_selected(role_keys.index(role) if role in role_keys else 0)
+            choose.set_valign(Gtk.Align.CENTER)
+            choose.set_size_request(140, -1)    # keeps the bars aligned
+            choose.set_tooltip_text(_("What this axis is"))
+            choose.connect("notify::selected", lambda d, _p, k=axis.key:
+                           self._set_axis_role(k, role_keys[d.get_selected()]))
+            for w in (bar, value, peak, choose):
+                row.add_suffix(w)
+            self.axes_list.append(row)
+            self.axis_widgets[axis.key] = (bar, value, peak)
+
+        if hidden:
+            show = Adw.SwitchRow(
+                title=_("Show hidden axes ({n})").format(n=hidden),
+                active=self.show_hidden_axes)
+            show.connect("notify::active", lambda r, _p: self._toggle_hidden(
+                r.get_active()))
+            self.axes_list.append(show)
+        self._update_inputs()
+
+    def _set_axis_role(self, key, role):
+        if role:
+            self.axis_roles[key] = role
+        else:
+            self.axis_roles.pop(key, None)
+        save_axis_roles(self.axis_roles)
+        # Rebuild after the dropdown's own signal has finished.
+        GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+
+    def _toggle_hidden(self, show):
+        self.show_hidden_axes = show
+        GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+
+    def _reset_peaks(self):
+        for axis in self.inputs.axes.values():
+            axis.peak = axis.fraction()
+        self._update_inputs()
+
+    def _on_input(self):
+        # Wheels report up to 1000 updates per second; redraw at ~30 fps.
+        if not self._input_timer:
+            self._input_timer = GLib.timeout_add(33, self._update_inputs)
+
+    def _update_inputs(self):
+        self._input_timer = 0
+        axis = self.inputs.steering_axis()
+        if axis:
+            c = axis.centered()
+            self.steer_adj.set_value(c)
+            # The full axis range covers the configured steering angle.
+            sen = self.rows["SEN"].get() if "SEN" in self.rows else 0
+            v, unit = (round(c * sen / 2), "°") if sen > 0 else (round(c * 100), " %")
+            self.steer_label.set_label(f"{v:+d}{unit}" if v else f"0{unit}")
+            self.steer_row.set_subtitle(_("Turn the wheel to see the angle"))
+        else:
+            self.steer_label.set_label("—")
+            self.steer_row.set_subtitle(self._input_problem())
+        for key, (bar, value, peak) in self.axis_widgets.items():
+            a = self.inputs.axes.get(key)
+            if a:
+                f = a.fraction()
+                bar.set_value(f)
+                value.set_label(f"{f * 100:.0f} %")
+                peak.set_label(_("Max {n} %").format(n=f"{a.peak * 100:.0f}"))
+        return GLib.SOURCE_REMOVE
 
     def _quick_angle_row(self, setting):
         row = Adw.ActionRow(title=_("Quick Select"))
@@ -717,7 +1051,8 @@ class TunerWindow(Adw.ApplicationWindow):
         self.perm_row = Adw.ActionRow(
             title=_("Write Permissions"),
             subtitle=_("Installs a udev rule so settings can be changed "
-                       "without a password prompt."))
+                       "without a password prompt and live input can be "
+                       "shown."))
         perm_btn = Gtk.Button(label=_("Set Up"))
         perm_btn.set_valign(Gtk.Align.CENTER)
         perm_btn.connect("clicked", lambda b: self._setup_permissions())
@@ -793,6 +1128,7 @@ class TunerWindow(Adw.ApplicationWindow):
             self.rumble_path = find_rumble_path()
             self.writable = bool(self.device_path) and can_write(self.device_path)
             self._refresh_device_state()
+            self._start_inputs()
 
     def _attr_file(self, attr_id):
         return os.path.join(self.device_path, attr_id)
@@ -945,6 +1281,7 @@ class TunerWindow(Adw.ApplicationWindow):
     def _recheck_permissions(self):
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self._refresh_device_state()
+        self._start_inputs()
         if self.writable:
             self.toasts.add_toast(Adw.Toast.new(
                 _("Permissions set up — changes now apply live")))
@@ -1069,6 +1406,10 @@ class TunerApplication(Adw.Application):
 
     def do_activate(self):
         win = self.get_active_window()
+        theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        for d in ICON_DIRS:
+            if d.is_dir():
+                theme.add_search_path(str(d))
         if not win:
             win = TunerWindow(application=self)
         win.present()

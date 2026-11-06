@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Pedal plate with grip slots, tilted on a hinge, on a floor plate -->
+  <path fill="#222222" fill-rule="evenodd" transform="rotate(18 8 11)"
+        d="M6.5 0.5 h3 a1.5 1.5 0 0 1 1.5 1.5 v8 a1.5 1.5 0 0 1 -1.5 1.5 h-3 a1.5 1.5 0 0 1 -1.5 -1.5 v-8 a1.5 1.5 0 0 1 1.5 -1.5 z
+           M6.5 3 v1 h3 v-1 z M6.5 5.5 v1 h3 v-1 z M6.5 8 v1 h3 v-1 z"/>
+  <circle fill="#222222" cx="7" cy="12.5" r="1.5"/>
+  <rect fill="#222222" x="1" y="14" width="14" height="2" rx="1"/>
+</svg>

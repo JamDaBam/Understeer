@@ -27,6 +27,8 @@ The AppImage contains embedded update information, so AppImage managers such as 
 
 SimPower writes changes to the wheel base live while you move a control. This needs write access to the device. If it is missing, the app shows a banner with a **Set Up** button that installs the udev rule below for you (it asks for your password once). Without it, changes are collected and written with a single password prompt when you click **Apply**.
 
+The live input display (current steering angle and pedal travel) reads the wheel's input device. The rule's last line makes it readable; on most desktops your user can already read it.
+
 To set it up manually instead: by default, Linux restricts writing to device configurations in the `/sys` directory to the root user. To allow this application to save settings seamlessly without needing `sudo` or `pkexec` prompts every single time, you must add a local `udev` hardware rule.
 
 Open a terminal and run the following combined command:
@@ -37,6 +39,7 @@ ACTION!="add|change", GOTO="fanatec_tuner_end"
 
 SUBSYSTEM=="ftec_tuning", RUN+="/bin/sh -c 'find /sys%p -type f -exec chmod 666 {} +'"
 SUBSYSTEM=="hid", DRIVER=="fanatec", RUN+="/bin/sh -c 'chmod 666 /sys%p/rumble 2>/dev/null'"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="0eb7", MODE="0644"
 
 LABEL="fanatec_tuner_end"
 EOF

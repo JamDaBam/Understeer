@@ -19,6 +19,10 @@ chmod +x AppDir/usr/bin/FFB_Tuner.py
 mkdir -p AppDir/usr/share/simpower/locale
 cp locale/*.po AppDir/usr/share/simpower/locale/
 
+# Custom symbolic icons (added to the icon theme by the app)
+mkdir -p AppDir/usr/share/simpower/icons
+cp icons/*.svg AppDir/usr/share/simpower/icons/
+
 # App metadata files
 cp io.github.benryboi.FanatecLinux.desktop AppDir/
 cp io.github.benryboi.FanatecLinux.desktop AppDir/usr/share/applications/
