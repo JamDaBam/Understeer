@@ -99,7 +99,7 @@ class TunerWindow(Adw.ApplicationWindow):
 
         self.rows = {}
         self.pending = {}
-        self._build_ui()
+        self._build_ui(page)
         self._refresh_device_state()
         self._rebuild_axes_list()
         self._update_inputs()
@@ -119,8 +119,6 @@ class TunerWindow(Adw.ApplicationWindow):
             self._set_active_preset(*active)
         else:
             self._update_preset_indicator()
-        if page:
-            self._select_page(page)
         log.info("Language changed; kept preset %s, %d unapplied changes",
                  active[0].name if active[0] else "none", len(self.pending))
 
@@ -133,7 +131,7 @@ class TunerWindow(Adw.ApplicationWindow):
     # -----------------------------------------------------------------------
     # Layout
     # -----------------------------------------------------------------------
-    def _build_ui(self):
+    def _build_ui(self, page=None):
         """Build the window content; again after the language changed.
 
         The message overlay and the split view hold no text and stay, so a
@@ -157,7 +155,7 @@ class TunerWindow(Adw.ApplicationWindow):
         side_scroll = Gtk.ScrolledWindow(vexpand=True)
         side_scroll.set_child(self.sidebar)
         side_view.set_content(side_scroll)
-        self.split.set_sidebar(Adw.NavigationPage.new(side_view, "Understeer"))
+        sidebar_page = Adw.NavigationPage.new(side_view, "Understeer")
 
         # Content
         content_view = Adw.ToolbarView()
@@ -216,18 +214,21 @@ class TunerWindow(Adw.ApplicationWindow):
         content_view.add_bottom_bar(self.pending_bar)
 
         self.content_page = Adw.NavigationPage.new(content_view, _(PAGES[0][1]))
-        self.split.set_content(self.content_page)
 
         builders = {"presets": self._build_presets_page,
                     "games": self._build_games_page,
                     "tools": self._build_tools_page}
         for key, title, icon in PAGES:
-            page = builders.get(key, lambda k=key: self._build_settings_page(k))()
-            self.stack.add_named(page, key)
+            widget = builders.get(key, lambda k=key: self._build_settings_page(k))()
+            self.stack.add_named(widget, key)
             self.sidebar.append(self._sidebar_row(key, _(title), icon))
 
         self._rebuild_preset_menu()
-        self.sidebar.select_row(self.sidebar.get_row_at_index(0))
+        # Choose the page before the content is shown, so a rebuild doesn't
+        # show the first page for a moment.
+        self._select_page(page or PAGES[0][0])
+        self.split.set_sidebar(sidebar_page)
+        self.split.set_content(self.content_page)
 
     def _sidebar_row(self, key, title, icon):
         box = Gtk.Box(spacing=12)
