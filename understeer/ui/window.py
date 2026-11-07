@@ -76,6 +76,38 @@ class TunerWindow(Adw.ApplicationWindow):
         GLib.idle_add(lambda: self._check_games() and False)
         self.connect("close-request", self._on_close)
 
+    def flush_live(self):
+        """Write a live change that is still waiting for its short delay."""
+        if self._live_timer:
+            GLib.source_remove(self._live_timer)
+            self._flush_live()
+
+    def take_over(self, old):
+        """Keep what the user did in the window this one replaces.
+
+        The window is rebuilt e.g. after changing the language; the active
+        preset, the state "Undo All" goes back to and changes waiting for
+        Apply must survive that.
+        """
+        for attr_id, row in self.rows.items():
+            old_row = old.rows.get(attr_id)
+            if old_row is not None and old_row.baseline is not None \
+                    and row.row.get_sensitive():
+                row.set_baseline(old_row.baseline)
+        if old.pending and self.device_path and not self.writable:
+            for attr_id, value in old.pending.items():
+                if attr_id in self.rows:
+                    self.rows[attr_id].set(value)
+                    self.pending[attr_id] = self.rows[attr_id].get()
+            self._update_pending_bar()
+        if old.active_preset is not None:
+            self._set_active_preset(old.active_preset, old.active_values)
+        else:
+            self._update_preset_indicator()
+        log.info("Window rebuilt; kept preset %s, %d unapplied changes",
+                 old.active_preset.name if old.active_preset else "none",
+                 len(self.pending))
+
     def _on_close(self, window):
         GLib.source_remove(self._watch)
         GLib.source_remove(self._games_watch)
