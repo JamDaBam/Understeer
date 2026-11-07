@@ -354,3 +354,59 @@ def test_custom_cover(home, tmp_path, monkeypatch):
     assert not path.exists() and new_path.exists()
     config.remove_game_cover(game)
     assert "cover" not in game and not new_path.exists()
+
+
+# -- starts and stops -----------------------------------------------------------
+class Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_start_reported_once():
+    clock = Clock()
+    watch = games.StartWatch(10, clock)
+    assert watch.update({"steam:1"}) == ({"steam:1"}, set())
+    for _ in range(5):                          # keeps running: nothing new
+        clock.now += 2
+        assert watch.update({"steam:1"}) == (set(), set())
+
+
+def test_short_gap_is_no_new_start():
+    clock = Clock()
+    watch = games.StartWatch(10, clock)
+    watch.update({"process:game"})
+    clock.now += 2
+    assert watch.update(set()) == (set(), set())        # launcher restarts it
+    assert watch.running == {"process:game"}
+    clock.now += 4
+    assert watch.update({"process:game"}) == (set(), set())
+
+
+def test_stop_after_grace_then_new_start():
+    clock = Clock()
+    watch = games.StartWatch(10, clock)
+    watch.update({"steam:1"})
+    clock.now += 2
+    watch.update(set())
+    clock.now += 9
+    assert watch.update(set()) == (set(), set())        # 9 s gone
+    clock.now += 1
+    assert watch.update(set()) == (set(), {"steam:1"})  # 10 s gone: stopped
+    assert watch.running == set()
+    clock.now += 2
+    assert watch.update({"steam:1"}) == ({"steam:1"}, set())
+
+
+def test_games_tracked_separately():
+    clock = Clock()
+    watch = games.StartWatch(10, clock)
+    watch.update({"steam:1"})
+    clock.now += 2
+    assert watch.update({"steam:1", "steam:2"}) == ({"steam:2"}, set())
+    clock.now += 2
+    watch.update({"steam:2"})
+    clock.now += 10
+    assert watch.update({"steam:2"}) == (set(), {"steam:1"})

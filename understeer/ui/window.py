@@ -70,7 +70,8 @@ class TunerWindow(Adw.ApplicationWindow):
         self._refresh_device_state()
         self._start_inputs()
         self._watch = GLib.timeout_add(WATCH_MS, self._check_device)
-        self._running_games = set()
+        app = self.get_application()
+        self._game_watch = getattr(app, "game_watch", None) or games.StartWatch()
         self._games_watch = GLib.timeout_add(GAMES_WATCH_MS, self._check_games)
         GLib.idle_add(lambda: self._check_games() and False)
         self.connect("close-request", self._on_close)
@@ -1193,10 +1194,8 @@ class TunerWindow(Adw.ApplicationWindow):
             return GLib.SOURCE_CONTINUE
         running = {g["game"] for g in self.games_page.games
                    if games.is_running(g["game"], running)}
-        started = running - self._running_games
-        stopped = self._running_games - running
-        self._running_games = running
-        self.games_page.set_running(running)
+        started, stopped = self._game_watch.update(running)
+        self.games_page.set_running(self._game_watch.running)
         for game in self.games_page.games:
             if game["game"] in stopped:
                 log.info("Game stopped: %s (%s)", game["name"], game["game"])

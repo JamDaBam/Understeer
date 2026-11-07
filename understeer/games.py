@@ -9,6 +9,7 @@ import os
 import pathlib
 import re
 import struct
+import time
 import urllib.request
 
 HOME = pathlib.Path.home()
@@ -20,6 +21,9 @@ STEAM_ROOTS = [
     HOME / "snap" / "steam" / "common" / ".local" / "share" / "Steam",
 ]
 PROC = pathlib.Path("/proc")
+# A game must be gone this long before showing up again counts as a new
+# start: some launchers restart the game process, e.g. after an update check.
+GONE_SECONDS = 10
 log = logging.getLogger("understeer.games")
 CDN_URLS = [
     "https://shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{file}",
@@ -359,3 +363,37 @@ def running_programs(proc=None):
             seen.add(program_key(name))
             result.append((name, cmdline))
     return result
+
+
+class StartWatch:
+    """Tells which games started or stopped, from repeated running checks.
+
+    A game counts as started once, when it shows up; while it runs, nothing
+    is reported again, so changes the user makes are kept. It counts as
+    stopped only after it was gone for GONE_SECONDS, so a launcher that
+    restarts the game process doesn't look like a second start.
+    The application keeps one StartWatch, so rebuilding the window (e.g.
+    after changing the language) doesn't forget which games already run.
+    """
+
+    def __init__(self, gone_seconds=None, clock=time.monotonic):
+        self.gone_seconds = GONE_SECONDS if gone_seconds is None else gone_seconds
+        self.clock = clock
+        self.running = set()        # started and not yet stopped
+        self._missing = {}          # id -> when it was first seen gone
+
+    def update(self, active):
+        """Ids of the games running now -> (started, stopped)."""
+        now = self.clock()
+        active = set(active)
+        for game_id in active:
+            self._missing.pop(game_id, None)
+        started = active - self.running
+        for game_id in self.running - active:
+            self._missing.setdefault(game_id, now)
+        stopped = {g for g, since in self._missing.items()
+                   if now - since >= self.gone_seconds}
+        for game_id in stopped:
+            del self._missing[game_id]
+        self.running = (self.running | active) - stopped
+        return started, stopped

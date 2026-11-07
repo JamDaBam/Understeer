@@ -2,7 +2,7 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, config, i18n, log
+from . import DATA_DIR, config, games, i18n, log
 from .ui.window import TunerWindow  # also selects the GTK version
 
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
@@ -17,6 +17,9 @@ class TunerApplication(Adw.Application):
     def __init__(self):
         super().__init__(application_id="io.github.JamDaBam.Understeer",
                          flags=Gio.ApplicationFlags.FLAGS_NONE)
+        # Which games run; kept here so a rebuilt window doesn't apply
+        # their presets again.
+        self.game_watch = games.StartWatch()
 
     def do_startup(self):
         Adw.Application.do_startup(self)
