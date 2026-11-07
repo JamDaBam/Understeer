@@ -35,23 +35,6 @@ class TunerApplication(Adw.Application):
         win = self.get_active_window() or TunerWindow(application=self)
         win.present()
 
-    def rebuild_window(self, page=None):
-        """Replace the window, e.g. after the language changed."""
-        old = self.get_active_window()
-        if old is not None:
-            old.flush_live()            # a value still waiting to be written
-        win = TunerWindow(application=self)
-        if old is not None:
-            win.take_over(old)
-            win.set_default_size(old.get_width(), old.get_height())
-            if old.is_maximized():
-                win.maximize()
-        if page:
-            win._select_page(page)
-        win.present()
-        if old is not None:
-            old.close()
-
 
 def main():
     log.setup()
