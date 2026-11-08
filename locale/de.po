@@ -579,79 +579,75 @@ msgstr "Hinzufügen"
 msgid "Program File"
 msgstr "Programmdatei"
 
-#: understeer/ui/report_dialog.py:30
+#: understeer/ui/report_dialog.py:33
 msgid "Report a Problem"
 msgstr "Problem melden"
 
-#: understeer/ui/report_dialog.py:41
-msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub. You see everything there before you send it; you need a GitHub account."
-msgstr "Beschreibe kurz, was passiert ist. Understeer ergänzt die technischen Details und öffnet ein ausgefülltes Issue auf GitHub. Dort siehst du alles, bevor du es absendest; du brauchst ein GitHub-Konto."
+#: understeer/ui/report_dialog.py:50
+msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub, where you see everything before you send it."
+msgstr "Beschreibe kurz, was passiert ist. Understeer ergänzt die technischen Details und öffnet ein ausgefülltes Issue auf GitHub. Dort siehst du alles, bevor du es absendest."
 
-#: understeer/ui/report_dialog.py:45
+#: understeer/ui/report_dialog.py:54
 msgid "Title"
 msgstr "Titel"
 
-#: understeer/ui/report_dialog.py:49
+#: understeer/ui/report_dialog.py:59
 msgid "What happened?"
 msgstr "Was ist passiert?"
 
-#: understeer/ui/report_dialog.py:61
+#: understeer/ui/report_dialog.py:60
 msgid "What did you do, what did you expect, and what happened instead?"
 msgstr "Was hast du gemacht, was hast du erwartet und was ist stattdessen passiert?"
 
-#: understeer/ui/report_dialog.py:70
+#: understeer/ui/report_dialog.py:77
 msgid "Added to the Report"
 msgstr "Wird mitgeschickt"
 
-#: understeer/ui/report_dialog.py:71
+#: understeer/ui/report_dialog.py:78
 msgid "Your user name and home folder are left out."
 msgstr "Dein Benutzername und dein Home-Ordner werden entfernt."
 
-#: understeer/ui/report_dialog.py:72
+#: understeer/ui/report_dialog.py:79
 msgid "System Details"
 msgstr "Systemdetails"
 
-#: understeer/ui/report_dialog.py:73
+#: understeer/ui/report_dialog.py:80
 msgid "Versions, wheel base and access rights"
 msgstr "Versionen, Wheelbase und Zugriffsrechte"
 
-#: understeer/ui/report_dialog.py:79
+#: understeer/ui/report_dialog.py:86
 msgid "Log Excerpt"
 msgstr "Auszug aus der Logdatei"
 
-#: understeer/ui/report_dialog.py:80
+#: understeer/ui/report_dialog.py:87
 msgid "The last entries of this session"
 msgstr "Die letzten Einträge dieser Sitzung"
 
-#: understeer/ui/report_dialog.py:87
-msgid "Whole Log File"
-msgstr "Ganze Logdatei"
+#: understeer/ui/report_dialog.py:94
+msgid "Show the whole log file, e.g. to drag it into the issue"
+msgstr "Die ganze Logdatei zeigen, z. B. um sie in das Issue zu ziehen"
 
-#: understeer/ui/report_dialog.py:88
-msgid "If asked for it, drag the file into the issue."
-msgstr "Falls danach gefragt wird, zieh die Datei in das Issue."
+#: understeer/ui/report_dialog.py:106
+msgid "Copy Only"
+msgstr "Nur kopieren"
 
-#: understeer/ui/report_dialog.py:89
-msgid "Show Folder"
-msgstr "Ordner zeigen"
+#: understeer/ui/report_dialog.py:108
+msgid "Without a GitHub account: copy the filled-in report, e.g. for an e-mail or a forum post"
+msgstr "Ohne GitHub-Konto: den ausgefüllten Bericht kopieren, z. B. für eine E-Mail oder einen Forenbeitrag"
 
-#: understeer/ui/report_dialog.py:98
-msgid "Copy Details"
-msgstr "Details kopieren"
-
-#: understeer/ui/report_dialog.py:100
-msgid "Copy the whole report, e.g. to paste it somewhere else"
-msgstr "Den ganzen Bericht kopieren, z. B. um ihn woanders einzufügen"
-
-#: understeer/ui/report_dialog.py:102
+#: understeer/ui/report_dialog.py:110
 msgid "Report copied"
 msgstr "Bericht kopiert"
 
-#: understeer/ui/report_dialog.py:103
+#: understeer/ui/report_dialog.py:111
 msgid "Open on GitHub"
 msgstr "Auf GitHub öffnen"
 
-#: understeer/ui/report_dialog.py:144
+#: understeer/ui/report_dialog.py:114
+msgid "Needs a GitHub account"
+msgstr "Braucht ein GitHub-Konto"
+
+#: understeer/ui/report_dialog.py:156
 msgid "GitHub opened in the browser. The report is also on the clipboard."
 msgstr "GitHub wurde im Browser geöffnet. Der Bericht liegt auch in der Zwischenablage."
 
@@ -990,6 +986,10 @@ msgstr "Zeichnet auf, was in dieser Sitzung passiert ist. Häng sie an, wenn du 
 #: understeer/ui/window.py:942
 msgid "Open"
 msgstr "Öffnen"
+
+#: understeer/ui/window.py:943
+msgid "Show Folder"
+msgstr "Ordner zeigen"
 
 #: understeer/ui/window.py:985
 msgid "Started as a fork of"

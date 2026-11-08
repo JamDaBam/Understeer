@@ -9,6 +9,8 @@ from ..i18n import _
 
 log = logging.getLogger("understeer.report")
 
+MAX_HEIGHT = 640    # content taller than this scrolls, e.g. an opened log
+
 
 class ReportDialog:
     """Window that opens a filled-in GitHub issue.
@@ -25,28 +27,38 @@ class ReportDialog:
         self.system = report.system_info(window.report_details())
         self.log = report.log_excerpt()
 
+        # As tall as its content, so nothing needs scrolling at first; the
+        # buttons sit in a bar below and stay in view.
         self.dialog = Adw.Window(transient_for=parent or window, modal=True,
-                                 default_width=600, default_height=720,
-                                 title=_("Report a Problem"))
+                                 default_width=640, title=_("Report a Problem"))
         view = Adw.ToolbarView()
         view.add_top_bar(Adw.HeaderBar())
         self.toasts = Adw.ToastOverlay()
         view.set_content(self.toasts)
         self.dialog.set_content(view)
 
-        page = Adw.PreferencesPage()
-        self.toasts.set_child(page)
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(column, f"set_margin_{side}")(18)
+        clamp = Adw.Clamp(maximum_size=600, child=column)
+        scroll = Gtk.ScrolledWindow(child=clamp, propagate_natural_height=True,
+                                    max_content_height=MAX_HEIGHT,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.toasts.set_child(scroll)
 
         intro = Adw.PreferencesGroup(
             description=_("Describe briefly what happened. Understeer adds the "
                           "technical details and opens a filled-in issue on "
-                          "GitHub. You see everything there before you send "
-                          "it; you need a GitHub account."))
+                          "GitHub, where you see everything before you send "
+                          "it."))
         self.title_row = Adw.EntryRow(title=_("Title"), text=title)
         intro.add(self.title_row)
-        page.add(intro)
+        column.append(intro)
 
-        what_group = Adw.PreferencesGroup(title=_("What happened?"))
+        what_group = Adw.PreferencesGroup(
+            title=_("What happened?"),
+            description=_("What did you do, what did you expect, and what "
+                          "happened instead?"))
         self.what = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR,
                                  top_margin=10, bottom_margin=10,
                                  left_margin=12, right_margin=12,
@@ -54,18 +66,12 @@ class ReportDialog:
         self.what.get_buffer().set_text(what)
         self.what.update_property([Gtk.AccessibleProperty.LABEL],
                                   [_("What happened?")])
-        frame = Gtk.ScrolledWindow(child=self.what, min_content_height=120,
+        frame = Gtk.ScrolledWindow(child=self.what, min_content_height=110,
                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
         frame.add_css_class("card")
         frame.set_overflow(Gtk.Overflow.HIDDEN)     # keep the round corners
         what_group.add(frame)
-        hint = Gtk.Label(label=_("What did you do, what did you expect, and "
-                                 "what happened instead?"),
-                         xalign=0, wrap=True, margin_top=6)
-        hint.add_css_class("dim-label")
-        hint.add_css_class("caption")
-        what_group.add(hint)
-        page.add(what_group)
+        column.append(what_group)
 
         sent = Adw.PreferencesGroup(
             title=_("Added to the Report"),
@@ -82,34 +88,34 @@ class ReportDialog:
             show_enable_switch=True, enable_expansion=bool(self.log))
         self.log_row.set_sensitive(bool(self.log))
         self.log_row.add_row(self._text_row(self.log or "—"))
-        sent.add(self.log_row)
-
-        full_log = Adw.ActionRow(
-            title=_("Whole Log File"),
-            subtitle=_("If asked for it, drag the file into the issue."))
-        folder = Gtk.Button(label=_("Show Folder"), valign=Gtk.Align.CENTER)
+        folder = Gtk.Button(icon_name="folder-open-symbolic",
+                            valign=Gtk.Align.CENTER)
+        folder.add_css_class("flat")
+        folder.set_tooltip_text(_("Show the whole log file, e.g. to drag it "
+                                  "into the issue"))
         folder.connect("clicked", lambda b: Gtk.FileLauncher.new(
             Gio.File.new_for_path(str(session_log.LOG_FILE)))
             .open_containing_folder(self.dialog, None, None))
-        full_log.add_suffix(folder)
-        sent.add(full_log)
-        page.add(sent)
+        self.log_row.add_suffix(folder)
+        sent.add(self.log_row)
+        column.append(sent)
 
-        buttons = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER, margin_top=6)
-        copy = Gtk.Button(label=_("Copy Details"))
+        bar = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER)
+        for side in ("top", "bottom"):
+            getattr(bar, f"set_margin_{side}")(12)
+        copy = Gtk.Button(label=_("Copy Only"))
         copy.add_css_class("pill")
-        copy.set_tooltip_text(_("Copy the whole report, e.g. to paste it "
-                                "somewhere else"))
+        copy.set_tooltip_text(_("Without a GitHub account: copy the filled-in "
+                                "report, e.g. for an e-mail or a forum post"))
         copy.connect("clicked", lambda b: self._copy(_("Report copied")))
         send = Gtk.Button(label=_("Open on GitHub"))
         send.add_css_class("pill")
         send.add_css_class("suggested-action")
+        send.set_tooltip_text(_("Needs a GitHub account"))
         send.connect("clicked", lambda b: self._open())
-        buttons.append(copy)
-        buttons.append(send)
-        actions = Adw.PreferencesGroup()
-        actions.add(buttons)
-        page.add(actions)
+        bar.append(copy)
+        bar.append(send)
+        view.add_bottom_bar(bar)
 
         self.dialog.present()
         # Start where the user has to type.

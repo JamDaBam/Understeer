@@ -579,79 +579,75 @@ msgstr ""
 msgid "Program File"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:30
+#: understeer/ui/report_dialog.py:33
 msgid "Report a Problem"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:41
-msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub. You see everything there before you send it; you need a GitHub account."
+#: understeer/ui/report_dialog.py:50
+msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub, where you see everything before you send it."
 msgstr ""
 
-#: understeer/ui/report_dialog.py:45
+#: understeer/ui/report_dialog.py:54
 msgid "Title"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:49
+#: understeer/ui/report_dialog.py:59
 msgid "What happened?"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:61
+#: understeer/ui/report_dialog.py:60
 msgid "What did you do, what did you expect, and what happened instead?"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:70
+#: understeer/ui/report_dialog.py:77
 msgid "Added to the Report"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:71
+#: understeer/ui/report_dialog.py:78
 msgid "Your user name and home folder are left out."
 msgstr ""
 
-#: understeer/ui/report_dialog.py:72
+#: understeer/ui/report_dialog.py:79
 msgid "System Details"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:73
+#: understeer/ui/report_dialog.py:80
 msgid "Versions, wheel base and access rights"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:79
+#: understeer/ui/report_dialog.py:86
 msgid "Log Excerpt"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:80
+#: understeer/ui/report_dialog.py:87
 msgid "The last entries of this session"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:87
-msgid "Whole Log File"
+#: understeer/ui/report_dialog.py:94
+msgid "Show the whole log file, e.g. to drag it into the issue"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:88
-msgid "If asked for it, drag the file into the issue."
+#: understeer/ui/report_dialog.py:106
+msgid "Copy Only"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:89
-msgid "Show Folder"
+#: understeer/ui/report_dialog.py:108
+msgid "Without a GitHub account: copy the filled-in report, e.g. for an e-mail or a forum post"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:98
-msgid "Copy Details"
-msgstr ""
-
-#: understeer/ui/report_dialog.py:100
-msgid "Copy the whole report, e.g. to paste it somewhere else"
-msgstr ""
-
-#: understeer/ui/report_dialog.py:102
+#: understeer/ui/report_dialog.py:110
 msgid "Report copied"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:103
+#: understeer/ui/report_dialog.py:111
 msgid "Open on GitHub"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:144
+#: understeer/ui/report_dialog.py:114
+msgid "Needs a GitHub account"
+msgstr ""
+
+#: understeer/ui/report_dialog.py:156
 msgid "GitHub opened in the browser. The report is also on the clipboard."
 msgstr ""
 
@@ -989,6 +985,10 @@ msgstr ""
 
 #: understeer/ui/window.py:942
 msgid "Open"
+msgstr ""
+
+#: understeer/ui/window.py:943
+msgid "Show Folder"
 msgstr ""
 
 #: understeer/ui/window.py:985
