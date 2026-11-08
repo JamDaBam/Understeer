@@ -9,15 +9,22 @@ from .i18n import _, N_
 # Sliders may have a "unit" and a "fmt" function for special values;
 # choices list (value, label) pairs.
 # ---------------------------------------------------------------------------
-PAGES = [
-    ("steering", N_("Steering"),       "understeer-steering-symbolic"),
-    ("feel",     N_("Wheel Feel"),     "emblem-system-symbolic"),
-    ("pedals",   N_("Pedals"),         "understeer-pedals-symbolic"),
-    ("paddles",  N_("Paddles"),        "view-dual-symbolic"),
-    ("presets",  N_("Presets"),        "document-save-symbolic"),
-    ("games",    N_("Games"),          "applications-games-symbolic"),
-    ("tools",    N_("Tools"),          "applications-utilities-symbolic"),
+# Views in the header bar.
+VIEWS = [
+    ("tuning",   N_("Tuning"),  "understeer-steering-symbolic"),
+    ("presets",  N_("Presets"), "document-save-symbolic"),
+    ("games",    N_("Games"),   "applications-games-symbolic"),
 ]
+
+# Tabs of the Tuning view; each setting's "page" is one of them.
+TABS = [
+    ("steering", N_("Steering & Force Feedback")),
+    ("feel",     N_("Wheel Feel")),
+    ("pedals",   N_("Pedals & Paddles")),
+]
+
+# Groups that are rarely changed: folded away, with their values in one line.
+ADVANCED_GROUPS = {"Signal"}
 
 
 def _fmt_drift(v):
@@ -118,7 +125,7 @@ SETTINGS = [
                  "game with FullForce support.")),
     # --- Paddles ---------------------------------------------------------
     dict(id="ACP", icon="view-dual-symbolic",
-         page="paddles", group=N_("Analogue Paddles"),
+         page="pedals", group=N_("Analogue Paddles"),
          label=N_("Paddle Mode"), kind="choice",
          choices=[(1, N_("Independent (CbP)")),
                   (2, N_("Clutch / Handbrake (CH)")),

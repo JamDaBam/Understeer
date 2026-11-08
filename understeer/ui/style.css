@@ -91,6 +91,51 @@ flowbox > flowboxchild > .tile {
   font-feature-settings: "tnum";
 }
 
+/* Tabs of the Tuning view: flat buttons, the chosen one underlined */
+.tab-row {
+  border-bottom: 1px solid alpha(currentColor, 0.12);
+  margin-top: 6px;
+}
+
+.tab-row button.tab {
+  border-radius: 6px 6px 0 0;
+  padding: 8px 14px;
+  font-weight: 600;
+  color: alpha(currentColor, 0.7);
+}
+
+.tab-row button.tab:checked {
+  background: none;
+  color: @accent_color;
+  box-shadow: inset 0 -3px 0 @accent_bg_color;
+}
+
+/* Live strip above the tabs */
+levelbar.strip-bar trough {
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+levelbar.strip-bar trough block {
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+levelbar.strip-bar trough block.filled {
+  background-color: @accent_bg_color;
+}
+
+.strip-value {
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
+/* A folded group of rarely changed settings */
+button.advanced-toggle {
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
 /* Presets */
 .preset-tile.active {
   box-shadow: inset 0 0 0 2px @accent_bg_color;

@@ -78,6 +78,18 @@ def _distribution():
     return "unknown"
 
 
+def debug_info():
+    """Versions and paths for a bug report, as plain text."""
+    return "\n".join([
+        f"Understeer {version()}",
+        f"Python {platform.python_version()}",
+        f"System: {_distribution()}, kernel {platform.release()}",
+        "hid-fanatecff driver: "
+        + (_read("/sys/module/hid_fanatec/version") or "version unknown"),
+        f"Log file: {LOG_FILE}",
+    ])
+
+
 def setup(path=None):
     """Start the session log. Returns the log file, or None if it can't be written."""
     path = pathlib.Path(path) if path else LOG_FILE

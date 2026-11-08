@@ -109,3 +109,8 @@ def test_describe_access(tmp_path):
     (tmp_path / "FF").write_text("70")
     assert "-rw" in device.describe_access(str(tmp_path))
     assert "not readable" in device.describe_access(str(tmp_path / "missing"))
+
+
+def test_debug_info():
+    info = log.debug_info()
+    assert info.startswith("Understeer ") and "Log file:" in info

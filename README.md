@@ -7,16 +7,17 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 ## Features
 
 - **Live tuning:** Changes reach the wheel base while you move a control, so you feel them immediately. Undo single settings or everything since loading. Switching the slot or changing a value on the wheel base shows up in the app right away.
+- **Everything on one view:** *Tuning* shows the live steering angle and pedals on top and all settings below in three tabs: steering & force feedback, wheel feel, pedals & paddles. Rarely changed signal settings are folded away. *Presets* and *Games* are one click away in the header bar; everything else is in the *Preferences* (main menu or Ctrl+,).
 - **Live input display:** See the current steering angle and how far each pedal is pressed, including the maximum reached. Useful to find the brake force you need for 100 %.
 - **Wheel & force feedback:** Steering angle with quick select, force feedback strength, force/spring/damper effects, scaling, intensity and interpolation.
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
 - **Pedals:** Load cell brake force, brake level LED and FullForce, plus a rumble test for ClubSport V3 / CSL Elite pedals.
-- **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base, name them like on its display, and keep named presets for your games. Apply a preset with one click, save your changes back into it or rename it.
-- **Moving to another computer:** *Tools → Transfer* exports presets, games with their pictures and all settings into one ZIP file and imports them on the other computer.
+- **Tuning slots & presets:** Switch between the 5 tuning slots of the wheel base, name them like on its display, and keep named presets for your games. Apply a preset with one click, save your changes back into it or rename it. Balanced sim racing defaults are built in.
+- **Moving to another computer:** *Preferences → Data* exports presets, games with their pictures and all settings into one ZIP file and imports them on the other computer.
 - **Plug and play:** Switch the wheel base on or plug it in while Understeer is open, it is found by itself.
 - **Presets per game:** Give each game a preset on the *Games* page. While Understeer is open, it applies the preset as soon as the game starts. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture, also chosen from [SteamGridDB](https://www.steamgriddb.com) with your free personal API key.
-- **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Tools → Appearance*; light and dark mode follow your system.
-- **Translations:** Available in English and German, chosen automatically or under *Tools → Appearance*. More languages can be added easily (see below).
+- **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Preferences → General*; light and dark mode follow your system.
+- **Translations:** Available in English and German, chosen automatically or under *Preferences → General*. More languages can be added easily (see below).
 
 ![Games page with BeamNG.drive running](docs/games.png)
 
@@ -51,7 +52,7 @@ To undo it later: `sudo gpasswd -d "$USER" games`, then log out and back in.
 
 ### Alternative: a separate udev rule
 
-If the driver's rule is not installed or you do not want to use the group, the **Set Up** button in the app's banner (or under *Tools*) installs the rule below for you. It asks for your password once. You can also add it manually:
+If the driver's rule is not installed or you do not want to use the group, the **Set Up** button in the app's banner (or under *Preferences → Wheel Base*) installs the rule below for you. It asks for your password once. You can also add it manually:
 
 ```bash
 sudo tee /etc/udev/rules.d/99-fanatec-tuner.rules > /dev/null << 'EOF'
@@ -71,11 +72,11 @@ The live input display (current steering angle and pedal travel) reads the wheel
 
 ## Reporting Problems
 
-Understeer writes a log file for every session to `~/.local/state/Understeer/understeer.log`; the one of the previous start is kept as `understeer.previous.log`. It records the wheel base, the driver version, the access rights of the tuning settings and every value written, including the reason when the driver rejects one. Open it under *Tools → System → Log File*, or with **Show Log** on an error message, and attach it to your issue.
+Understeer writes a log file for every session to `~/.local/state/Understeer/understeer.log`; the one of the previous start is kept as `understeer.previous.log`. It records the wheel base, the driver version, the access rights of the tuning settings and every value written, including the reason when the driver rejects one. Open it under *Preferences → Data → Log File*, or with **Show Log** on an error message, and attach it to your issue.
 
 ## Translations
 
-Understeer uses your system language when a translation is available and falls back to English otherwise. You can also pick a language under *Tools → Appearance*. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
+Understeer uses your system language when a translation is available and falls back to English otherwise. You can also pick a language under *Preferences → General*. Translations are plain gettext `.po` files in [`locale/`](locale/), so tools like Poedit or Weblate can edit them. `locale/en.po` keeps the English text unchanged; it makes sure English is used when it comes first in your language list (for example `LANGUAGE=en_US:de`).
 
 To add a language:
 
@@ -92,7 +93,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 
 | Module | Contents |
 |---|---|
-| `settings.py` | The settings shown in the app (sysfs attribute, range, page, description) |
+| `settings.py` | The settings shown in the app (sysfs attribute, range, tab, description) |
 | `device.py` | Finding the wheel base, reading and writing sysfs, permissions and udev rule |
 | `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
 | `config.py` | Presets and app settings in `~/.config/Understeer/` |

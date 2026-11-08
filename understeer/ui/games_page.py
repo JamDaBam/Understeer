@@ -19,7 +19,8 @@ def _steam_appid(game):
 
 
 class GamesPage:
-    """Builds and updates the Games page; `widget` is the page itself.
+    """Builds and updates the Games page; `widget` is the page itself and
+    `options` the cover settings shown in the preferences.
 
     Running games are reported by the window through set_running().
     """
@@ -57,8 +58,8 @@ class GamesPage:
                                 max_children_per_line=8, column_spacing=12,
                                 row_spacing=12, valign=Gtk.Align.START)
 
-        options = Adw.PreferencesGroup(title=_("Covers"))
-        options.set_margin_top(18)
+        # Shown in the preferences, not on the page.
+        options = self.options = Adw.PreferencesGroup(title=_("Covers"))
         self.download_row = Adw.SwitchRow(
             title=_("Download Missing Covers"),
             subtitle=_("Steam games from Steam, other games from SteamGridDB "
@@ -86,7 +87,7 @@ class GamesPage:
         self.key_row.connect("apply", self._on_key_applied)
         options.add(self.key_row)
 
-        for w in (title, desc, self.flow, options):
+        for w in (title, desc, self.flow):
             column.append(w)
         clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
         clamp.set_child(column)

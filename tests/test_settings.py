@@ -1,8 +1,8 @@
 import pytest
 
 from understeer import i18n
-from understeer.settings import (PAGES, SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS,
-                                 format_value)
+from understeer.settings import (ADVANCED_GROUPS, SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS,
+                                 TABS, format_value)
 
 
 def test_ids_are_unique():
@@ -11,7 +11,7 @@ def test_ids_are_unique():
 
 @pytest.mark.parametrize("s", SETTINGS, ids=lambda s: s["id"])
 def test_setting_is_complete(s):
-    assert s["page"] in {key for key, _title, _icon in PAGES}
+    assert s["page"] in {key for key, _title in TABS}
     assert s["group"] and s["label"] and s["desc"]
     assert s["icon"].endswith("-symbolic")
     if s.get("kind") == "choice":
@@ -58,3 +58,7 @@ def test_format_value(english, attr_id, value, text):
 def test_format_value_translated(monkeypatch):
     monkeypatch.setattr(i18n, "_CATALOG", {"Peak": "Spitze"})
     assert format_value(SETTINGS_BY_ID["FFS"], 1) == "Spitze"
+
+
+def test_advanced_groups_exist():
+    assert ADVANCED_GROUPS <= {s["group"] for s in SETTINGS}

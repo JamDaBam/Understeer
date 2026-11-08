@@ -63,6 +63,6 @@ def test_shipped_languages_have_names():
 def test_set_language_switches_translations(monkeypatch):
     monkeypatch.setattr(i18n, "_CATALOG", {})
     i18n.set_language("de")
-    assert i18n._("Steering") == "Lenkung"
+    assert i18n._("Wheel Feel") == "Lenkgefühl"
     i18n.set_language("en")
-    assert i18n._("Steering") == "Steering"
+    assert i18n._("Wheel Feel") == "Wheel Feel"
