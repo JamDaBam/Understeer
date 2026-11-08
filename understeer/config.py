@@ -11,7 +11,8 @@ import re
 import shutil
 
 CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
-OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"   # before rename
+# Used by SimPower and by Understeer up to v1.0.4, when it still had that name
+OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"
 # Kept in a subfolder: every *.json directly in CONFIG_DIR is a preset.
 AXES_FILE   = CONFIG_DIR / "settings" / "axes.json"
 SLOT_NAMES_FILE = CONFIG_DIR / "settings" / "slot_names.json"
@@ -26,7 +27,7 @@ CUSTOM_COVER_DIR = CONFIG_DIR / "covers"
 
 
 def migrate_config():
-    """Move presets and settings from the old SimPower folder once."""
+    """Take over presets and settings from the old SimPower folder once."""
     if OLD_CONFIG_DIR.is_dir() and not CONFIG_DIR.exists():
         try:
             OLD_CONFIG_DIR.rename(CONFIG_DIR)
