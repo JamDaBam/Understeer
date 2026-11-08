@@ -94,8 +94,8 @@ class TunerWindow(Adw.ApplicationWindow):
         Text is set when widgets are made, so the window content is built
         again. The window itself stays, with its position and size, and so
         do the active preset, the state "Undo All" goes back to, changes
-        waiting for Apply, the shown view and tab, open preferences and the
-        shown message.
+        waiting for Apply, the shown view and tab, the preferences window
+        with its page, and the shown message.
         """
         self.flush_live()
         baselines = {a: r.baseline for a, r in self.rows.items()}
@@ -103,8 +103,6 @@ class TunerWindow(Adw.ApplicationWindow):
         active = self.active_preset, self.active_values
         view = self.views.get_visible_child_name()
         tab = self.tabs.get_visible_child_name()
-        prefs = (self.prefs.get_visible_page_name()
-                 if self.prefs.get_visible() else None)
 
         self.rows = {}
         self.pending = {}
@@ -114,8 +112,6 @@ class TunerWindow(Adw.ApplicationWindow):
         self._update_inputs()
         self._update_permission_row()
         self.games_page.set_running(self._game_watch.running)
-        if prefs:
-            self._show_preferences(prefs)
 
         for attr_id, row in self.rows.items():
             if baselines.get(attr_id) is not None and row.row.get_sensitive():
@@ -805,14 +801,22 @@ class TunerWindow(Adw.ApplicationWindow):
     # Tools page
     # -----------------------------------------------------------------------
     def _build_preferences(self):
-        """The preferences window, built with the window and kept hidden."""
-        old = getattr(self, "prefs", None)
-        if old is not None:
-            old.destroy()
-        self.prefs = prefs = Adw.PreferencesWindow(
-            transient_for=self, modal=True, hide_on_close=True,
-            default_width=720, default_height=680, title=_("Preferences"),
-            search_enabled=False)
+        """The preferences window, made once and kept hidden when closed.
+
+        After the language changed only its pages are made again, so an
+        open preferences window stays where it is, on the same page.
+        """
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            self.prefs = prefs = Adw.PreferencesWindow(
+                transient_for=self, modal=True, hide_on_close=True,
+                default_width=720, default_height=680, search_enabled=False)
+            self._prefs_pages = []
+        shown = prefs.get_visible_page_name()
+        old_pages, self._prefs_pages = self._prefs_pages, []
+        for page in old_pages:                  # free their names
+            page.set_name(f"old-{page.get_name()}")
+        prefs.set_title(_("Preferences"))
 
         # -- General --------------------------------------------------------
         general = Adw.PreferencesPage(title=_("General"), name="general",
@@ -837,7 +841,7 @@ class TunerWindow(Adw.ApplicationWindow):
                              self._set_language(languages[r.get_selected()]))
         appearance.add(language_row)
         general.add(appearance)
-        prefs.add(general)
+        self._add_prefs_page(general)
 
         # -- Wheel base -----------------------------------------------------
         wheel = Adw.PreferencesPage(title=_("Wheel Base"), name="wheelbase",
@@ -890,13 +894,13 @@ class TunerWindow(Adw.ApplicationWindow):
         rumble.add(fire)
         self.rumble_group = rumble
         wheel.add(rumble)
-        prefs.add(wheel)
+        self._add_prefs_page(wheel)
 
         # -- Games ----------------------------------------------------------
         games_prefs = Adw.PreferencesPage(title=_("Games"), name="games",
                                           icon_name="applications-games-symbolic")
         games_prefs.add(self.games_page.options)
-        prefs.add(games_prefs)
+        self._add_prefs_page(games_prefs)
 
         # -- Data -----------------------------------------------------------
         data = Adw.PreferencesPage(title=_("Data"), name="data",
@@ -932,7 +936,20 @@ class TunerWindow(Adw.ApplicationWindow):
             log_row.add_suffix(button)
         problems.add(log_row)
         data.add(problems)
-        prefs.add(data)
+        self._add_prefs_page(data)
+
+        # The new pages are in; now the old ones can go without the window
+        # showing another page in between.
+        for page in old_pages:
+            self.prefs.remove(page)
+        if shown:
+            self.prefs.set_visible_page_name(shown)
+        if old_pages:
+            self.prefs.set_focus(None)
+
+    def _add_prefs_page(self, page):
+        self.prefs.add(page)
+        self._prefs_pages.append(page)
 
     def _show_preferences(self, page=None):
         if page:
