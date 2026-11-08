@@ -118,3 +118,19 @@ def test_migration_keeps_existing_folder(home):
     config.CONFIG_DIR.mkdir(parents=True)
     config.migrate_config()
     assert config.OLD_CONFIG_DIR.exists()
+
+
+def test_rename_preset(home, monkeypatch):
+    monkeypatch.setattr(config, "GAMES_FILE", config.CONFIG_DIR / "settings" / "games.json")
+    old = config.preset_path("Drfit")
+    config.write_preset(old, "Drfit", {"FF": 55})
+    config.write_preset(config.preset_path("Rally"), "Rally", {"FF": 80})
+    config.save_games([{"game": "steam:1", "name": "BeamNG.drive",
+                        "preset": "Drfit.json", "auto": True}])
+    new = config.rename_preset(old, "Drift")
+    assert new == config.preset_path("Drift") and not old.exists()
+    assert config.read_preset(new) == ("Drift", {"FF": 55})
+    assert config.load_games()[0]["preset"] == "Drift.json"
+    with pytest.raises(FileExistsError):
+        config.rename_preset(new, "Rally")
+    assert config.rename_preset(new, "Drift") == new    # same name: unchanged

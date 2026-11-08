@@ -232,3 +232,29 @@ def write_preset(path, name, values):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     pathlib.Path(path).write_text(json.dumps(
         {"name": name, "values": values}, indent=2))
+
+
+def rename_preset(path, new_name):
+    """Give a preset a new name; its file is renamed to match.
+
+    Games that use the preset keep it. Returns the new path. Raises
+    FileExistsError if another preset already has that file name, OSError
+    or ValueError (bad file) otherwise.
+    """
+    path = pathlib.Path(path)
+    _name, values = read_preset(path)
+    new_path = preset_path(new_name)
+    if new_path != path and new_path.exists():
+        raise FileExistsError(new_path.name)
+    write_preset(new_path, new_name, values)
+    if new_path != path:
+        path.unlink(missing_ok=True)
+        games = load_games()
+        changed = False
+        for game in games:
+            if game.get("preset") == path.name:
+                game["preset"] = new_path.name
+                changed = True
+        if changed:
+            save_games(games)
+    return new_path

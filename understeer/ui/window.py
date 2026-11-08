@@ -3,10 +3,11 @@ import json
 import logging
 import os
 import pathlib
+import time
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import config, games
+from .. import backup, config, games
 from .. import log as session_log
 from ..device import (can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -22,6 +23,8 @@ from .setting_tile import SettingTile
 LIVE_DELAY_MS = 120
 LAYOUTS = ["full", "compact"]
 WATCH_MS = 250       # how often to look for changes made on the wheel base
+PLUG_TICKS = 4       # ... and every 4th time (1 s) for a wheel base plugged in or out
+INPUT_SETTLE_MS = 2000  # udev may give access to a new input device a bit later
 GAMES_WATCH_MS = 2000   # how often to look for started games
 TOAST_MS = 3000         # how long a message stays
 TOAST_BUTTON_MS = 5000  # ... with a button such as Undo, to have time to click
@@ -119,7 +122,7 @@ class TunerWindow(Adw.ApplicationWindow):
             self._set_active_preset(*active)
         else:
             self._update_preset_indicator()
-        log.info("Language changed; kept preset %s, %d unapplied changes",
+        log.info("Window rebuilt; kept preset %s, %d unapplied changes",
                  active[0].name if active[0] else "none", len(self.pending))
 
     def _on_close(self, window):
@@ -566,12 +569,17 @@ class TunerWindow(Adw.ApplicationWindow):
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
                              self._confirm_overwrite(p))
+            rename_btn = Gtk.Button(icon_name="document-edit-symbolic")
+            rename_btn.set_tooltip_text(_("Rename"))
+            rename_btn.add_css_class("flat")
+            rename_btn.connect("clicked", lambda b, p=path, n=name:
+                               self._ask_rename_preset(p, n))
             del_btn = Gtk.Button(icon_name="user-trash-symbolic")
             del_btn.set_tooltip_text(_("Delete"))
             del_btn.add_css_class("flat")
             del_btn.connect("clicked", lambda b, p=path, n=name:
                             self._confirm_delete_preset(p, n))
-            for w in (apply_btn, save_btn, del_btn):
+            for w in (apply_btn, save_btn, rename_btn, del_btn):
                 buttons.append(w)
             for w in (title, sub, buttons):
                 tile.append(w)
@@ -701,6 +709,24 @@ class TunerWindow(Adw.ApplicationWindow):
         rumble.add(fire)
         self.rumble_group = rumble
         page.add(rumble)
+
+        transfer = Adw.PreferencesGroup(
+            title=_("Transfer"),
+            description=_("Presets, games with their pictures and all "
+                          "settings in one file, e.g. to move them to "
+                          "another computer."))
+        for title, subtitle, label, callback in (
+                (_("Export"), _("Saves everything to a ZIP file."),
+                 _("Export…"), self._ask_export),
+                (_("Import"), _("Adds the presets and games from an exported "
+                                "file. Ones with the same name are replaced."),
+                 _("Import…"), self._ask_import)):
+            row = Adw.ActionRow(title=title, subtitle=subtitle)
+            button = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+            button.connect("clicked", lambda b, cb=callback: cb())
+            row.add_suffix(button)
+            transfer.add(row)
+        page.add(transfer)
 
         system = Adw.PreferencesGroup(title=_("System"))
         self.perm_row = Adw.ActionRow(
@@ -956,11 +982,45 @@ class TunerWindow(Adw.ApplicationWindow):
         if self.device_path:
             self._fix_permissions()
         else:
-            self.device_path = find_device_path()
-            self.rumble_path = find_rumble_path()
-            self.writable = bool(self.device_path) and can_write(self.device_path)
-            self._refresh_device_state()
-            self._start_inputs()
+            self._detect_device()
+
+    def _detect_device(self):
+        """Look for the wheel base again, e.g. after it was switched on."""
+        self.device_path = find_device_path()
+        self.rumble_path = find_rumble_path()
+        self.writable = bool(self.device_path) and can_write(self.device_path)
+        self._refresh_device_state()
+        self._start_inputs()
+        if self.device_path:
+            GLib.timeout_add(INPUT_SETTLE_MS, lambda: self._start_inputs() and False)
+
+    def _check_plugged(self):
+        """Notice a wheel base being switched on, off or plugged in again.
+
+        Plugging in again gives the device folder a new name, so a gone
+        folder means: look again. A new device counts only once the driver
+        has made its settings (FF).
+        """
+        self._plug_tick = (getattr(self, "_plug_tick", 0) + 1) % PLUG_TICKS
+        if self._plug_tick:
+            return False
+        if self.device_path and os.path.isdir(self.device_path):
+            return False
+        found = find_device_path()
+        if self.device_path is None and (
+                found is None or not os.path.exists(os.path.join(found, "FF"))):
+            return False
+        if found is None:
+            log.info("Wheel base %s is gone", self.device_path)
+        else:
+            log.info("Wheel base found: %s", found)
+        had_device = self.device_path is not None
+        self._detect_device()
+        if self.device_path:
+            self._notify(_("Wheel base connected"))
+        elif had_device:
+            self._notify(_("Wheel base disconnected"))
+        return True
 
     def _attr_file(self, attr_id):
         return os.path.join(self.device_path, attr_id)
@@ -1145,7 +1205,7 @@ class TunerWindow(Adw.ApplicationWindow):
         tuning menu moves the matching control. Values the app wrote itself
         are already in device_values, so they don't count as changes.
         """
-        if not self.device_path or self._live_timer:
+        if self._check_plugged() or not self.device_path or self._live_timer:
             return GLib.SOURCE_CONTINUE
         slot = read_int(self._attr_file("SLOT"))
         if slot is not None and slot != self.device_values.get("SLOT"):
@@ -1389,6 +1449,49 @@ class TunerWindow(Adw.ApplicationWindow):
         self._notify(_("Saved to “{name}”").format(name=name),
                      _("Undo") if old_text is not None else None, undo)
 
+    def _ask_rename_preset(self, path, name):
+        entry = Gtk.Entry(text=name, activates_default=True)
+        dialog = Adw.MessageDialog(
+            transient_for=self, heading=_("Rename Preset"),
+            body=_("Games that use this preset keep it."))
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("rename", _("Rename"))
+        dialog.set_default_response("rename")
+        dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+        entry.connect("changed", lambda e: dialog.set_response_enabled(
+            "rename", bool(e.get_text().strip())))
+        entry.grab_focus()
+        entry.select_region(0, -1)
+
+        def on_response(d, response):
+            if response == "rename":
+                self._rename_preset(path, name, entry.get_text().strip())
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _rename_preset(self, path, old_name, new_name):
+        path = pathlib.Path(path)
+        if not new_name or new_name == old_name:
+            return
+        try:
+            new_path = config.rename_preset(path, new_name)
+        except FileExistsError:
+            self._error(_("Name Already Used"),
+                        _("Another preset is already called “{name}”.").format(
+                            name=new_name))
+            return
+        except (OSError, ValueError) as e:
+            self._error(_("Could not rename preset"), str(e))
+            return
+        log.info("Preset %s renamed to %r (%s)", path.name, new_name, new_path.name)
+        if self.active_preset == path:
+            self.active_preset = new_path
+        self.games_page.games = config.load_games()
+        self._presets_changed()
+        self._notify(_("Preset renamed to “{name}”").format(name=new_name))
+
     def _confirm_delete_preset(self, path, name):
         dialog = Adw.MessageDialog(
             transient_for=self,
@@ -1439,6 +1542,106 @@ class TunerWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", on_response)
         dialog.present()
+
+    # -----------------------------------------------------------------------
+    # Export and import
+    # -----------------------------------------------------------------------
+    @staticmethod
+    def _zip_filters():
+        zips = Gtk.FileFilter(name=_("Understeer Export (ZIP)"))
+        zips.add_pattern("*.zip")
+        zips.add_mime_type("application/zip")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(zips)
+        return filters, zips
+
+    def _ask_export(self):
+        filters, zips = self._zip_filters()
+        dialog = Gtk.FileDialog(
+            title=_("Export"), filters=filters, default_filter=zips,
+            initial_name=time.strftime("Understeer-%Y-%m-%d.zip"))
+        dialog.save(self, None, self._export_chosen)
+
+    def _export_chosen(self, dialog, result):
+        try:
+            file = dialog.save_finish(result)
+        except GLib.Error:
+            return                              # cancelled
+        path = file.get_path() if file else None
+        if path is None:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            counts = backup.export(path)
+        except OSError as e:
+            self._error(_("Could not export"), str(e))
+            return
+        self._notify(_("Exported (presets: {presets}, games: {games})").format(
+            **counts), _("Show Folder"),
+            lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(path))
+            .open_containing_folder(self, None, None))
+
+    def _ask_import(self):
+        filters, zips = self._zip_filters()
+        dialog = Gtk.FileDialog(title=_("Import"), filters=filters,
+                                default_filter=zips)
+        dialog.open(self, None, self._import_chosen)
+
+    def _import_chosen(self, dialog, result):
+        try:
+            file = dialog.open_finish(result)
+        except GLib.Error:
+            return                              # cancelled
+        path = file.get_path() if file else None
+        if path is None:
+            return
+        try:
+            found = backup.read(path)
+        except (backup.Error, OSError) as e:
+            log.warning("Import of %s refused: %s", path, e)
+            self._error(_("Could not import"),
+                        _("This is not a file exported by Understeer, or it "
+                          "is damaged."))
+            return
+        counts = backup.summary(found)
+        dialog = Adw.MessageDialog(
+            transient_for=self, heading=_("Import from This File?"),
+            body=_("Presets: {presets} · Games: {games} · Pictures: "
+                   "{covers}\n\nPresets and games with the same name are replaced, "
+                   "everything else stays. Settings like the language and "
+                   "slot names are taken from the file.\n\nThe current "
+                   "state is saved first, as before-import.zip next to "
+                   "the log file."
+                   ).format(**counts))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("import", _("Import"))
+        dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", lambda d, r: r == "import" and
+                       self._import(found))
+        dialog.present()
+
+    def _import(self, found):
+        safety = session_log.LOG_DIR / "before-import.zip"
+        try:
+            backup.export(safety)
+            backup.import_(found)
+        except OSError as e:
+            self._error(_("Could not import"), str(e))
+            return
+        # Show what was imported: language, layout, presets, games, names.
+        i18n.set_language(config.get_setting("language"))
+        layout = config.get_setting("layout")
+        self.layout = layout if layout in LAYOUTS else "full"
+        self._apply_layout()
+        self.axis_roles = config.load_axis_roles()
+
+        def rebuild():
+            self.relocalize("tools")
+            counts = backup.summary(found)
+            self._notify(_("Imported (presets: {presets}, games: {games})").format(
+                **counts))
+        GLib.idle_add(lambda: rebuild() and False)
 
     def _open_log(self):
         """Open the session log in the default text editor."""
