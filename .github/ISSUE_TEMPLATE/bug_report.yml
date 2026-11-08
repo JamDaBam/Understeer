@@ -1,0 +1,31 @@
+name: Report a problem
+description: Something doesn't work as expected. Easiest from Understeer itself (main menu → Report a Problem…), which fills in everything but what happened.
+labels: ["bug"]
+# The fields match Understeer's "Report a Problem" window; it fills them
+# through the address by their ids (see understeer/report.py).
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe briefly what happened. When you report from Understeer, the details below are already filled in; your user name and home folder are left out.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: system
+    attributes:
+      label: System details
+      description: Versions, wheel base and access rights. Without Understeer's report window, copy them from About Understeer → Troubleshooting.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: The last entries of this session. If asked for the whole log file (~/.local/state/Understeer/understeer.log), drag it into a comment.
+      render: text
