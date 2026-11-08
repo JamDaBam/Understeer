@@ -21,8 +21,6 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 
 ![Games page with BeamNG.drive running](docs/games.png)
 
-Understeer is based on [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi.
-
 ## Prerequisites
 
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
@@ -108,5 +106,13 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 
 Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt install python3-pytest`). They use a fake sysfs and temporary folders, so no wheel base or password is needed.
+
+## Credits & License
+
+- Understeer started as a fork of [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi and has since been rewritten as its own project. Thanks for the starting point!
+- The tuning settings come from the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver by gotzl and its contributors.
+- Game covers come from Steam and, if you enter your own API key, from [SteamGridDB](https://www.steamgriddb.com).
+
+Understeer is free software under the [GNU General Public License v3.0](LICENSE).
 
 *Disclaimer: This software is provided as-is. I am not responsible for any damage to hardware or personal injury resulting from misconfigured settings. Use at your own risk.*

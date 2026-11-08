@@ -969,9 +969,18 @@ class TunerWindow(Adw.ApplicationWindow):
             debug_info=session_log.debug_info(),
             debug_info_filename="understeer-debug.txt")
         if hasattr(Adw, "AboutDialog"):         # Libadwaita 1.5
-            Adw.AboutDialog(**props).present(self)
+            about = Adw.AboutDialog(**props)
         else:
-            Adw.AboutWindow(transient_for=self, modal=True, **props).present()
+            about = Adw.AboutWindow(transient_for=self, modal=True, **props)
+        about.add_acknowledgement_section(_("Started as a fork of"), [
+            "SimPower (FanatecLinux) by BenryBoi "
+            "https://github.com/BenryBoi/FanatecLinux"])
+        about.add_acknowledgement_section(_("Kernel driver"), [
+            "hid-fanatecff by gotzl https://github.com/gotzl/hid-fanatecff"])
+        if isinstance(about, Adw.Window):
+            about.present()
+        else:
+            about.present(self)
 
     # -----------------------------------------------------------------------
     # Actions
