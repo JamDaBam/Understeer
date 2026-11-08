@@ -107,7 +107,9 @@ def test_log_is_capped(tmp_path):
 
 def test_describe_access(tmp_path):
     (tmp_path / "FF").write_text("70")
-    assert "-rw" in device.describe_access(str(tmp_path))
+    text = device.describe_access(str(tmp_path))
+    assert "-rw" in text and " group " in text
+    assert "groups" not in text             # not all of the user's groups
     assert "not readable" in device.describe_access(str(tmp_path / "missing"))
 
 

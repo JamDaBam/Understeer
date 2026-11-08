@@ -148,14 +148,10 @@ def describe_access(device_path):
         mode = stat.filemode(st.st_mode)
     except OSError as e:
         return f"settings not readable: {e}"
-    groups = []
-    for gid in os.getgroups():
-        try:
-            groups.append(grp.getgrgid(gid).gr_name)
-        except KeyError:
-            groups.append(str(gid))
-    return (f"settings {mode} {owner}:{group}, user in groups "
-            f"{', '.join(sorted(groups)) or '-'}")
+    # Only the group that matters; the user's other groups are private.
+    member = st.st_gid in os.getgroups() or st.st_gid == os.getgid()
+    return (f"settings {mode} {owner}:{group}, user "
+            f"{'in' if member else 'not in'} group {group}")
 
 
 def install_udev_rule():
