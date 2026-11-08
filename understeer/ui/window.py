@@ -562,16 +562,15 @@ class TunerWindow(Adw.ApplicationWindow):
             sub.set_ellipsize(3)                # Pango.EllipsizeMode.END
             sub.add_css_class("dim-label")
             buttons = Gtk.Box(spacing=6)
-            apply_btn = Gtk.Button(label=_("Apply"), hexpand=True)
+            apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
             apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
                              self._confirm_overwrite(p))
-            rename_btn = Gtk.Button(icon_name="document-edit-symbolic")
-            rename_btn.set_tooltip_text(_("Rename"))
-            rename_btn.add_css_class("flat")
+            rename_btn = Gtk.Button(label=_("Rename"))
+            rename_btn.set_tooltip_text(_("Change the name of this preset"))
             rename_btn.connect("clicked", lambda b, p=path, n=name:
                                self._ask_rename_preset(p, n))
             del_btn = Gtk.Button(icon_name="user-trash-symbolic")
@@ -579,9 +578,13 @@ class TunerWindow(Adw.ApplicationWindow):
             del_btn.add_css_class("flat")
             del_btn.connect("clicked", lambda b, p=path, n=name:
                             self._confirm_delete_preset(p, n))
-            for w in (apply_btn, save_btn, rename_btn, del_btn):
+            # Apply on its own row: with the text buttons in one row, the
+            # tiles would get too wide for two of them side by side.
+            for w in (save_btn, rename_btn, del_btn):
                 buttons.append(w)
-            for w in (title, sub, buttons):
+            save_btn.set_hexpand(True)
+            rename_btn.set_hexpand(True)
+            for w in (title, sub, apply_btn, buttons):
                 tile.append(w)
             self.presets_flow.append(tile)
 
