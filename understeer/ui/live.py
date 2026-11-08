@@ -17,6 +17,10 @@ class WheelView(Gtk.Box):
 
     def __init__(self, icon_name):
         super().__init__(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        # The icon expands to fill this box; set explicitly so that doesn't
+        # spread to the tile, which would then grow with the window.
+        self.set_hexpand(False)
+        self.set_vexpand(False)
         self.add_css_class("wheel-view")
         self.angle = 0.0
         self.image = Gtk.Image.new_from_icon_name(icon_name)

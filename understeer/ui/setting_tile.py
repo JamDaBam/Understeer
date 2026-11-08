@@ -43,7 +43,7 @@ class SettingTile:
         self.revert_btn.add_css_class("circular")
         self.revert_btn.connect("clicked", lambda b: self.revert())
 
-        info = Gtk.MenuButton(icon_name="help-about-symbolic")
+        info = self.info_btn = Gtk.MenuButton(icon_name="help-about-symbolic")
         info.set_valign(Gtk.Align.START)
         info.add_css_class("flat")
         info.add_css_class("circular")
@@ -58,6 +58,7 @@ class SettingTile:
         for w in (icon, title, self.revert_btn, info):
             head.append(w)
         tile.append(head)
+        self.head, self.title = head, title
 
         # Large value with the sysfs name next to it
         value_line = Gtk.Box(spacing=8)
@@ -72,6 +73,8 @@ class SettingTile:
         value_line.append(self.value_label)
         value_line.append(self.id_label)
         tile.append(value_line)
+        self.value_line = value_line
+        self.compact = False
 
         # Control
         if kind == "choice":
@@ -110,6 +113,33 @@ class SettingTile:
 
         self.row = tile
         self._update_label()
+
+    def set_compact(self, compact):
+        """Compact: the value moves up next to the name and the info button
+        and the sysfs name are left out (the tooltip still explains the
+        setting), so the tile is two rows shorter."""
+        if compact == self.compact:
+            return
+        self.compact = compact
+        self.value_label.unparent()
+        if compact:
+            self.value_label.set_hexpand(False)
+            self.value_label.set_valign(Gtk.Align.CENTER)
+            self.value_label.set_ellipsize(0)   # Pango.EllipsizeMode.NONE
+            self.head.append(self.value_label)
+        else:
+            self.value_label.set_hexpand(True)
+            self.value_label.set_valign(Gtk.Align.FILL)
+            self.value_label.set_ellipsize(3)   # Pango.EllipsizeMode.END
+            self.value_line.prepend(self.value_label)
+        self.head.set_spacing(6 if compact else 10)
+        self.info_btn.set_visible(not compact)
+        self._update_id_line()
+        self._update_label()
+
+    def _update_id_line(self):
+        # In compact tiles only "not supported" is shown there.
+        self.value_line.set_visible(not self.compact or not self.row.get_sensitive())
 
     def add_extra(self, widget):
         """Add a widget below the control, e.g. quick select buttons."""
@@ -155,6 +185,7 @@ class SettingTile:
         self.id_label.set_label(
             self.setting["id"] if supported else
             _("Not supported by your hardware") + f"  ·  {self.setting['id']}")
+        self._update_id_line()
 
     # -- internals ---------------------------------------------------------
     def _changed(self):
@@ -171,6 +202,8 @@ class SettingTile:
         modified = self.baseline is not None and self.get() != self.baseline
         self.revert_btn.set_opacity(1 if modified else 0)
         self.revert_btn.set_sensitive(modified)
+        # Compact tiles have no room to keep for it.
+        self.revert_btn.set_visible(modified or not self.compact)
         if modified:
             self.row.add_css_class("modified")
         else:

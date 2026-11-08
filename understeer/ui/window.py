@@ -69,7 +69,6 @@ class TunerWindow(Adw.ApplicationWindow):
 
         self._build_actions()
         self._build_ui()
-        self._apply_layout()
         self._refresh_device_state()
         self._start_inputs()
         self._watch = GLib.timeout_add(WATCH_MS, self._check_device)
@@ -232,6 +231,7 @@ class TunerWindow(Adw.ApplicationWindow):
         self._select_page(page or PAGES[0][0])
         self.split.set_sidebar(sidebar_page)
         self.split.set_content(self.content_page)
+        self._apply_layout()        # the tiles are new
 
     def _sidebar_row(self, key, title, icon):
         box = Gtk.Box(spacing=12)
@@ -787,10 +787,13 @@ class TunerWindow(Adw.ApplicationWindow):
         self.update_action.set_enabled(False)
 
     def _apply_layout(self):
-        if self.layout == "compact":
+        compact = self.layout == "compact"
+        if compact:
             self.add_css_class("compact")
         else:
             self.remove_css_class("compact")
+        for tile in self.rows.values():
+            tile.set_compact(compact)
 
     def _set_layout(self, layout):
         self.layout = layout
