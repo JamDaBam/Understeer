@@ -7,7 +7,7 @@ import time
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import backup, config, games
+from .. import backup, config, games, report
 from .. import log as session_log
 from ..device import (can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -18,6 +18,7 @@ from ..inputs import AXIS_ROLES, InputMonitor
 from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SIM_DEFAULTS,
                         SLOTS, TABS, VIEWS)
 from .games_page import GamesPage
+from .report_dialog import ReportDialog
 from .live import WheelView
 from .setting_tile import SettingTile
 
@@ -182,6 +183,7 @@ class TunerWindow(Adw.ApplicationWindow):
         menu.append_section(None, device)
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
+        app.append(_("Report a Problem…"), "win.report")
         app.append(_("About Understeer"), "win.about")
         menu.append_section(None, app)
         menu_btn.set_menu_model(menu)
@@ -924,6 +926,14 @@ class TunerWindow(Adw.ApplicationWindow):
         data.add(transfer)
 
         problems = Adw.PreferencesGroup(title=_("Reporting Problems"))
+        report_row = Adw.ActionRow(
+            title=_("Report a Problem"),
+            subtitle=_("Opens a filled-in issue on GitHub with the details "
+                       "needed to help you."))
+        report_btn = Gtk.Button(label=_("Report…"), valign=Gtk.Align.CENTER)
+        report_btn.connect("clicked", lambda b: ReportDialog(self, parent=self.prefs))
+        report_row.add_suffix(report_btn)
+        problems.add(report_row)
         log_row = Adw.ActionRow(
             title=_("Log File"),
             subtitle=_("Records what happened in this session. Attach it "
@@ -966,7 +976,7 @@ class TunerWindow(Adw.ApplicationWindow):
             website="https://github.com/JamDaBam/Understeer",
             issue_url="https://github.com/JamDaBam/Understeer/issues",
             license_type=Gtk.License.GPL_3_0,
-            debug_info=session_log.debug_info(),
+            debug_info=report.system_info(self.report_details()),
             debug_info_filename="understeer-debug.txt")
         if hasattr(Adw, "AboutDialog"):         # Libadwaita 1.5
             about = Adw.AboutDialog(**props)
@@ -997,6 +1007,7 @@ class TunerWindow(Adw.ApplicationWindow):
         add("show-presets", lambda *a: self._select_page("presets"))
         add("preferences", lambda *a: self._show_preferences())
         add("about", lambda *a: self._show_about())
+        add("report", lambda *a: ReportDialog(self))
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
@@ -1310,8 +1321,9 @@ class TunerWindow(Adw.ApplicationWindow):
             names = ", ".join(os.path.basename(p) for p in failed)
             self._set_status(_("Write failed: {names}").format(names=names))
             log.warning("Shown to the user: could not write %s", names)
-            self._notify(_("Could not write: {names}").format(names=names),
-                         _("Show Log"), self._open_log)
+            message = _("Could not write: {names}").format(names=names)
+            self._notify(message, _("Report…"),
+                         lambda: ReportDialog(self, title=message))
         else:
             self._set_status(_("In sync with device"))
 
@@ -1889,5 +1901,34 @@ class TunerWindow(Adw.ApplicationWindow):
     def _error(self, heading, body):
         log.error("%s: %s", heading, body)
         d = Adw.MessageDialog(transient_for=self, heading=heading, body=body)
+        d.add_response("report", _("Report…"))
         d.add_response("ok", _("OK"))
+        d.set_default_response("ok")
+        d.connect("response", lambda d, r: r == "report" and
+                  ReportDialog(self, title=heading, what=body,
+                               parent=self.prefs if self.prefs.get_visible() else None))
         d.present()
+
+    def report_details(self):
+        """What a problem report needs to know about this window."""
+        details = [("GTK", "{}.{}.{}".format(Gtk.get_major_version(),
+                                             Gtk.get_minor_version(),
+                                             Gtk.get_micro_version())),
+                   ("Libadwaita", "{}.{}.{}".format(Adw.get_major_version(),
+                                                    Adw.get_minor_version(),
+                                                    Adw.get_micro_version()))]
+        if self.device_path:
+            details += [("Wheel base", f"{model_id(self.device_path)} "
+                         f"({'writable' if self.writable else 'no write access'})"),
+                        ("Access", describe_access(self.device_path))]
+        else:
+            details.append(("Wheel base", "not found"))
+        steering = self.inputs.steering_axis()
+        details.append(("Input", "{} axes, steering {}{}".format(
+            len(self.inputs.axes), "found" if steering else "not found",
+            f", no access to {len(self.inputs.denied)} devices"
+            if self.inputs.denied else "")))
+        details.append(("Rumble", "available" if self.rumble_path else "not available"))
+        details.append(("Language / layout", "{} / {}".format(
+            config.get_setting("language") or "system", self.layout)))
+        return details

@@ -70,7 +70,9 @@ The live input display (current steering angle and pedal travel) reads the wheel
 
 ## Reporting Problems
 
-Understeer writes a log file for every session to `~/.local/state/Understeer/understeer.log`; the one of the previous start is kept as `understeer.previous.log`. It records the wheel base, the driver version, the access rights of the tuning settings and every value written, including the reason when the driver rejects one. Open it under *Preferences → Data → Log File*, or with **Show Log** on an error message, and attach it to your issue.
+The easiest way: choose **Report a Problem…** in the main menu (also under *Preferences → Data* and on every error message). Write what happened, then click **Open on GitHub**. Understeer opens a [new issue](https://github.com/JamDaBam/Understeer/issues/new?template=bug_report.yml) with the versions, your wheel base, its access rights and the end of the log already filled in. Your user name and home folder are left out, and nothing is sent until you submit the issue on GitHub (you need a GitHub account). The report is also put on the clipboard.
+
+Understeer writes a log file for every session to `~/.local/state/Understeer/understeer.log`; the one of the previous start is kept as `understeer.previous.log`. It records the wheel base, the driver version, the access rights of the tuning settings and every value written, including the reason when the driver rejects one. If you are asked for the whole file, open its folder under *Preferences → Data → Log File* and drag it into the issue.
 
 ## Translations
 
@@ -98,6 +100,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 | `games.py` | Installed Steam games, their covers and which games are running |
 | `steamgriddb.py` | Searching covers on SteamGridDB |
 | `log.py` | Session log file |
+| `report.py` | Problem reports: a filled-in GitHub issue |
 | `backup.py` | Export and import of presets, games and settings |
 | `i18n.py` | Loading translations from `locale/` |
 | `ui/` | GTK window and widgets |
