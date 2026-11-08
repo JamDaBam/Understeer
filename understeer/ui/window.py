@@ -1928,7 +1928,9 @@ class TunerWindow(Adw.ApplicationWindow):
             len(self.inputs.axes), "found" if steering else "not found",
             f", no access to {len(self.inputs.denied)} devices"
             if self.inputs.denied else "")))
-        details.append(("Rumble", "available" if self.rumble_path else "not available"))
+        details.append(("Rumble", "not available" if not self.rumble_path else
+                        "available, " + ("writable" if os.access(self.rumble_path, os.W_OK)
+                                         else "not writable")))
         details.append(("Language / layout", "{} / {}".format(
             config.get_setting("language") or "system", self.layout)))
         return details

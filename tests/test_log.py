@@ -105,11 +105,20 @@ def test_log_is_capped(tmp_path):
     assert content.endswith("log full, further messages are dropped\n")
 
 
-def test_describe_access(tmp_path):
+@pytest.mark.parametrize("mode, how", [
+    (0o666, "writable for everyone (udev rule)"),    # README / Set Up rule
+    (0o664, " group "),                              # hid-fanatecff rule
+    (0o644, " may write"),
+])
+def test_describe_access(tmp_path, mode, how):
     (tmp_path / "FF").write_text("70")
+    (tmp_path / "FF").chmod(mode)
     text = device.describe_access(str(tmp_path))
-    assert "-rw" in text and " group " in text
+    assert how in text and text.endswith(": writable")   # we own the file
     assert "groups" not in text             # not all of the user's groups
+
+
+def test_describe_access_without_settings(tmp_path):
     assert "not readable" in device.describe_access(str(tmp_path / "missing"))
 
 

@@ -134,9 +134,15 @@ def run_privileged(script):
 
 
 def describe_access(device_path):
-    """One line about who may write the tuning settings, for the log."""
+    """One line about who may write the tuning settings, for the log.
+
+    Says through what the user may write, or why not: the udev rule of
+    the README and of "Set Up" makes the settings writable for everyone,
+    the one of hid-fanatecff for a group (usually "games").
+    """
+    path = os.path.join(device_path, "FF")
     try:
-        st = os.stat(os.path.join(device_path, "FF"))
+        st = os.stat(path)
         try:
             owner = pwd.getpwuid(st.st_uid).pw_name
         except KeyError:
@@ -148,10 +154,16 @@ def describe_access(device_path):
         mode = stat.filemode(st.st_mode)
     except OSError as e:
         return f"settings not readable: {e}"
-    # Only the group that matters; the user's other groups are private.
-    member = st.st_gid in os.getgroups() or st.st_gid == os.getgid()
-    return (f"settings {mode} {owner}:{group}, user "
-            f"{'in' if member else 'not in'} group {group}")
+    if st.st_mode & stat.S_IWOTH:
+        how = "writable for everyone (udev rule)"
+    elif st.st_mode & stat.S_IWGRP:
+        # Only the group that matters; the user's other groups are private.
+        member = st.st_gid in os.getgroups() or st.st_gid == os.getgid()
+        how = f"user {'in' if member else 'not in'} group {group}"
+    else:
+        how = f"only {owner} may write"
+    result = "writable" if os.access(path, os.W_OK) else "not writable"
+    return f"settings {mode} {owner}:{group}, {how}: {result}"
 
 
 def install_udev_rule():
