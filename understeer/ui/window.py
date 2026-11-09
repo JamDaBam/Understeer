@@ -1019,7 +1019,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             return
         dialog = Adw.MessageDialog(
             transient_for=self, heading=_("Reset All Tuning Slots?"),
-            body=_("All 5 tuning slots stored on the wheel base will be "
+            body=_("All tuning slots stored on the wheel base will be "
                    "cleared. This cannot be undone."))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("reset", _("Reset"))

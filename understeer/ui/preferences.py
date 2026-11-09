@@ -87,7 +87,7 @@ class PreferencesMixin:
         system.add(self.perm_row)
         reset = Adw.ActionRow(
             title=_("Reset All Tuning Slots"),
-            subtitle=_("Clears all 5 tuning slots stored on the wheel base."))
+            subtitle=_("Clears all tuning slots stored on the wheel base."))
         reset_btn = Gtk.Button(label=_("Reset…"))
         reset_btn.add_css_class("destructive-action")
         reset_btn.set_valign(Gtk.Align.CENTER)
