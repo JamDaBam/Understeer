@@ -65,6 +65,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
 
         self.active_preset = None   # path of the last applied/saved preset
         self.active_values = {}     # values stored in that preset
+        self._preset_names = {}     # preset path -> name, see _rebuild_preset_menu
 
         self.inputs = InputMonitor(self._on_input)
         self.axis_roles = config.load_axis_roles()

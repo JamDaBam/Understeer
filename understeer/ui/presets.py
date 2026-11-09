@@ -115,6 +115,10 @@ class PresetsMixin:
         return tile
 
     def _rebuild_preset_menu(self):
+        """The Presets menu; also remembers the preset names for
+        _active_name(), which runs on every change of a setting."""
+        presets_found = config.list_presets()
+        self._preset_names = {path: name for name, path in presets_found}
         menu = Gio.Menu()
         if self.active_preset is not None:
             update = Gio.Menu()
@@ -122,7 +126,7 @@ class PresetsMixin:
                 name=self._active_name()), "win.update-preset")
             menu.append_section(None, update)
         presets = Gio.Menu()
-        for name, path in config.list_presets():
+        for name, path in presets_found:
             item = Gio.MenuItem.new(name, None)
             item.set_action_and_target_value(
                 "win.apply-preset", GLib.Variant.new_string(str(path)))
@@ -142,10 +146,9 @@ class PresetsMixin:
         self._update_preset_indicator()
 
     def _active_name(self):
-        for name, path in config.list_presets():
-            if path == self.active_preset:
-                return name
-        return self.active_preset.stem if self.active_preset else ""
+        if self.active_preset is None:
+            return ""
+        return self._preset_names.get(self.active_preset, self.active_preset.stem)
 
     def _preset_diff(self, stored):
         """[(attr id, stored value or None, current value)] that differ."""
