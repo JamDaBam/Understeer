@@ -15,11 +15,16 @@ jobs:
       - uses: actions/checkout@v5
 
       # The system Python with pytest from the distribution, as in the README.
-      # python3-gi lets the tests that need GLib run too.
-      - name: Install pytest
+      # GTK 4, Libadwaita and Xvfb (an invisible screen) let the UI test
+      # run the whole app; pyflakes finds wrong names before anything runs.
+      - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-pytest python3-gi
+          sudo apt-get install -y --no-install-recommends python3-pytest \
+            python3-pyflakes python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 xvfb
+
+      - name: Check for mistakes in the code
+        run: python3 -m pyflakes understeer tests tools
 
       - name: Run tests
-        run: python3 -m pytest -v
+        run: python3 -m pytest -v -rs
