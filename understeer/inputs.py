@@ -34,8 +34,10 @@ def find_input_devices():
     result = []
     for ev in sorted(glob.glob("/sys/class/input/event*")):
         try:
-            vendor = open(os.path.join(ev, "device/id/vendor")).read().strip()
-            name = open(os.path.join(ev, "device/name")).read().strip()
+            with open(os.path.join(ev, "device/id/vendor")) as f:
+                vendor = f.read().strip()
+            with open(os.path.join(ev, "device/name")) as f:
+                name = f.read().strip()
         except OSError:
             continue
         if vendor.lower() == FANATEC_VENDOR:
