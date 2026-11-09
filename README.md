@@ -104,7 +104,9 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 | `report.py` | Problem reports: a filled-in GitHub issue |
 | `backup.py` | Export and import of presets, games and settings |
 | `i18n.py` | Loading translations from `locale/` |
-| `ui/` | GTK window and widgets |
+| `ui/window.py` | The main window: device sync, writing, slots, games watch |
+| `ui/live_input.py`, `ui/presets.py`, `ui/preferences.py` | Parts of the main window: live input, presets, preferences with export and import |
+| `ui/` (others) | Games page, cover search, setting tiles and other widgets |
 | `app.py` | Application start |
 
 Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
