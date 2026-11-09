@@ -64,10 +64,12 @@ class CoverSearch:
         self.dialog.connect("closed", self._on_close)
         self.nav = Adw.NavigationView()
         self.dialog.set_child(self.nav)
+        # replace, not add: added pages stay in the view for good, and the
+        # next page with the same tag (e.g. after a refused key) clashes.
         if config.get_setting(KEY_SETTING):
-            self.nav.add(self._search_page())
+            self.nav.replace([self._search_page()])
         else:
-            self.nav.add(self._key_page())
+            self.nav.replace([self._key_page()])
         self.dialog.present(games_page.window)
 
     def _on_close(self, _dialog):
