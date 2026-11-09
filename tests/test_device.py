@@ -158,6 +158,8 @@ def test_install_udev_rule(privileged):
     assert device.UDEV_RULE_PATH in script
     assert 'SUBSYSTEM=="ftec_tuning"' in script
     assert "udevadm control --reload-rules" in script
+    # only the devices of the rule, not all devices of the system
+    assert "--subsystem-match=ftec_tuning" in script
 
 
 def test_join_group(privileged):

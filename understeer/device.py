@@ -170,7 +170,10 @@ def install_udev_rule():
     """Install UDEV_RULE with one password prompt. Returns True on success."""
     return run_privileged(
         f"printf %s {shlex.quote(UDEV_RULE)} > {UDEV_RULE_PATH} && "
-        "udevadm control --reload-rules && udevadm trigger")
+        # Only the devices the rule is about, not every device there is.
+        "udevadm control --reload-rules && "
+        "udevadm trigger --subsystem-match=ftec_tuning "
+        "--subsystem-match=hid --subsystem-match=input")
 
 
 def join_group(group):

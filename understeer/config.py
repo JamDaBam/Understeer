@@ -138,6 +138,15 @@ def set_setting(key, value):
     _save_json(APP_SETTINGS_FILE, data, sort_keys=True)
 
 
+def _file_name(name):
+    """name if it is a plain file name, else None. Keeps a games.json from
+    an import pointing outside the folders of presets and pictures."""
+    if isinstance(name, str) and name not in ("", ".", "..") and \
+            "/" not in name and "\0" not in name:
+        return name
+    return None
+
+
 def load_games():
     """Games with their preset, e.g.
     [{"game": "steam:284160", "name": "BeamNG.drive",
@@ -157,11 +166,10 @@ def load_games():
         if isinstance(g, dict) and isinstance(g.get("game"), str):
             games.append({"game": g["game"],
                           "name": str(g.get("name") or g["game"]),
-                          "preset": g.get("preset") if isinstance(
-                              g.get("preset"), str) else None,
+                          "preset": _file_name(g.get("preset")),
                           "auto": bool(g.get("auto", True))})
-            cover = g.get("cover")
-            if isinstance(cover, str) and cover and "/" not in cover:
+            cover = _file_name(g.get("cover"))
+            if cover:
                 games[-1]["cover"] = cover
             sgdb = g.get("steamgriddb")
             if isinstance(sgdb, int) and not isinstance(sgdb, bool) and sgdb > 0:

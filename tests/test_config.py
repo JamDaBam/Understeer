@@ -136,6 +136,18 @@ def test_rename_preset(home, monkeypatch):
     assert config.rename_preset(new, "Drift") == new    # same name: unchanged
 
 
+def test_games_only_name_files_in_their_folders(home, monkeypatch):
+    """A games.json from an import can't point outside the folders."""
+    monkeypatch.setattr(config, "GAMES_FILE", config.CONFIG_DIR / "settings" / "games.json")
+    config.save_games([
+        {"game": "steam:1", "preset": "../../outside.json", "cover": "../x.png"},
+        {"game": "steam:2", "preset": "..", "cover": "."},
+        {"game": "steam:3", "preset": "Drift.json", "cover": "abc.png"}])
+    games = config.load_games()
+    assert [g["preset"] for g in games] == [None, None, "Drift.json"]
+    assert [g.get("cover") for g in games] == [None, None, "abc.png"]
+
+
 def test_write_file_replaces_completely(home):
     path = config.CONFIG_DIR / "settings" / "app.json"
     config.write_file(path, '{"a": 1}')

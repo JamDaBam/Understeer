@@ -64,7 +64,7 @@ SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="0eb7", MODE="0644"
 
 LABEL="fanatec_tuner_end"
 EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=ftec_tuning --subsystem-match=hid --subsystem-match=input
 ```
 
 
