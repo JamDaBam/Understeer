@@ -15,7 +15,7 @@ jobs:
 
   build:
     needs: test        # no release if a test fails
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04   # fixed, so an image change never breaks a build unnoticed
     steps:
       - uses: actions/checkout@v5
 
