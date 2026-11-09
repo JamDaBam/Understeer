@@ -29,6 +29,8 @@ class PreferencesMixin:
         if prefs is None:
             self.prefs = prefs = Adw.PreferencesDialog(
                 content_width=720, content_height=680, search_enabled=False)
+            # A key typed just before closing counts without Enter.
+            prefs.connect("closed", lambda d: self.games_page.key_entry.flush())
             self._prefs_pages = []
         shown = prefs.get_visible_page_name()
         old_pages, self._prefs_pages = self._prefs_pages, []

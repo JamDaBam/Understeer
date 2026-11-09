@@ -76,15 +76,14 @@ class GamesPage:
         self.download_row.connect("notify::active", self._on_download_toggled)
         options.add(self.download_row)
 
-        self.key_row = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"),
-                                            show_apply_button=True)
-        self.key_row.set_text(config.get_setting(cover_search.KEY_SETTING) or "")
+        self.key_entry = cover_search.KeyRow(self.window._notify,
+                                             self._on_key_accepted)
+        self.key_row = self.key_entry.row
         get_key = Gtk.Button(icon_name="web-browser-symbolic", valign=Gtk.Align.CENTER)
         get_key.add_css_class("flat")
         get_key.set_tooltip_text(_("Get a free API key on SteamGridDB"))
         get_key.connect("clicked", lambda b: cover_search.open_key_page(self.window))
         self.key_row.add_suffix(get_key)
-        self.key_row.connect("apply", self._on_key_applied)
         options.add(self.key_row)
 
         for w in (title, desc, self.flow):
@@ -114,32 +113,14 @@ class GamesPage:
         if active:
             self.search_covers()
 
-    def _on_key_applied(self, row):
-        key = row.get_text().strip()
-        if not key:
-            config.set_setting(cover_search.KEY_SETTING, None)
-            log.info("SteamGridDB API key removed")
-            self.window._notify(_("SteamGridDB API key removed"))
-            return
-        row.set_sensitive(False)
-
-        def done(error):
-            row.set_sensitive(True)
-            if error is not None:
-                log.warning("SteamGridDB API key check failed: %s", error)
-                self.window._notify(cover_search.error_text(error))
-                return
-            config.set_setting(cover_search.KEY_SETTING, key)
-            log.info("SteamGridDB API key saved")
-            self.window._notify(_("SteamGridDB API key saved"))
-            self._failed.clear()                # may find more now
-            if config.get_setting("download_covers", False):
-                self.refresh()
-        cover_search.check_key(key, done)
+    def _on_key_accepted(self):
+        self._failed.clear()                # may find more now
+        if config.get_setting("download_covers", False):
+            self.refresh()
 
     def key_changed(self):
         """The cover search saved a key."""
-        self.key_row.set_text(config.get_setting(cover_search.KEY_SETTING) or "")
+        self.key_entry.show_saved()
 
     # -- tiles ---------------------------------------------------------------
     def refresh(self):

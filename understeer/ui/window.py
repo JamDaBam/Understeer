@@ -134,6 +134,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
                  active[0].name if active[0] else "none", len(self.pending))
 
     def _on_close(self, window):
+        self.games_page.key_entry.flush()   # an API key still being typed
         GLib.source_remove(self._watch)
         GLib.source_remove(self._games_watch)
         self.inputs.stop()

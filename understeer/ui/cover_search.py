@@ -45,6 +45,85 @@ def open_key_page(parent):
     Gtk.UriLauncher.new(steamgriddb.KEY_URL).launch(parent, None, None)
 
 
+class KeyRow:
+    """Entry row for the SteamGridDB API key, without an apply button.
+
+    What is entered counts at once: it is saved shortly after typing
+    stops, on Enter, and when flush() is called (e.g. as its dialog
+    closes). Then SteamGridDB is asked whether it takes the key; a refused
+    key stays saved, but the row turns red and notify() says why.
+    """
+    DELAY_MS = 800
+
+    def __init__(self, notify, accepted=None):
+        """notify(text) shows a message; accepted() runs after SteamGridDB
+        took a newly saved key."""
+        self.notify = notify
+        self.accepted = accepted
+        self.row = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"))
+        self._timer = 0
+        self._check_id = 0          # ignores answers about an older key
+        self._loading = False
+        self.show_saved()
+        self.row.connect("changed", self._changed)
+        self.row.connect("entry-activated", lambda r: self.flush())
+
+    def show_saved(self):
+        """Show the saved key, e.g. after the other key row saved one."""
+        self._stop_timer()
+        self._loading = True
+        self.row.set_text(config.get_setting(KEY_SETTING) or "")
+        self._loading = False
+        self.row.remove_css_class("error")
+
+    def _stop_timer(self):
+        if self._timer:
+            GLib.source_remove(self._timer)
+            self._timer = 0
+
+    def _changed(self, _row):
+        if self._loading:
+            return
+        self.row.remove_css_class("error")
+        self._stop_timer()
+        self._timer = GLib.timeout_add(self.DELAY_MS, self._timeout)
+
+    def _timeout(self):
+        self._timer = 0
+        self.flush()
+        return False
+
+    def flush(self):
+        """Save the entered key now, if it differs from the saved one."""
+        self._stop_timer()
+        key = self.row.get_text().strip()
+        if key == (config.get_setting(KEY_SETTING) or ""):
+            return
+        self._check_id += 1
+        if not key:
+            config.set_setting(KEY_SETTING, None)
+            log.info("SteamGridDB API key removed")
+            self.notify(_("SteamGridDB API key removed"))
+            return
+        config.set_setting(KEY_SETTING, key)
+        log.info("SteamGridDB API key saved")
+        check_id = self._check_id
+
+        def done(error):
+            if check_id != self._check_id:
+                return                  # changed again in the meantime
+            if error is None:
+                self.notify(_("SteamGridDB API key saved"))
+                if self.accepted:
+                    self.accepted()
+                return
+            log.warning("SteamGridDB API key check failed: %s", error)
+            if error.kind == "key":
+                self.row.add_css_class("error")
+            self.notify(error_text(error))
+        check_key(key, done)
+
+
 class CoverSearch:
     """Dialog to search a game on SteamGridDB and pick one of its covers.
 
@@ -59,6 +138,7 @@ class CoverSearch:
         self.game = game
         self._search_id = 0         # ignores answers of older searches
         self._closed = False
+        self.key_row = None
         self.dialog = Adw.Dialog(content_width=600, content_height=680,
                                  title=_("Cover from SteamGridDB"))
         self.dialog.connect("closed", self._on_close)
@@ -74,6 +154,8 @@ class CoverSearch:
 
     def _on_close(self, _dialog):
         self._closed = True
+        if self.key_row is not None:
+            self.key_row.flush()        # a key entered just before closing
 
     def _progress(self):
         """Subtitle: the game, and where we are when going through several."""
@@ -117,38 +199,31 @@ class CoverSearch:
         get = Gtk.Button(label=_("Get API Key"), halign=Gtk.Align.CENTER)
         get.add_css_class("pill")
         get.connect("clicked", lambda b: open_key_page(self.page.window))
-        group = Adw.PreferencesGroup()
-        entry = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"),
-                                     show_apply_button=True)
-        group.add(entry)
         problem = Gtk.Label(wrap=True, visible=False)
         problem.add_css_class("error")
+
+        def notify(text):
+            if self._closed:
+                self.page.window._notify(text)
+            else:
+                problem.set_label(text)
+                problem.set_visible(True)
+
+        def accepted():
+            self.page.key_changed()
+            if not self._closed:
+                self.key_row = None
+                self.nav.replace([self._search_page()])
+
+        self.key_row = KeyRow(notify, accepted)
+        self.key_row.row.connect("changed", lambda r: problem.set_visible(False))
+        group = Adw.PreferencesGroup()
+        group.add(self.key_row.row)
         box.append(get)
         box.append(group)
         box.append(problem)
         clamp = Adw.Clamp(maximum_size=420, child=box)
         status.set_child(clamp)
-
-        def applied(row):
-            key = row.get_text().strip()
-            if not key:
-                return
-            row.set_sensitive(False)
-            problem.set_visible(False)
-
-            def done(error):
-                row.set_sensitive(True)
-                if error is not None:
-                    problem.set_label(error_text(error))
-                    problem.set_visible(True)
-                    return
-                config.set_setting(KEY_SETTING, key)
-                log.info("SteamGridDB API key saved")
-                self.page.key_changed()
-                self.nav.replace([self._search_page()])
-            check_key(key, done)
-
-        entry.connect("apply", applied)
         return self._page("SteamGridDB", status, "key")
 
     # -- games ---------------------------------------------------------------
