@@ -1,0 +1,25 @@
+name: Tests
+
+# Runs on every push and pull request, and before a release is built
+# (release.yml calls this workflow).
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The system Python with pytest from the distribution, as in the README.
+      # python3-gi lets the tests that need GLib run too.
+      - name: Install pytest
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-pytest python3-gi
+
+      - name: Run tests
+        run: python3 -m pytest -v
