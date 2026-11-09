@@ -4,6 +4,7 @@ import sys
 
 from . import DATA_DIR, config, games, i18n, log
 from .ui.window import TunerWindow  # also selects the GTK version
+from .ui import theme
 
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
 
@@ -30,6 +31,7 @@ class TunerApplication(Adw.Application):
         css.load_from_path(str(STYLE))
         Gtk.StyleContext.add_provider_for_display(
             display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        theme.apply()           # colour scheme, theme, accent and corners
 
     def do_activate(self):
         win = self.get_active_window() or TunerWindow(application=self)

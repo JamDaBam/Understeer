@@ -16,7 +16,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Moving to another computer:** *Preferences → Data* exports presets, games with their pictures and all settings into one ZIP file and imports them on the other computer.
 - **Plug and play:** Switch the wheel base on or plug it in while Understeer is open, it is found by itself.
 - **Presets per game:** Give each game a preset on the *Games* page. While Understeer is open, it applies the preset as soon as the game starts. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture, also chosen from [SteamGridDB](https://www.steamgriddb.com) with your free personal API key.
-- **Tiles in two sizes:** Every setting is a tile with its value in large type. Choose *Full* or *Compact* under *Preferences → General*; light and dark mode follow your system.
+- **Your look:** Every setting is a tile with its value in large type, in two sizes (*Full* or *Compact*). Under *Preferences → General* you choose light, dark or system colours, one of four themes (Standard, Carbon, Midnight, Pit Lane), an accent colour and the corner radius (3 px by default).
 - **Translations:** Available in English and German, chosen automatically or under *Preferences → General*. More languages can be added easily (see below).
 
 ![Games page with BeamNG.drive running](docs/games.png)
@@ -100,6 +100,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 | `games.py` | Installed Steam games, their covers and which games are running |
 | `steamgriddb.py` | Searching covers on SteamGridDB |
 | `log.py` | Session log file |
+| `themes.py` | Themes, accent colours and corner radius as a stylesheet |
 | `report.py` | Problem reports: a filled-in GitHub issue |
 | `backup.py` | Export and import of presets, games and settings |
 | `i18n.py` | Loading translations from `locale/` |

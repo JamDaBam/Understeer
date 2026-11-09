@@ -18,6 +18,7 @@ from ..inputs import AXIS_ROLES, InputMonitor
 from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SIM_DEFAULTS,
                         SLOTS, TABS, VIEWS)
 from .games_page import GamesPage
+from .look_prefs import LookGroups
 from .report_dialog import ReportDialog
 from .live import WheelView
 from .setting_tile import SettingTile
@@ -823,7 +824,9 @@ class TunerWindow(Adw.ApplicationWindow):
         # -- General --------------------------------------------------------
         general = Adw.PreferencesPage(title=_("General"), name="general",
                                       icon_name="preferences-system-symbolic")
+        look = LookGroups()
         appearance = Adw.PreferencesGroup(title=_("Appearance"))
+        appearance.add(look.scheme_row)
         layout_row = Adw.ComboRow(title=_("Layout"),
                                   subtitle=_("Size of the tiles"))
         layout_row.set_model(Gtk.StringList.new([_("Full"), _("Compact")]))
@@ -843,6 +846,8 @@ class TunerWindow(Adw.ApplicationWindow):
                              self._set_language(languages[r.get_selected()]))
         appearance.add(language_row)
         general.add(appearance)
+        general.add(look.theme_group)
+        general.add(look.shape_group)
         self._add_prefs_page(general)
 
         # -- Wheel base -----------------------------------------------------

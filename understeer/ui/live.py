@@ -1,10 +1,24 @@
 """Widgets for the live input display."""
+import colorsys
+
 from gi.repository import Adw, Gdk, Graphene, Gtk
 
 # Top-centre stripe like on a real steering wheel; shows the angle even
-# where the three spokes look the same (e.g. at 120°).
+# where the three spokes look the same (e.g. at 120°). On a wheel drawn in
+# an orange-like accent colour it would vanish, so it is light or dark then.
 MARKER_COLOR = Gdk.RGBA()
 MARKER_COLOR.parse("#ff7800")
+MARKER_LIGHT, MARKER_DARK = Gdk.RGBA(), Gdk.RGBA()
+MARKER_LIGHT.parse("#f6f5f4")
+MARKER_DARK.parse("#241f31")
+
+
+def marker_color(wheel, dark):
+    """The marker for a wheel drawn in colour wheel (Gdk.RGBA)."""
+    hue, _light, saturation = colorsys.rgb_to_hls(wheel.red, wheel.green, wheel.blue)
+    if saturation > 0.4 and 5 / 360 <= hue <= 50 / 360:
+        return MARKER_LIGHT if dark else MARKER_DARK
+    return MARKER_COLOR
 
 
 class WheelView(Gtk.Box):
@@ -46,7 +60,8 @@ class WheelView(Gtk.Box):
         marker = Graphene.Rect().init(w / 2 - icon * 0.05,
                                       (h - icon) / 2 + icon / 16,
                                       icon * 0.1, icon * 2 / 16)
-        snapshot.append_color(MARKER_COLOR, marker)
+        dark = Adw.StyleManager.get_default().get_dark()
+        snapshot.append_color(marker_color(self.get_color(), dark), marker)
         snapshot.restore()
 
 

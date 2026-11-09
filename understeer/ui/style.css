@@ -1,15 +1,24 @@
-/* Tiles on top of Libadwaita's "card" style; colours follow the system
-   accent colour and the light/dark theme. */
+/* Tiles on top of Libadwaita's "card" style; colours follow the accent
+   colour and the light/dark theme. Corner radius, theme colours and the
+   chosen accent come from themes.py, loaded on top of this file. */
 
+/* Section names: small capitals, like in dashboards */
 .section-title {
   font-weight: 700;
-  font-size: 1.05em;
+  font-size: 0.8em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
   margin: 18px 6px 6px 6px;
+}
+
+/* Flat: a fine border instead of the soft card shadow */
+.tile, list.boxed-list, button.advanced-toggle {
+  box-shadow: 0 0 0 1px alpha(currentColor, 0.11);
 }
 
 .tile {
   padding: 14px 16px 12px 16px;
-  border-radius: 14px;
 }
 
 /* The minimum width decides how many tiles fit next to each other. */
@@ -20,7 +29,7 @@ flowbox > flowboxchild > .tile {
 .tile-icon {
   color: @accent_color;
   background-color: alpha(@accent_bg_color, 0.14);
-  border-radius: 9px;
+  border-radius: 4px;
   padding: 7px;
 }
 
@@ -43,8 +52,9 @@ flowbox > flowboxchild > .tile {
   opacity: 0.4;
 }
 
+/* Changed since loading: a stripe in the accent colour on the left */
 .tile.modified {
-  box-shadow: inset 0 0 0 2px alpha(@accent_bg_color, 0.55);
+  box-shadow: inset 3px 0 0 @accent_bg_color, 0 0 0 1px alpha(currentColor, 0.11);
 }
 
 .quick-select button {
@@ -252,4 +262,41 @@ button.advanced-toggle {
   margin: 8px;
   font-weight: 700;
   font-size: 0.85em;
+}
+
+/* Preferences: accent colours and themes */
+button.accent-swatch {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 99px;
+}
+
+button.accent-swatch:checked {
+  box-shadow: 0 0 0 2px @window_bg_color, 0 0 0 4px @window_fg_color;
+}
+
+button.theme-choice {
+  padding: 6px;
+  background: none;
+  box-shadow: 0 0 0 1px alpha(currentColor, 0.15);
+}
+
+button.theme-choice:checked {
+  box-shadow: 0 0 0 2px @accent_bg_color;
+  background: alpha(@accent_bg_color, 0.08);
+}
+
+.theme-preview {
+  min-height: 46px;
+  padding: 6px;
+  box-shadow: inset 0 0 0 1px alpha(#888, 0.3);
+}
+
+.theme-mini {
+  border-radius: 2px;
+}
+
+.theme-mini-accent {
+  min-height: 3px;
 }
