@@ -46,7 +46,7 @@ def open_key_page(parent):
 
 
 class CoverSearch:
-    """Window to search a game on SteamGridDB and pick one of its covers.
+    """Dialog to search a game on SteamGridDB and pick one of its covers.
 
     With more games (`more`), it goes through them one after another; each
     can be skipped.
@@ -59,21 +59,19 @@ class CoverSearch:
         self.game = game
         self._search_id = 0         # ignores answers of older searches
         self._closed = False
-        self.window = Adw.Window(transient_for=games_page.window, modal=True,
-                                 default_width=600, default_height=680,
+        self.dialog = Adw.Dialog(content_width=600, content_height=680,
                                  title=_("Cover from SteamGridDB"))
-        self.window.connect("close-request", self._on_close)
+        self.dialog.connect("closed", self._on_close)
         self.nav = Adw.NavigationView()
-        self.window.set_content(self.nav)
+        self.dialog.set_child(self.nav)
         if config.get_setting(KEY_SETTING):
             self.nav.add(self._search_page())
         else:
             self.nav.add(self._key_page())
-        self.window.present()
+        self.dialog.present(games_page.window)
 
-    def _on_close(self, _window):
+    def _on_close(self, _dialog):
         self._closed = True
-        return False
 
     def _progress(self):
         """Subtitle: the game, and where we are when going through several."""
@@ -100,7 +98,7 @@ class CoverSearch:
         """Go on with the next game, or close after the last."""
         self.index += 1
         if self.index >= len(self.queue):
-            self.window.close()
+            self.dialog.close()
             return
         self.game = self.queue[self.index]
         self.nav.replace([self._search_page()])
@@ -116,7 +114,7 @@ class CoverSearch:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         get = Gtk.Button(label=_("Get API Key"), halign=Gtk.Align.CENTER)
         get.add_css_class("pill")
-        get.connect("clicked", lambda b: open_key_page(self.window))
+        get.connect("clicked", lambda b: open_key_page(self.page.window))
         group = Adw.PreferencesGroup()
         entry = Adw.PasswordEntryRow(title=_("SteamGridDB API Key"),
                                      show_apply_button=True)

@@ -13,7 +13,7 @@ MAX_HEIGHT = 640    # content taller than this scrolls, e.g. an opened log
 
 
 class ReportDialog:
-    """Window that opens a filled-in GitHub issue.
+    """Dialog that opens a filled-in GitHub issue.
 
     The user writes what happened; system details and the end of the log
     are added. GitHub shows the issue before it is sent, nothing is sent
@@ -28,13 +28,12 @@ class ReportDialog:
 
         # As tall as its content, so nothing needs scrolling at first; the
         # buttons sit in a bar below and stay in view.
-        self.dialog = Adw.Window(transient_for=window, modal=True,
-                                 default_width=640, title=_("Report a Problem"))
+        self.dialog = Adw.Dialog(content_width=640, title=_("Report a Problem"))
         view = Adw.ToolbarView()
         view.add_top_bar(Adw.HeaderBar())
         self.toasts = Adw.ToastOverlay()
         view.set_content(self.toasts)
-        self.dialog.set_content(view)
+        self.dialog.set_child(view)
 
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
         for side in ("top", "bottom", "start", "end"):
@@ -94,7 +93,7 @@ class ReportDialog:
                                   "into the issue"))
         folder.connect("clicked", lambda b: Gtk.FileLauncher.new(
             Gio.File.new_for_path(str(session_log.LOG_FILE)))
-            .open_containing_folder(self.dialog, None, None))
+            .open_containing_folder(window, None, None))
         self.log_row.add_suffix(folder)
         sent.add(self.log_row)
         column.append(sent)
@@ -116,7 +115,7 @@ class ReportDialog:
         bar.append(send)
         view.add_bottom_bar(bar)
 
-        self.dialog.present()
+        self.dialog.present(window)
         # Start where the user has to type.
         if title:
             buffer = self.what.get_buffer()
@@ -154,4 +153,4 @@ class ReportDialog:
         # Also on the clipboard, in case the browser cuts the address.
         self._copy(_("GitHub opened in the browser. The report is also on "
                      "the clipboard."))
-        Gtk.UriLauncher.new(url).launch(self.dialog, None, None)
+        Gtk.UriLauncher.new(url).launch(self.window, None, None)
