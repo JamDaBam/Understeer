@@ -5,6 +5,7 @@ Every *.json directly in CONFIG_DIR is a preset:
 """
 import hashlib
 import json
+import logging
 import os
 import pathlib
 import re
@@ -25,6 +26,36 @@ COVER_DIR = (pathlib.Path(os.environ.get("XDG_CACHE_HOME") or
 # Pictures the user picked for a game can't be fetched again: config, not cache.
 CUSTOM_COVER_DIR = CONFIG_DIR / "covers"
 
+log = logging.getLogger("understeer.config")
+
+
+def write_file(path, data):
+    """Write text or bytes to path completely or not at all; raises OSError.
+
+    The data goes to a .part file first, which then replaces the old file,
+    so a crash or a full disk never leaves a half-written file behind.
+    """
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".part")
+    try:
+        if isinstance(data, str):
+            tmp.write_text(data, encoding="utf-8")
+        else:
+            tmp.write_bytes(data)
+        tmp.replace(path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _save_json(path, data, sort_keys=False):
+    """Store data as JSON; a failure is logged, the app goes on."""
+    try:
+        write_file(path, json.dumps(data, indent=2, sort_keys=sort_keys))
+    except OSError as e:
+        log.warning("Could not save %s: %s", path, e)
+
 
 def migrate_config():
     """Take over presets and settings from the old SimPower folder once."""
@@ -43,11 +74,7 @@ def load_axis_roles():
 
 
 def save_axis_roles(roles):
-    try:
-        AXES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        AXES_FILE.write_text(json.dumps(roles, indent=2))
-    except OSError:
-        pass
+    _save_json(AXES_FILE, roles)
 
 
 def _read_json(path):
@@ -80,11 +107,7 @@ def save_slot_name(model, slot, name):
         data[model] = names
     else:
         data.pop(model, None)
-    try:
-        SLOT_NAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SLOT_NAMES_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
-    except OSError:
-        pass
+    _save_json(SLOT_NAMES_FILE, data, sort_keys=True)
 
 
 def load_slot_count(model):
@@ -96,11 +119,7 @@ def load_slot_count(model):
 def save_slot_count(model, count):
     data = _read_json(SLOT_COUNTS_FILE)
     data[model] = count
-    try:
-        SLOT_COUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SLOT_COUNTS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
-    except OSError:
-        pass
+    _save_json(SLOT_COUNTS_FILE, data, sort_keys=True)
 
 
 def get_setting(key, default=None):
@@ -116,11 +135,7 @@ def set_setting(key, value):
         data.pop(key, None)
     else:
         data[key] = value
-    try:
-        APP_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        APP_SETTINGS_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
-    except OSError:
-        pass
+    _save_json(APP_SETTINGS_FILE, data, sort_keys=True)
 
 
 def load_games():
@@ -155,11 +170,7 @@ def load_games():
 
 
 def save_games(games):
-    try:
-        GAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        GAMES_FILE.write_text(json.dumps(games, indent=2))
-    except OSError:
-        pass
+    _save_json(GAMES_FILE, games)
 
 
 def game_cover_path(game):
@@ -230,9 +241,7 @@ def read_preset(path):
 
 def write_preset(path, name, values):
     """Write a preset file; raises OSError."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    pathlib.Path(path).write_text(json.dumps(
-        {"name": name, "values": values}, indent=2))
+    write_file(path, json.dumps({"name": name, "values": values}, indent=2))
 
 
 def rename_preset(path, new_name):

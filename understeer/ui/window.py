@@ -1690,7 +1690,7 @@ class TunerWindow(Adw.ApplicationWindow):
             return
         def undo():
             try:
-                path.write_text(old_text)
+                config.write_file(path, old_text)
             except OSError as e:
                 self._error(_("Could not save preset"), str(e))
                 return

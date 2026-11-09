@@ -134,3 +134,40 @@ def test_rename_preset(home, monkeypatch):
     with pytest.raises(FileExistsError):
         config.rename_preset(new, "Rally")
     assert config.rename_preset(new, "Drift") == new    # same name: unchanged
+
+
+def test_write_file_replaces_completely(home):
+    path = config.CONFIG_DIR / "settings" / "app.json"
+    config.write_file(path, '{"a": 1}')
+    config.write_file(path, b'{"a": 2}')
+    assert path.read_text() == '{"a": 2}'
+    assert [p.name for p in path.parent.iterdir()] == ["app.json"]
+
+
+def _disk_full(self, target):
+    raise OSError(28, "No space left on device")
+
+
+def test_failed_write_keeps_old_file(home, monkeypatch):
+    config.set_setting("language", "de")
+    with monkeypatch.context() as m:
+        m.setattr(config.pathlib.Path, "replace", _disk_full)
+        config.set_setting("language", "en")     # must not raise
+    assert config.get_setting("language") == "de"
+    assert not list(config.APP_SETTINGS_FILE.parent.glob("*.part"))
+
+
+def test_failed_save_is_logged(home, monkeypatch, caplog):
+    def denied(path, data):
+        raise OSError(13, "Permission denied")
+    monkeypatch.setattr(config, "write_file", denied)
+    with caplog.at_level("WARNING", logger="understeer.config"):
+        config.save_axis_roles({"x": "brake"})
+    assert "Could not save" in caplog.text
+    assert "Permission denied" in caplog.text
+
+
+def test_write_preset_raises(home, monkeypatch):
+    monkeypatch.setattr(config.pathlib.Path, "replace", _disk_full)
+    with pytest.raises(OSError):
+        config.write_preset(config.preset_path("GT3"), "GT3", {"FF": 70})

@@ -162,26 +162,19 @@ def _merge(name, old, new):
     return merged
 
 
-def _write(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".part")
-    tmp.write_bytes(data)
-    tmp.replace(path)
-
-
 def import_(found):
     """Add what read() found to this computer. Raises OSError."""
     presets_dir, settings_dir, covers_dir = _folders()
     for name, (_title, data) in found["presets"].items():
-        _write(presets_dir / name, data)
+        config.write_file(presets_dir / name, data)
     for name, new in found["settings"].items():
         try:
             old = json.loads((settings_dir / name).read_text())
         except (OSError, ValueError):
             old = None
         merged = _merge(name, old, new)
-        _write(settings_dir / name, json.dumps(
+        config.write_file(settings_dir / name, json.dumps(
             merged, indent=2, sort_keys=name != "games.json").encode("utf-8"))
     for name, data in found["covers"].items():
-        _write(covers_dir / name, data)
+        config.write_file(covers_dir / name, data)
     log.info("Imported: %s", summary(found))
