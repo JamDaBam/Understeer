@@ -433,19 +433,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             license_type=Gtk.License.GPL_3_0,
             debug_info=report.system_info(self.report_details()),
             debug_info_filename="understeer-debug.txt")
-        if hasattr(Adw, "AboutDialog"):         # Libadwaita 1.5
-            about = Adw.AboutDialog(**props)
-        else:
-            about = Adw.AboutWindow(transient_for=self, modal=True, **props)
+        about = Adw.AboutDialog(**props)
         about.add_acknowledgement_section(_("Started as a fork of"), [
             "SimPower (FanatecLinux) by BenryBoi "
             "https://github.com/BenryBoi/FanatecLinux"])
         about.add_acknowledgement_section(_("Kernel driver"), [
             "hid-fanatecff by gotzl https://github.com/gotzl/hid-fanatecff"])
-        if isinstance(about, Adw.Window):
-            about.present()
-        else:
-            about.present(self)
+        about.present(self)
 
     # -----------------------------------------------------------------------
     # Actions
@@ -857,7 +851,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
 
         While the preferences are open, messages show there instead.
         """
-        if self.prefs.get_visible():
+        if self._prefs_open():
             toast = Adw.Toast(title=text, timeout=3, use_markup=False)
             if button:
                 toast.set_button_label(button)
@@ -1017,8 +1011,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
     def _confirm_reset(self):
         if not self.device_path:
             return
-        dialog = Adw.MessageDialog(
-            transient_for=self, heading=_("Reset All Tuning Slots?"),
+        dialog = Adw.AlertDialog(
+            heading=_("Reset All Tuning Slots?"),
             body=_("All tuning slots stored on the wheel base will be "
                    "cleared. This cannot be undone."))
         dialog.add_response("cancel", _("Cancel"))
@@ -1037,18 +1031,17 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
                 GLib.timeout_add(300, lambda: self._load_from_device() and False)
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self)
 
     def _error(self, heading, body):
         log.error("%s: %s", heading, body)
-        d = Adw.MessageDialog(transient_for=self, heading=heading, body=body)
+        d = Adw.AlertDialog(heading=heading, body=body)
         d.add_response("report", _("Report…"))
         d.add_response("ok", _("OK"))
         d.set_default_response("ok")
         d.connect("response", lambda d, r: r == "report" and
-                  ReportDialog(self, title=heading, what=body,
-                               parent=self.prefs if self.prefs.get_visible() else None))
-        d.present()
+                  ReportDialog(self, title=heading, what=body))
+        d.present(self)
 
     def report_details(self):
         """What a problem report needs to know about this window."""

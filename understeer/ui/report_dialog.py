@@ -20,16 +20,15 @@ class ReportDialog:
     from here.
     """
 
-    def __init__(self, window, title="", what="", parent=None):
-        """window: the main window, for its details; parent: the window the
-        dialog belongs to, if not that one (e.g. the preferences)."""
+    def __init__(self, window, title="", what=""):
+        """window: the main window, for its details and as parent."""
         self.window = window
         self.system = report.system_info(window.report_details())
         self.log = report.log_excerpt()
 
         # As tall as its content, so nothing needs scrolling at first; the
         # buttons sit in a bar below and stay in view.
-        self.dialog = Adw.Window(transient_for=parent or window, modal=True,
+        self.dialog = Adw.Window(transient_for=window, modal=True,
                                  default_width=640, title=_("Report a Problem"))
         view = Adw.ToolbarView()
         view.add_top_bar(Adw.HeaderBar())

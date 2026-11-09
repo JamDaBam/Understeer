@@ -214,8 +214,8 @@ class PresetsMixin:
     def _ask_preset_name(self):
         entry = Gtk.Entry(placeholder_text=_("e.g. BeamNG Drift"),
                           activates_default=True)
-        dialog = Adw.MessageDialog(
-            transient_for=self, heading=_("Save as Preset"),
+        dialog = Adw.AlertDialog(
+            heading=_("Save as Preset"),
             body=_("Saves all current settings under this name."))
         dialog.set_extra_child(entry)
         dialog.add_response("cancel", _("Cancel"))
@@ -228,7 +228,7 @@ class PresetsMixin:
                 self._save_preset(entry.get_text().strip())
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self)
 
     def _save_preset(self, name):
         if not name:
@@ -272,8 +272,7 @@ class PresetsMixin:
         body = (_("Settings that change:") + "\n" + self._describe_diff(diff)
                 if diff else _("The preset already matches the current "
                                "settings."))
-        dialog = Adw.MessageDialog(
-            transient_for=self,
+        dialog = Adw.AlertDialog(
             heading=_("Overwrite “{name}”?").format(name=name), body=body)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("overwrite", _("Overwrite"))
@@ -285,7 +284,7 @@ class PresetsMixin:
                 self._notify(_("Preset “{name}” saved").format(name=name))
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self)
 
     def _update_active_preset(self):
         """Save to the active preset without asking; offer undo instead."""
@@ -312,8 +311,8 @@ class PresetsMixin:
 
     def _ask_rename_preset(self, path, name):
         entry = Gtk.Entry(text=name, activates_default=True)
-        dialog = Adw.MessageDialog(
-            transient_for=self, heading=_("Rename Preset"),
+        dialog = Adw.AlertDialog(
+            heading=_("Rename Preset"),
             body=_("Games that use this preset keep it."))
         dialog.set_extra_child(entry)
         dialog.add_response("cancel", _("Cancel"))
@@ -322,15 +321,15 @@ class PresetsMixin:
         dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
         entry.connect("changed", lambda e: dialog.set_response_enabled(
             "rename", bool(e.get_text().strip())))
-        entry.grab_focus()
-        entry.select_region(0, -1)
 
         def on_response(d, response):
             if response == "rename":
                 self._rename_preset(path, name, entry.get_text().strip())
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self)
+        entry.grab_focus()
+        entry.select_region(0, -1)
 
     def _rename_preset(self, path, old_name, new_name):
         path = pathlib.Path(path)
@@ -354,8 +353,7 @@ class PresetsMixin:
         self._notify(_("Preset renamed to “{name}”").format(name=new_name))
 
     def _confirm_delete_preset(self, path, name):
-        dialog = Adw.MessageDialog(
-            transient_for=self,
+        dialog = Adw.AlertDialog(
             heading=_("Delete “{name}”?").format(name=name),
             body=_("The preset file will be removed. This cannot be undone."))
         dialog.add_response("cancel", _("Cancel"))
@@ -374,4 +372,4 @@ class PresetsMixin:
                 self._presets_changed()
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self)

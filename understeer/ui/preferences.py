@@ -20,16 +20,15 @@ class PreferencesMixin:
     does."""
 
     def _build_preferences(self):
-        """The preferences window, made once and kept hidden when closed.
+        """The preferences dialog, made once and shown again when reopened.
 
-        After the language changed only its pages are made again, so an
-        open preferences window stays where it is, on the same page.
+        After the language changed only its pages are made again, so open
+        preferences stay open, on the same page.
         """
         prefs = getattr(self, "prefs", None)
         if prefs is None:
-            self.prefs = prefs = Adw.PreferencesWindow(
-                transient_for=self, modal=True, hide_on_close=True,
-                default_width=720, default_height=680, search_enabled=False)
+            self.prefs = prefs = Adw.PreferencesDialog(
+                content_width=720, content_height=680, search_enabled=False)
             self._prefs_pages = []
         shown = prefs.get_visible_page_name()
         old_pages, self._prefs_pages = self._prefs_pages, []
@@ -152,7 +151,7 @@ class PreferencesMixin:
             subtitle=_("Opens a filled-in issue on GitHub with the details "
                        "needed to help you."))
         report_btn = Gtk.Button(label=_("Report…"), valign=Gtk.Align.CENTER)
-        report_btn.connect("clicked", lambda b: ReportDialog(self, parent=self.prefs))
+        report_btn.connect("clicked", lambda b: ReportDialog(self))
         report_row.add_suffix(report_btn)
         problems.add(report_row)
         log_row = Adw.ActionRow(
@@ -185,8 +184,13 @@ class PreferencesMixin:
     def _show_preferences(self, page=None):
         if page:
             self.prefs.set_visible_page_name(page)
-        self.prefs.present()
+        self.prefs.present(self)
         self.prefs.set_focus(None)      # don't start typing in a slot name
+
+    def _prefs_open(self):
+        """Whether the preferences are shown. A closed Adw.Dialog still
+        counts as visible, but it no longer sits in the window."""
+        return self.prefs.get_parent() is not None
 
     @staticmethod
     def _zip_filters():
@@ -247,8 +251,8 @@ class PreferencesMixin:
                           "is damaged."))
             return
         counts = backup.summary(found)
-        dialog = Adw.MessageDialog(
-            transient_for=self, heading=_("Import from This File?"),
+        dialog = Adw.AlertDialog(
+            heading=_("Import from This File?"),
             body=_("Presets: {presets} · Games: {games} · Pictures: "
                    "{covers}\n\nPresets and games with the same name are replaced, "
                    "everything else stays. Settings like the language and "
@@ -261,7 +265,7 @@ class PreferencesMixin:
         dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
         dialog.connect("response", lambda d, r: r == "import" and
                        self._import(found))
-        dialog.present()
+        dialog.present(self)
 
     def _import(self, found):
         safety = session_log.LOG_DIR / "before-import.zip"

@@ -25,6 +25,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
 
+The AppImage uses Python 3 with PyGObject, GTK 4 and Libadwaita 1.5 or newer from your system, as found for example in Ubuntu 24.04, Fedora 40 and Debian 13.
+
 ## Installation
 
 Download `Understeer-<version>-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/Understeer/releases/latest), make it executable (`chmod +x Understeer-*-x86_64.AppImage`) and run it.
@@ -89,7 +91,7 @@ After changing text in the code, run `python3 tools/update_translations.py`. It 
 
 ## Development
 
-Run the app from a checkout with `python3 -m understeer` (needs PyGObject with GTK 4 and Libadwaita). The code lives in the `understeer/` package:
+Run the app from a checkout with `python3 -m understeer` (needs PyGObject with GTK 4 and Libadwaita 1.5 or newer). The code lives in the `understeer/` package:
 
 | Module | Contents |
 |---|---|

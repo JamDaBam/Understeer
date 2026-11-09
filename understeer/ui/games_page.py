@@ -530,8 +530,7 @@ class GamesPage:
         box.append(search)
         box.append(scroll)
 
-        dialog = Adw.MessageDialog(transient_for=self.window,
-                                   heading=_("Add Game"))
+        dialog = Adw.AlertDialog(heading=_("Add Game"))
         dialog.set_extra_child(box)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("other", _("Other Program…"))
@@ -543,7 +542,7 @@ class GamesPage:
 
         listbox.connect("row-activated", on_row)
         dialog.connect("response", lambda d, r: r == "other" and self._ask_program())
-        dialog.present()
+        dialog.present(self.window)
 
     def _name_suggestions(self, name_row):
         """Names from SteamGridDB under the name field, while typing.
@@ -683,8 +682,8 @@ class GamesPage:
         box.set_size_request(420, -1)
         for w in (fields, suggestions, hint, search_box, scroll):
             box.append(w)
-        dialog = Adw.MessageDialog(
-            transient_for=self.window, heading=_("Add Other Program"),
+        dialog = Adw.AlertDialog(
+            heading=_("Add Other Program"),
             body=_("For games not started by Steam. Understeer recognises them "
                    "by their program file. For Windows games (Wine, Proton, "
                    "Lutris, Heroic) that is the game's .exe, not the launcher."))
@@ -705,7 +704,9 @@ class GamesPage:
                     return
                 if file is not None and file.get_basename():
                     use(file.get_basename())
-            Gtk.FileDialog(title=_("Program File")).open(dialog, None, done)
+            # The dialog is no window of its own; the file chooser belongs
+            # to the main window.
+            Gtk.FileDialog(title=_("Program File")).open(self.window, None, done)
 
         pick.connect("clicked", choose_file)
 
@@ -717,4 +718,4 @@ class GamesPage:
                           suggestions.chosen)
 
         dialog.connect("response", on_response)
-        dialog.present()
+        dialog.present(self.window)
