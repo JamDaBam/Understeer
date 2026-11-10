@@ -14,12 +14,13 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 # (icons/hicolor/scalable/apps); loose files are not recoloured by GTK.
 ICON_DIR = DATA_DIR / "icons"
 STYLE = pathlib.Path(__file__).resolve().parent / "ui" / "style.css"
+APP_ID = background.APP_ID
 APP_ICON = DATA_DIR / "io.github.JamDaBam.Understeer.png"    # for the tray
 
 
 class TunerApplication(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="io.github.JamDaBam.Understeer",
+        super().__init__(application_id=APP_ID,
                          flags=Gio.ApplicationFlags.FLAGS_NONE)
         # Which games run; kept here so a rebuilt window doesn't apply
         # their presets again.
@@ -110,6 +111,10 @@ class TunerApplication(Adw.Application):
 
 
 def main():
+    # Started as "python3 -m understeer", GLib would call the program
+    # "__main__.py", and the desktop shows that in notifications.
+    GLib.set_prgname(APP_ID)
+    GLib.set_application_name("Understeer")
     log.setup()
     config.migrate_config()
     i18n.set_language(config.get_setting("language"))

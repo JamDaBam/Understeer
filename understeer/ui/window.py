@@ -8,7 +8,7 @@ import os
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import config, games, releases, report
+from .. import DATA_DIR, config, games, releases, report
 from .. import log as session_log
 from ..device import (RIMS, can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -180,6 +180,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             note.set_body(_("It applies the presets of your games when they "
                             "start. Open or quit it with its icon in the "
                             "system tray."))
+            # Without an installed .desktop file the desktop knows no icon
+            icon = DATA_DIR / "io.github.JamDaBam.Understeer.png"
+            if icon.is_file():
+                note.set_icon(Gio.FileIcon.new(Gio.File.new_for_path(str(icon))))
             self.get_application().send_notification("background", note)
 
     def show_again(self, token=None):
