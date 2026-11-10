@@ -102,10 +102,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         Text is set when widgets are made, so the window content is built
         again. The window itself stays, with its position and size, and so
         do the active preset, the state "Undo All" goes back to, changes
-        waiting for Apply, the shown view and tab, the preferences window
-        with its page, and the shown message.
+        waiting for Apply, the shown values (without a wheel base there is
+        nothing to read them from again), the shown view and tab, the
+        preferences window with its page, and the shown message.
         """
         self.flush_live()
+        values = {a: r.get() for a, r in self.rows.items()}
         baselines = {a: r.baseline for a, r in self.rows.items()}
         pending = dict(self.pending)
         active = self.active_preset, self.active_values
@@ -121,6 +123,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self._update_permission_row()
         self.games_page.set_running(self._game_watch.running)
 
+        if not self.device_path:
+            for attr_id, row in self.rows.items():
+                if attr_id in values:
+                    row.set(values[attr_id])
         for attr_id, row in self.rows.items():
             if baselines.get(attr_id) is not None and row.row.get_sensitive():
                 row.set_baseline(baselines[attr_id])

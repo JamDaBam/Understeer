@@ -188,6 +188,20 @@ def steps(win):
               f"preset button shows new name: {win.preset_button.get_label()!r}")
     yield "rename preset", rename
 
+    def rebuilt_without_wheel_base():
+        # Nothing to read the values from again after the window is rebuilt
+        path, win.device_path = win.device_path, None
+        try:
+            win._apply_values({"SEN": 540, "SHO": 35})
+            win.relocalize()
+            shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
+            check(shown == {"SEN": 540, "SHO": 35},
+                  f"values kept without a wheel base: {shown}")
+        finally:
+            win.device_path = path
+            win.relocalize()
+    yield "rebuilt without wheel base", rebuilt_without_wheel_base
+
     def dialogs():
         win._ask_preset_name()
         win._confirm_overwrite(config.preset_path("Renamed"))
