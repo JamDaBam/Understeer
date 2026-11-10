@@ -14,8 +14,12 @@ from gi.repository import Gio, GLib  # noqa: E402
 from understeer.ui import tray  # noqa: E402
 
 # The panel stand-in below registers its object like the tray does.
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:Gio.DBusConnection.register_object is deprecated")
+# PyGObject on Python 3.14 warns about asyncio internals when the test turns
+# the main loop by hand; neither is Understeer's code.
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Gio.DBusConnection.register_object is deprecated"),
+    pytest.mark.filterwarnings("ignore::DeprecationWarning:gi.events"),
+]
 
 ICON = DATA_DIR / "io.github.JamDaBam.Understeer.png"
 WATCHER_XML = """
