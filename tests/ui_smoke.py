@@ -7,6 +7,7 @@ every ERROR log line and every failed check counts as a failure; the
 exit code is the number of failures.
 """
 import logging
+import os
 import pathlib
 import xml.etree.ElementTree as ET
 import sys
@@ -23,6 +24,13 @@ VALUES = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0, "FFS": 1,
           "DRI": 0, "brF": 50, "BLI": 0, "FUL": 0, "ACP": 1, "SLOT": 1, "RESET": 0}
 for k, v in VALUES.items():
     (dev / k).write_text(f"{v}\n")
+# Its HID device, with what newer drivers tell about it.
+hid = scratch / "sysfs" / "hid-device"
+hid.mkdir(exist_ok=True)
+for k, v in {"fw_version": 1234, "rim_id": 0x0A, "fw_version_rim": 52}.items():
+    (hid / k).write_text(f"{v}\n")
+if not (dev / "device").exists():
+    (dev / "device").symlink_to(hid)
 
 from understeer import device, steamgriddb  # noqa: E402
 
@@ -44,12 +52,13 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, backup, config, inputs, releases, log as session_log  # noqa: E402
+from understeer import app, background, backup, config, inputs, releases, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 failures, steps_done = [], []
+finished = []           # set once every step ran
 STEP_MS = 300
 
 
@@ -70,6 +79,19 @@ sys.excepthook = lambda kind, value, tb: failures.append(
 def check(cond, what):
     if not cond:
         failures.append(f"check failed: {what}")
+
+
+def find_row(widget, title):
+    """Depth-first search for a preferences row with this title."""
+    if isinstance(widget, Adw.PreferencesRow) and widget.get_title() == title:
+        return widget
+    child = widget.get_first_child()
+    while child is not None:
+        found = find_row(child, title)
+        if found is not None:
+            return found
+        child = child.get_next_sibling()
+    return None
 
 
 def close_dialogs(win):
@@ -270,6 +292,61 @@ def steps(win):
         check(bool(win.get_visible_dialog().get_release_notes()), "notes not empty"),
         win.get_visible_dialog().close())
 
+    # -- wheel base and steering wheel ---------------------------------------
+    yield "hardware shown", lambda: (
+        win._show_preferences("wheelbase"),
+        check(win.base_row.get_subtitle() == "CSL DD · Firmware 1234",
+              f"wheel base row: {win.base_row.get_subtitle()!r}"),
+        check(win.rim_row.get_visible() and win.rim_row.get_subtitle() ==
+              "ClubSport Steering Wheel Formula V2 · Firmware 52",
+              f"wheel row: {win.rim_row.get_subtitle()!r}"),
+        check("Formula V2" in dict(win.report_details()).get("Wheel", ""),
+              "wheel in the report"))
+    yield "wheel changed", lambda: (hid / "rim_id").write_text("15\n")
+    yield "wait for the wheel", lambda: None
+    yield "new wheel shown", lambda: (
+        check(win.rim_row.get_subtitle().startswith("Podium Steering Wheel BMW M4 GT3"),
+              f"changed wheel: {win.rim_row.get_subtitle()!r}"),
+        win.prefs.close())
+
+    # -- running in the background ------------------------------------------
+    application = win.get_application()
+
+    def background_on():
+        win._show_preferences("games")
+        run = find_row(win.prefs, "Run in the Background")
+        login = find_row(win.prefs, "Start at Login")
+        check(run is not None and login is not None, "background switches found")
+        check(not login.get_sensitive(), "start at login needs the background")
+        run.set_active(True)
+        check(login.get_sensitive(), "start at login can be switched on")
+        login.set_active(True)
+        check(background.autostart_enabled(), "autostart file written")
+        if os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+            check(application.tray.running, "tray icon up while in the background")
+        win.prefs.close()
+    yield "background on", background_on
+    yield "close the window", lambda: win.close()
+    yield "runs on hidden", lambda: (
+        check(not win.get_visible(), "window hidden"),
+        check(win._in_background and win in application.get_windows(),
+              "still running"),
+        check(not win.inputs.axes, "live input stopped"),
+        check(config.get_setting("background_hint_shown"), "hint shown once"))
+    yield "games still watched", lambda: check(win._check_games() is True,
+                                               "games watch runs on")
+    yield "started again", lambda: application.activate()
+    yield "window back", lambda: (
+        check(win.get_visible() and not win._in_background, "window shown again"))
+
+    def background_off():
+        win._show_preferences("games")
+        find_row(win.prefs, "Run in the Background").set_active(False)
+        check(not background.autostart_enabled(), "autostart removed with it")
+        check(not application.tray.running, "tray icon gone")
+        win.prefs.close()
+    yield "background off", background_off
+
     # -- export, import, layout ---------------------------------------------
     def export_import():
         dest = scratch / "export.zip"
@@ -313,6 +390,7 @@ def main():
             try:
                 name, fn = next(it)
             except StopIteration:
+                finished.append(True)
                 application.quit()
                 return False
             try:
@@ -330,6 +408,8 @@ def main():
     session_log.setup()
     config.migrate_config()
     application.run([])
+    if not finished and "timeout" not in failures:
+        failures.append("the app ended before all steps ran")
     print(f"steps done: {len(steps_done)}")
     print(f"failures: {len(failures)}")
     for f in failures:

@@ -71,7 +71,10 @@ def test_app_runs_through(display, tmp_path):
         "XDG_STATE_HOME": str(home / ".local" / "state"),
         "PYTHONPATH": str(ROOT),
     })
-    result = subprocess.run([sys.executable, str(SMOKE), str(tmp_path)],
+    command = [sys.executable, str(SMOKE), str(tmp_path)]
+    if shutil.which("dbus-run-session"):    # a session bus for the tray icon
+        command = ["dbus-run-session", "--", *command]
+    result = subprocess.run(command,
                             env=env, cwd=ROOT, capture_output=True, text=True,
                             timeout=150)
     output = result.stdout + result.stderr

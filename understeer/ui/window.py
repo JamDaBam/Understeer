@@ -10,9 +10,9 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config, games, releases, report
 from .. import log as session_log
-from ..device import (can_write, describe_access, find_device_path,
+from ..device import (RIMS, can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
-                      permission_hint, read_int, write_values)
+                      permission_hint, read_int, wheel_info, write_values)
 from .. import i18n
 from ..i18n import _
 from ..inputs import InputMonitor
@@ -48,6 +48,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self.device_path = find_device_path()
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
+        self.wheel = {}          # see device.wheel_info()
+        self._in_background = False     # window hidden, still watching games
+        self._shut_down = False
 
         self.rows = {}           # attr id -> SettingTile
         self.pending = {}        # attr id -> value waiting to be written
@@ -131,15 +134,64 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             self._set_active_preset(*active)
         else:
             self._update_preset_indicator()
+        app = self.get_application()
+        if app is not None and hasattr(app, "tray"):
+            app.tray.relocalize()           # menu texts in the new language
         log.info("Window rebuilt; kept preset %s, %d unapplied changes",
                  active[0].name if active[0] else "none", len(self.pending))
 
     def _on_close(self, window):
+        app = self.get_application()
+        if not self._shut_down and app is not None and app.runs_in_background():
+            self.go_to_background()
+            return True                     # keep running, without window
+        self.shut_down()
+        return False
+
+    def shut_down(self):
+        """Stop watching for good, before quitting."""
+        if self._shut_down:
+            return
+        self._shut_down = True
+        self.flush_live()
         self.games_page.key_entry.flush()   # an API key still being typed
         GLib.source_remove(self._watch)
         GLib.source_remove(self._games_watch)
         self.inputs.stop()
-        return False
+
+    # -----------------------------------------------------------------------
+    # Running in the background
+    # -----------------------------------------------------------------------
+    def go_to_background(self, announce=True):
+        """Hide the window but keep applying the presets of games.
+
+        Watching the wheel base and the games goes on; the live input
+        display stops, nobody sees it.
+        """
+        self.flush_live()
+        self.games_page.key_entry.flush()
+        self._in_background = True
+        self.inputs.stop()
+        self.set_visible(False)
+        log.info("Running in the background")
+        if announce and not config.get_setting("background_hint_shown"):
+            config.set_setting("background_hint_shown", True)
+            note = Gio.Notification.new(_("Understeer runs in the background"))
+            note.set_body(_("It applies the presets of your games when they "
+                            "start. Open or quit it with its icon in the "
+                            "system tray."))
+            self.get_application().send_notification("background", note)
+
+    def show_again(self, token=None):
+        """Show the window (again). token: Wayland activation token."""
+        if token:
+            self.set_startup_id(token)
+        if self._in_background:
+            self._in_background = False
+            log.info("Window shown again")
+            self._start_inputs()
+            self._load_from_device()
+        self.present()
 
     # -----------------------------------------------------------------------
     # Layout
@@ -191,6 +243,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         app.append(_("Report a Problem…"), "win.report")
         app.append(_("About Understeer"), "win.about")
         menu.append_section(None, app)
+        quit_section = Gio.Menu()
+        quit_section.append(_("Quit"), "app.quit")
+        menu.append_section(None, quit_section)
         menu_btn.set_menu_model(menu)
         header.pack_end(menu_btn)
 
@@ -524,6 +579,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             log.info("Rumble: %s", self.rumble_path or "not available")
         else:
             log.info("No wheel base found")
+        self.wheel = wheel_info(self.device_path) if self.device_path else {}
+        if self.wheel.get("base_firmware") is not None or self.wheel.get("rim_id"):
+            log.info("Wheel: %s", self._wheel_text())
+        self._show_wheel_info()
         self._update_banner()
         self.slot_dropdown.set_sensitive(bool(self.device_path))
         self.rumble_group.set_sensitive(bool(self.rumble_path))
@@ -919,7 +978,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         tuning menu moves the matching control. Values the app wrote itself
         are already in device_values, so they don't count as changes.
         """
-        if self._check_plugged() or not self.device_path or self._live_timer:
+        if self._check_plugged() or not self.device_path:
+            return GLib.SOURCE_CONTINUE
+        self._check_wheel()
+        if self._live_timer:
             return GLib.SOURCE_CONTINUE
         slot = read_int(self._attr_file("SLOT"))
         if slot is not None and slot != self.device_values.get("SLOT"):
@@ -949,6 +1011,57 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         if changed:
             self._update_preset_indicator()
         return GLib.SOURCE_CONTINUE
+
+    # -----------------------------------------------------------------------
+    # Wheel base and steering wheel
+    # -----------------------------------------------------------------------
+    def _rim_name(self, rim_id):
+        return RIMS.get(rim_id) or _("Unknown wheel (ID {id})").format(id=rim_id)
+
+    def _wheel_text(self):
+        """One line for the log and the report."""
+        w = self.wheel
+        parts = [f"base {w.get('base') or model_id(self.device_path)}"
+                 f", firmware {w.get('base_firmware')}"]
+        if w.get("rim_id"):
+            parts.append(f"wheel {RIMS.get(w['rim_id'], 'unknown')} "
+                         f"(id {w['rim_id']}), firmware {w.get('rim_firmware')}")
+        return "; ".join(parts)
+
+    def _check_wheel(self):
+        """Notice a steering wheel being put on or changed."""
+        info = wheel_info(self.device_path)
+        if info == self.wheel:
+            return
+        old_rim, self.wheel = self.wheel.get("rim_id"), info
+        if info["rim_id"] != old_rim:
+            log.info("Wheel: %s", self._wheel_text())
+            if info["rim_id"] and old_rim:      # not when first reported
+                self._notify(_("Steering wheel changed: {name}").format(
+                    name=self._rim_name(info["rim_id"])))
+        self._show_wheel_info()
+
+    def _show_wheel_info(self):
+        """Fill the Hardware rows in the preferences."""
+        if not hasattr(self, "base_row"):
+            return
+        w = self.wheel
+
+        def firmware(version):
+            return "" if version is None else _("Firmware {version}").format(
+                version=version)
+
+        if self.device_path:
+            name = w.get("base") or model_id(self.device_path)
+            self.base_row.set_subtitle(" · ".join(
+                p for p in (name, firmware(w.get("base_firmware"))) if p))
+        else:
+            self.base_row.set_subtitle(_("Not connected"))
+        rim = w.get("rim_id")
+        self.rim_row.set_visible(bool(rim))
+        if rim:
+            self.rim_row.set_subtitle(" · ".join(
+                p for p in (self._rim_name(rim), firmware(w.get("rim_firmware"))) if p))
 
     def _on_slot_selected(self):
         if not self.device_path:
@@ -1074,6 +1187,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         if self.device_path:
             details += [("Wheel base", f"{model_id(self.device_path)} "
                          f"({'writable' if self.writable else 'no write access'})"),
+                        ("Wheel", self._wheel_text()),
                         ("Access", describe_access(self.device_path))]
         else:
             details.append(("Wheel base", "not found"))

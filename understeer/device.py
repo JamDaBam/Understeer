@@ -45,6 +45,67 @@ def model_id(device_path):
     return f"{m[1]}:{m[2]}".upper() if m else name
 
 
+# Names for the ids hid-fanatecff reports (from its hid-ftec.h). Product
+# names, so they aren't translated.
+WHEEL_BASES = {          # USB product id
+    0x0001: "ClubSport Wheel Base V2",
+    0x0004: "ClubSport Wheel Base V2.5",
+    0x0005: "CSL Elite Wheel Base (PS4)",
+    0x0006: "Podium Wheel Base DD1",
+    0x0007: "Podium Wheel Base DD2",
+    0x0011: "CSR Elite Wheel Base",
+    0x0020: "CSL DD",
+    0x0E03: "CSL Elite Wheel Base",
+}
+RIMS = {                 # rim_id
+    0x01: "ClubSport Steering Wheel BMW M3 GT2",
+    0x02: "ClubSport Steering Wheel F1",
+    0x03: "ClubSport Steering Wheel Porsche 918 RSR",
+    0x04: "ClubSport Universal Hub",
+    0x06: "ClubSport Universal Hub for Xbox One",
+    0x07: "CSL Steering Wheel P1 for Xbox One",
+    0x08: "CSL Steering Wheel P1 V2",
+    0x09: "CSL Elite Steering Wheel McLaren GT3",
+    0x0A: "ClubSport Steering Wheel Formula V2",
+    0x0B: "CSL Elite Steering Wheel McLaren GT3 V2",
+    0x0C: "Podium Button Module Endurance",
+    0x0D: "CSL Elite Steering Wheel WRC",
+    0x0E: "Podium Steering Wheel Bentley GT3",
+    0x0F: "Podium Steering Wheel BMW M4 GT3",
+    0x10: "Podium Steering Wheel GT",
+    0x11: "CSL Universal Hub",
+    0x12: "CSL Elite Steering Wheel WRC",
+    0x13: "ClubSport Steering Wheel BMW GT2 V2",
+    0x14: "ClubSport Steering Wheel RS",
+    0x15: "ClubSport Universal Hub V2",
+    0x16: "ClubSport Steering Wheel F1 Esports V2",
+    0x18: "Podium Steering Wheel GT X",
+}
+
+
+def wheel_info(device_path):
+    """What the driver tells about the wheel base and the wheel on it:
+    {"base": name or None, "base_firmware", "rim_id", "rim_firmware"}.
+
+    rim_id and the firmware versions come with hid-fanatecff from October
+    2026 on; with older drivers they are None. rim_id 0 means no wheel was
+    reported yet. The files belong to the HID device, the parent of the
+    tuning folder.
+    """
+    hid = os.path.join(device_path, "device")
+    product = model_id(device_path).partition(":")[2]
+    try:
+        base = WHEEL_BASES.get(int(product, 16))
+    except ValueError:
+        base = None
+    rim_id = read_int(os.path.join(hid, "rim_id"))
+    return {"base": base,
+            "base_firmware": read_int(os.path.join(hid, "fw_version")),
+            "rim_id": rim_id or None,
+            "rim_firmware": read_int(os.path.join(hid, "fw_version_rim"))
+            if rim_id else None}
+
+
 def find_rumble_path():
     matches = glob.glob(RUMBLE_GLOB)
     return matches[0] if matches else None

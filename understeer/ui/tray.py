@@ -1,0 +1,336 @@
+"""The tray icon while Understeer runs in the background.
+
+GTK 4 has no tray icon, so this speaks the StatusNotifierItem protocol on
+the session D-Bus directly, with a com.canonical.dbusmenu menu for the
+right click. KDE Plasma, Cinnamon, XFCE, Budgie and MATE show it, GNOME
+with the AppIndicator extension (Ubuntu has it). Without a tray the icon
+is just not shown; starting Understeer again brings the window back.
+"""
+import logging
+import os
+import warnings
+
+import gi
+
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf, Gio, GLib  # noqa: E402
+
+log = logging.getLogger("understeer.tray")
+
+WATCHER = "org.kde.StatusNotifierWatcher"
+ITEM_PATH = "/StatusNotifierItem"
+MENU_PATH = "/MenuBar"
+ICON_SIZES = (16, 22, 24, 32, 48, 64)
+
+ITEM_XML = """
+<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <property name="Category" type="s" access="read"/>
+    <property name="Id" type="s" access="read"/>
+    <property name="Title" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="WindowId" type="i" access="read"/>
+    <property name="IconName" type="s" access="read"/>
+    <property name="IconPixmap" type="a(iiay)" access="read"/>
+    <property name="OverlayIconName" type="s" access="read"/>
+    <property name="OverlayIconPixmap" type="a(iiay)" access="read"/>
+    <property name="AttentionIconName" type="s" access="read"/>
+    <property name="AttentionIconPixmap" type="a(iiay)" access="read"/>
+    <property name="AttentionMovieName" type="s" access="read"/>
+    <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
+    <property name="ItemIsMenu" type="b" access="read"/>
+    <property name="Menu" type="o" access="read"/>
+    <method name="ContextMenu"><arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/></method>
+    <method name="Activate"><arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/></method>
+    <method name="SecondaryActivate"><arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/></method>
+    <method name="Scroll"><arg name="delta" type="i" direction="in"/>
+      <arg name="orientation" type="s" direction="in"/></method>
+    <method name="ProvideXdgActivationToken">
+      <arg name="token" type="s" direction="in"/></method>
+    <signal name="NewTitle"/>
+    <signal name="NewIcon"/>
+    <signal name="NewToolTip"/>
+    <signal name="NewStatus"><arg name="status" type="s"/></signal>
+  </interface>
+</node>"""
+
+MENU_XML = """
+<node>
+  <interface name="com.canonical.dbusmenu">
+    <property name="Version" type="u" access="read"/>
+    <property name="TextDirection" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="IconThemePath" type="as" access="read"/>
+    <method name="GetLayout">
+      <arg name="parentId" type="i" direction="in"/>
+      <arg name="recursionDepth" type="i" direction="in"/>
+      <arg name="propertyNames" type="as" direction="in"/>
+      <arg name="revision" type="u" direction="out"/>
+      <arg name="layout" type="(ia{sv}av)" direction="out"/>
+    </method>
+    <method name="GetGroupProperties">
+      <arg name="ids" type="ai" direction="in"/>
+      <arg name="propertyNames" type="as" direction="in"/>
+      <arg name="properties" type="a(ia{sv})" direction="out"/>
+    </method>
+    <method name="GetProperty">
+      <arg name="id" type="i" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="Event">
+      <arg name="id" type="i" direction="in"/>
+      <arg name="eventId" type="s" direction="in"/>
+      <arg name="data" type="v" direction="in"/>
+      <arg name="timestamp" type="u" direction="in"/>
+    </method>
+    <method name="EventGroup">
+      <arg name="events" type="a(isvu)" direction="in"/>
+      <arg name="idErrors" type="ai" direction="out"/>
+    </method>
+    <method name="AboutToShow">
+      <arg name="id" type="i" direction="in"/>
+      <arg name="needUpdate" type="b" direction="out"/>
+    </method>
+    <method name="AboutToShowGroup">
+      <arg name="ids" type="ai" direction="in"/>
+      <arg name="updatesNeeded" type="ai" direction="out"/>
+      <arg name="idErrors" type="ai" direction="out"/>
+    </method>
+    <signal name="ItemsPropertiesUpdated">
+      <arg name="updatedProps" type="a(ia{sv})"/>
+      <arg name="removedProps" type="a(ias)"/>
+    </signal>
+    <signal name="LayoutUpdated">
+      <arg name="revision" type="u"/>
+      <arg name="parent" type="i"/>
+    </signal>
+    <signal name="ItemActivationRequested">
+      <arg name="id" type="i"/>
+      <arg name="timestamp" type="u"/>
+    </signal>
+  </interface>
+</node>"""
+
+
+def argb_pixmaps(path, sizes=ICON_SIZES):
+    """The picture at path as SNI pixmaps: [(w, h, ARGB32 big-endian)]."""
+    try:
+        source = GdkPixbuf.Pixbuf.new_from_file(str(path))
+    except GLib.Error as e:
+        log.warning("Tray icon %s not readable: %s", path, e)
+        return []
+    pixmaps = []
+    for size in sizes:
+        pb = source.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        if not pb.get_has_alpha():
+            pb = pb.add_alpha(False, 0, 0, 0)
+        data, stride = pb.get_pixels(), pb.get_rowstride()
+        rgba = b"".join(data[y * stride:y * stride + size * 4] for y in range(size))
+        argb = bytearray(len(rgba))
+        argb[0::4], argb[1::4] = rgba[3::4], rgba[0::4]
+        argb[2::4], argb[3::4] = rgba[1::4], rgba[2::4]
+        pixmaps.append((size, size, bytes(argb)))
+    return pixmaps
+
+
+class Tray:
+    """A StatusNotifierItem with a menu: open the window, or quit.
+
+    texts() returns {"title", "tooltip", "open", "quit"} in the current
+    language; call relocalize() after it changed. activate(token) shows the
+    window (token: the Wayland activation token from the panel, or None),
+    quit() ends Understeer.
+    """
+    OPEN, QUIT = 1, 3
+
+    def __init__(self, icon_path, texts, activate, quit, connection=None):
+        self.icon_path = icon_path
+        self.texts = texts
+        self.on_activate = activate
+        self.on_quit = quit
+        self.connection = connection
+        self._pixmaps = None
+        self._token = None
+        self._revision = 1
+        self._ids = []          # registration ids to undo in stop()
+        self._owner = self._watch = 0
+        self.name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
+        self.registered = False     # the panel took the item
+
+    # -- start / stop --------------------------------------------------------
+    def start(self):
+        """Put the icon up. Returns False without a session bus."""
+        if self._owner:
+            return True
+        try:
+            if self.connection is None:
+                self.connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            for path, xml, call, prop in (
+                    (ITEM_PATH, ITEM_XML, self._item_call, self._item_property),
+                    (MENU_PATH, MENU_XML, self._menu_call, self._menu_property)):
+                info = Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0]
+                with warnings.catch_warnings():
+                    # Its successor needs GLib 2.84; Ubuntu 24.04 has 2.80.
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    self._ids.append(self.connection.register_object(
+                        path, info, call, prop, None))
+        except GLib.Error as e:
+            log.warning("No tray icon, the session bus is not available: %s", e)
+            self.stop()
+            return False
+        self._owner = Gio.bus_own_name_on_connection(
+            self.connection, self.name, Gio.BusNameOwnerFlags.NONE, None, None)
+        self._watch = Gio.bus_watch_name_on_connection(
+            self.connection, WATCHER, Gio.BusNameWatcherFlags.NONE,
+            self._watcher_appeared, self._watcher_vanished)
+        return True
+
+    def stop(self):
+        for reg_id in self._ids:
+            self.connection.unregister_object(reg_id)
+        self._ids = []
+        if self._watch:
+            Gio.bus_unwatch_name(self._watch)
+        if self._owner:
+            Gio.bus_unown_name(self._owner)
+        self._owner = self._watch = 0
+        self.registered = False
+
+    @property
+    def running(self):
+        return bool(self._owner)
+
+    def _watcher_appeared(self, connection, _name, _owner):
+        """The panel is there (again, e.g. after it restarted): register."""
+        def done(conn, result):
+            try:
+                conn.call_finish(result)
+                self.registered = True
+                log.info("Tray icon shown")
+            except GLib.Error as e:
+                log.warning("The panel did not take the tray icon: %s", e)
+        connection.call(WATCHER, "/StatusNotifierWatcher", WATCHER,
+                        "RegisterStatusNotifierItem",
+                        GLib.Variant("(s)", (self.name,)), None,
+                        Gio.DBusCallFlags.NONE, -1, None, done)
+
+    def _watcher_vanished(self, _connection, _name):
+        if self.registered:
+            log.info("The panel is gone, tray icon hidden")
+        self.registered = False
+
+    def relocalize(self):
+        """Texts changed (language): tell the panel to read them again."""
+        if not self._owner:
+            return
+        self._revision += 1
+        for signal in ("NewTitle", "NewToolTip"):
+            self._emit(ITEM_PATH, "org.kde.StatusNotifierItem", signal, None)
+        self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
+                   GLib.Variant("(ui)", (self._revision, 0)))
+
+    def _emit(self, path, interface, signal, params):
+        try:
+            self.connection.emit_signal(None, path, interface, signal, params)
+        except GLib.Error as e:
+            log.debug("Signal %s not sent: %s", signal, e)
+
+    # -- the item ------------------------------------------------------------
+    def _item_property(self, _conn, _sender, _path, _iface, name):
+        texts = self.texts()
+        if name in ("IconPixmap",):
+            if self._pixmaps is None:
+                self._pixmaps = argb_pixmaps(self.icon_path)
+            return GLib.Variant("a(iiay)", self._pixmaps)
+        if name in ("OverlayIconPixmap", "AttentionIconPixmap"):
+            return GLib.Variant("a(iiay)", [])
+        if name == "ToolTip":
+            return GLib.Variant("(sa(iiay)ss)",
+                                ("", [], texts["title"], texts["tooltip"]))
+        values = {"Category": ("s", "ApplicationStatus"),
+                  "Id": ("s", "io.github.JamDaBam.Understeer"),
+                  "Title": ("s", texts["title"]),
+                  "Status": ("s", "Active"),
+                  "WindowId": ("i", 0),
+                  "IconName": ("s", ""),        # the pixmap, as the AppImage's
+                  "OverlayIconName": ("s", ""),  # icon isn't in the icon theme
+                  "AttentionIconName": ("s", ""),
+                  "AttentionMovieName": ("s", ""),
+                  "ItemIsMenu": ("b", False),
+                  "Menu": ("o", MENU_PATH)}
+        if name in values:
+            return GLib.Variant(*values[name])
+        return None
+
+    def _item_call(self, _conn, _sender, _path, _iface, method, params, invocation):
+        if method == "ProvideXdgActivationToken":
+            self._token = params.unpack()[0]
+        elif method in ("Activate", "SecondaryActivate"):
+            self._open()
+        invocation.return_value(None)
+
+    def _open(self):
+        token, self._token = self._token, None
+        GLib.idle_add(lambda: self.on_activate(token) and False)
+
+    # -- the menu ------------------------------------------------------------
+    def _items(self):
+        texts = self.texts()
+        return {self.OPEN: {"label": GLib.Variant("s", texts["open"])},
+                2: {"type": GLib.Variant("s", "separator")},
+                self.QUIT: {"label": GLib.Variant("s", texts["quit"])}}
+
+    def _layout(self):
+        children = [GLib.Variant("(ia{sv}av)", (item_id, props, []))
+                    for item_id, props in self._items().items()]
+        root = {"children-display": GLib.Variant("s", "submenu")}
+        return (0, root, children)
+
+    def _menu_property(self, _conn, _sender, _path, _iface, name):
+        values = {"Version": ("u", 3), "TextDirection": ("s", "ltr"),
+                  "Status": ("s", "normal"), "IconThemePath": ("as", [])}
+        return GLib.Variant(*values[name]) if name in values else None
+
+    def _menu_call(self, _conn, _sender, _path, _iface, method, params, invocation):
+        args = params.unpack()
+        items = self._items()
+        if method == "GetLayout":
+            invocation.return_value(GLib.Variant(
+                "(u(ia{sv}av))", (self._revision, self._layout())))
+        elif method == "GetGroupProperties":
+            ids = args[0] or list(items)
+            invocation.return_value(GLib.Variant(
+                "(a(ia{sv}))", ([(i, items[i]) for i in ids if i in items],)))
+        elif method == "GetProperty":
+            value = items.get(args[0], {}).get(args[1])
+            if value is None:
+                invocation.return_dbus_error(
+                    "com.canonical.dbusmenu.Error", "no such property")
+            else:
+                invocation.return_value(GLib.Variant("(v)", (value,)))
+        elif method == "Event":
+            self._event(args[0], args[1])
+            invocation.return_value(None)
+        elif method == "EventGroup":
+            for item_id, event_id, _data, _time in args[0]:
+                self._event(item_id, event_id)
+            invocation.return_value(GLib.Variant("(ai)", ([],)))
+        elif method == "AboutToShow":
+            invocation.return_value(GLib.Variant("(b)", (False,)))
+        elif method == "AboutToShowGroup":
+            invocation.return_value(GLib.Variant("(aiai)", ([], [])))
+        else:
+            invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod",
+                                         method)
+
+    def _event(self, item_id, event_id):
+        if event_id != "clicked":
+            return
+        if item_id == self.OPEN:
+            self._open()
+        elif item_id == self.QUIT:
+            GLib.idle_add(lambda: self.on_quit() and False)

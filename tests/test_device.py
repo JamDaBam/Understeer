@@ -166,3 +166,27 @@ def test_join_group(privileged):
     user = pwd.getpwuid(os.getuid()).pw_name
     assert device.join_group("games")
     privileged.assert_called_once_with(f"usermod -aG games {user}")
+
+
+def test_wheel_info(sysfs, tmp_path):
+    d = sysfs("0003:0EB7:0020.0005", FF=50)
+    hid = tmp_path / "hid-device"
+    hid.mkdir()
+    (d / "device").symlink_to(hid)
+    assert device.wheel_info(str(d)) == {           # older driver
+        "base": "CSL DD", "base_firmware": None, "rim_id": None,
+        "rim_firmware": None}
+    (hid / "fw_version").write_text("1234\n")
+    (hid / "rim_id").write_text("0\n")             # no wheel reported yet
+    (hid / "fw_version_rim").write_text("7\n")
+    info = device.wheel_info(str(d))
+    assert (info["base_firmware"], info["rim_id"], info["rim_firmware"]) == (1234, None, None)
+    (hid / "rim_id").write_text("10\n")
+    info = device.wheel_info(str(d))
+    assert (info["rim_id"], info["rim_firmware"]) == (10, 7)
+    assert device.RIMS[info["rim_id"]] == "ClubSport Steering Wheel Formula V2"
+
+
+def test_wheel_info_unknown_base(sysfs):
+    assert device.wheel_info(str(sysfs("0003:0EB7:0999.0001")))["base"] is None
+    assert device.wheel_info(str(sysfs("odd-name")))["base"] is None

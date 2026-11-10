@@ -16,12 +16,14 @@ jobs:
 
       # The system Python with pytest from the distribution, as in the README.
       # GTK 4, Libadwaita and Xvfb (an invisible screen) let the UI test
-      # run the whole app; pyflakes finds wrong names before anything runs.
+      # run the whole app; D-Bus lets the tray icon be tested; pyflakes finds
+      # wrong names before anything runs.
       - name: Install test tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends python3-pytest \
-            python3-pyflakes python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 xvfb
+            python3-pyflakes python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 xvfb \
+            dbus-daemon dbus-bin
 
       - name: Check for mistakes in the code
         run: python3 -m pyflakes understeer tests tools
