@@ -69,8 +69,7 @@ class PresetsMixin:
             buttons = Gtk.Box(spacing=6)
             apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
-            apply_btn.connect("clicked", lambda b, p=path:
-                              self._confirm_apply_preset(p))
+            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
@@ -109,10 +108,8 @@ class PresetsMixin:
         sub.add_css_class("dim-label")
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
-        apply_btn.connect("clicked", lambda b: self._confirm_apply(
-            _("Sim Racing Defaults"), SIM_DEFAULTS,
-            lambda: self._apply_values(SIM_DEFAULTS,
-                                       _("Sim racing defaults applied"))))
+        apply_btn.connect("clicked", lambda b: self._apply_values(
+            SIM_DEFAULTS, _("Sim racing defaults applied")))
         for w in (title, sub, apply_btn):
             tile.append(w)
         return tile
@@ -213,51 +210,31 @@ class PresetsMixin:
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
 
-    def _confirm_apply_preset(self, path):
-        """Apply a preset by hand: first show what it changes."""
-        path = pathlib.Path(path)
-        try:
-            name, values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError) as e:
-            self._error(_("Could not load preset"), str(e))
-            return
-        self._confirm_apply(name, values, lambda: self._apply_preset(path))
-
-    def _confirm_apply(self, name, values, apply):
-        """Show the settings that values would change, then apply() on
-        confirmation. Nothing to change: apply() right away."""
-        current = self._collect_values()
-        # Like _apply_values: settings the wheel doesn't offer stay as they are
-        diff = changes(current, {a: v for a, v in values.items() if a in current})
-        if not diff:
-            apply()
-            return
-        dialog = Adw.AlertDialog(
-            heading=_("Apply “{name}”?").format(name=name),
-            body=_("Settings that change:"))
-        dialog.set_extra_child(self._changes_list(diff))
-        dialog.add_response("cancel", _("Cancel"))
-        dialog.add_response("apply", _("Apply"))
-        dialog.set_default_response("apply")
-        dialog.set_close_response("cancel")
-        dialog.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
-        dialog.connect("response", lambda d, r: apply() if r == "apply" else None)
-        dialog.present(self)
-
     def _changes_list(self, diff):
-        """A list of setting: before → after, scrolling when it is long."""
+        """Setting, before → after in aligned columns; scrolls when long."""
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
         for attr_id, old, new in diff:
             row = self.rows[attr_id]
-            before = row.format(old) if old is not None else "—"
             item = Adw.ActionRow(title=_(row.setting["label"]))
-            item.add_suffix(Gtk.Label(label=f"{before} → {row.format(new)}",
-                                      css_classes=["numeric"]))
+            values = Gtk.Box(spacing=8)
+            # Columns of the same width line up from row to row; long values
+            # (paddle mode) wrap within theirs.
+            before = row.format(old) if old is not None else "—"
+            for text, xalign in ((before, 1), (row.format(new), 0)):
+                values.append(Gtk.Label(label=text, xalign=xalign, wrap=True,
+                                        width_chars=17, max_width_chars=17,
+                                        css_classes=["numeric"]))
+            values.insert_child_after(Gtk.Label(label="→", css_classes=["dim-label"]),
+                                      values.get_first_child())
+            values.get_last_child().add_css_class("heading")
+            item.add_suffix(values)
             listbox.append(item)
-        return Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
-                                  max_content_height=320,
-                                  hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll = Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
+                                    max_content_height=420,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_size_request(560, -1)
+        return scroll
 
     def _ask_preset_name(self):
         entry = Gtk.Entry(placeholder_text=_("e.g. BeamNG Drift"),
@@ -300,7 +277,9 @@ class PresetsMixin:
         return True
 
     def _confirm_overwrite(self, path, new_name=None):
-        """Ask before replacing a preset file with the current settings."""
+        """Ask before replacing a preset file with the current settings,
+        showing what changes in it."""
+        path = pathlib.Path(path)
         try:
             name, stored = self._read_preset(path)
         except (OSError, json.JSONDecodeError):
@@ -313,28 +292,29 @@ class PresetsMixin:
             heading=_("Overwrite “{name}”?").format(name=name), body=body)
         if diff:
             dialog.set_extra_child(self._changes_list(diff))
+            if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
+                dialog.set_prefer_wide_layout(True)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("overwrite", _("Overwrite"))
+        dialog.set_close_response("cancel")
         dialog.set_response_appearance("overwrite",
                                        Adw.ResponseAppearance.DESTRUCTIVE)
-
-        def on_response(d, response):
-            if response == "overwrite" and self._write_preset(path, name):
-                self._notify(_("Preset “{name}” saved").format(name=name))
-
-        dialog.connect("response", on_response)
+        dialog.connect("response", lambda d, r: self._overwrite_preset(path, name)
+                       if r == "overwrite" else None)
         dialog.present(self)
 
     def _update_active_preset(self):
-        """Save to the active preset without asking; offer undo instead."""
-        path = self.active_preset
-        if path is None:
-            return
+        """Save to the active preset, after showing what changes in it."""
+        if self.active_preset is not None:
+            self._confirm_overwrite(self.active_preset)
+
+    def _overwrite_preset(self, path, name):
+        """Replace a preset with the current settings; offer undo."""
         try:
             old_text = path.read_text()
-            name, old_values = self._read_preset(path)
+            _n, old_values = self._read_preset(path)
         except (OSError, json.JSONDecodeError):
-            old_text, name, old_values = None, self._active_name(), {}
+            old_text, old_values = None, {}
         if not self._write_preset(path, name):
             return
         def undo():
@@ -345,7 +325,7 @@ class PresetsMixin:
                 return
             self._set_active_preset(path, old_values)
 
-        self._notify(_("Saved to “{name}”").format(name=name),
+        self._notify(_("Preset “{name}” saved").format(name=name),
                      _("Undo") if old_text is not None else None, undo)
 
     def _ask_rename_preset(self, path, name):

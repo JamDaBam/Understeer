@@ -152,38 +152,33 @@ def steps(win):
         check(win.update_action.get_enabled(), "update action enabled after change")
         check(win.preset_button.get_label() == "Test GT3 •",
               f"modified marker: {win.preset_button.get_label()!r}")
-        win._update_active_preset()
-        _n, vals = config.read_preset(win.active_preset)
-        check(vals.get("SHO") == 40, "preset updated")
-    yield "update preset", modify_and_update
+        win.activate_action("win.update-preset", None)
+    yield "save to the active preset", modify_and_update
 
-    def apply_preset():
-        win._apply_values({"FF": 70, "SHO": 80})
-        win._apply_preset(config.preset_path("Test GT3"))
-        check((dev / "SHO").read_text().strip() == "40", "preset applied to device")
-    yield "apply preset", apply_preset
-
-    def compare_before_applying():
-        win._apply_values({"FF": 70, "SHO": 80})
-        win._confirm_apply_preset(config.preset_path("Test GT3"))
-    yield "compare before applying", compare_before_applying
-
-    def compared():
+    def update_confirmed():
         d = win.get_visible_dialog()
-        check(isinstance(d, Adw.AlertDialog), "comparison shown before applying")
+        check(isinstance(d, Adw.AlertDialog), "changes shown before saving")
         if not isinstance(d, Adw.AlertDialog):
             return
         lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
                  if isinstance(r, Adw.ActionRow)]
-        check(lines == ["Force Feedback Strength: 70 % → 55 %",
-                        "Wheel Vibration: 80 % → 40 %"], f"changes listed: {lines}")
-        check((dev / "SHO").read_text().strip() == "80", "nothing written yet")
-        d.emit("response", "apply")
+        check(lines == ["Wheel Vibration: 60 % → 40 %"], f"changes listed: {lines}")
+        _n, vals = config.read_preset(win.active_preset)
+        check(vals.get("SHO") == 60, "nothing saved before confirming")
+        d.emit("response", "overwrite")
         d.force_close()
-        check((dev / "SHO").read_text().strip() == "40", "applied after confirming")
-        win._confirm_apply_preset(config.preset_path("Test GT3"))
-        check(win.get_visible_dialog() is None, "no question when nothing changes")
-    yield "compared and applied", compared
+        _n, vals = config.read_preset(win.active_preset)
+        check(vals.get("SHO") == 40, "preset updated")
+    yield "preset updated", update_confirmed
+
+    def apply_preset():
+        win._apply_values({"FF": 70, "SHO": 80})
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(
+            str(config.preset_path("Test GT3"))))
+        check((dev / "SHO").read_text().strip() == "40", "preset applied to device")
+        check(win.get_visible_dialog() is None, "applied without asking")
+    yield "apply preset", apply_preset
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")

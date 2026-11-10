@@ -44,8 +44,8 @@
                     <li xml:lang="de">Understeer kann im Hintergrund weiterlaufen, mit einem Symbol in der Systemleiste, damit die Presets deiner Spiele angewendet werden, ohne es vorher zu öffnen; es kann auch bei der Anmeldung starten</li>
                     <li>The preferences show the wheel base, the steering wheel on it and their firmware (with hid-fanatecff from October 2026)</li>
                     <li xml:lang="de">Die Einstellungen zeigen die Wheelbase, das Lenkrad darauf und ihre Firmware (mit hid-fanatecff ab Oktober 2026)</li>
-                    <li>Before applying or overwriting a preset, Understeer lists every setting that changes, e.g. Force Feedback Strength 70 % → 85 %</li>
-                    <li xml:lang="de">Vor dem Anwenden oder Überschreiben eines Presets zeigt Understeer jede Einstellung, die sich ändert, z. B. Force-Feedback-Stärke 70 % → 85 %</li>
+                    <li>Before a preset is overwritten, also from the Presets menu, Understeer lists every setting that changes in it, e.g. Force Feedback Strength 70 % → 85 %</li>
+                    <li xml:lang="de">Bevor ein Preset überschrieben wird, auch über das Presets-Menü, zeigt Understeer jede Einstellung, die sich darin ändert, z. B. Force-Feedback-Stärke 70 % → 85 %</li>
                     <li>After an update, Understeer says so once and shows what is new</li>
                     <li xml:lang="de">Nach einem Update weist Understeer einmal darauf hin und zeigt, was neu ist</li>
                     <li>The About dialog shows the changes of the installed version</li>

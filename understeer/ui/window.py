@@ -539,8 +539,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
-        add("apply-preset",
-            lambda a, p: self._confirm_apply_preset(p.get_string()),
+        add("apply-preset", lambda a, p: self._apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",
