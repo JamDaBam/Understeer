@@ -15,6 +15,17 @@ LAYOUTS = ["full", "compact"]      # tile sizes, see SettingTile.set_compact
 log = logging.getLogger("understeer.window")
 
 
+def _groups(widget):
+    """The preferences groups inside widget (not those inside them)."""
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Adw.PreferencesGroup):
+            yield child
+        else:
+            yield from _groups(child)
+        child = child.get_next_sibling()
+
+
 class PreferencesMixin:
     """Part of TunerWindow: the preferences window and what its Data page
     does."""
@@ -22,8 +33,10 @@ class PreferencesMixin:
     def _build_preferences(self):
         """The preferences dialog, made once and shown again when reopened.
 
-        After the language changed only its pages are made again, so open
-        preferences stay open, on the same page.
+        After the language changed only the content of its pages is made
+        again, so open preferences stay open, on the same page. The pages
+        themselves stay: replacing the shown page made Libadwaita crash now
+        and then.
         """
         prefs = getattr(self, "prefs", None)
         if prefs is None:
@@ -31,16 +44,12 @@ class PreferencesMixin:
                 content_width=720, content_height=680, search_enabled=False)
             # A key typed just before closing counts without Enter.
             prefs.connect("closed", lambda d: self.games_page.key_entry.flush())
-            self._prefs_pages = []
-        shown = prefs.get_visible_page_name()
-        old_pages, self._prefs_pages = self._prefs_pages, []
-        for page in old_pages:                  # free their names
-            page.set_name(f"old-{page.get_name()}")
+            self._prefs_pages = {}
+        rebuilt = bool(self._prefs_pages)
         prefs.set_title(_("Preferences"))
 
         # -- General --------------------------------------------------------
-        general = Adw.PreferencesPage(title=_("General"), name="general",
-                                      icon_name="preferences-system-symbolic")
+        general = self._prefs_page("general", _("General"), "preferences-system-symbolic")
         look = LookGroups()
         appearance = Adw.PreferencesGroup(title=_("Appearance"))
         appearance.add(look.scheme_row)
@@ -65,11 +74,9 @@ class PreferencesMixin:
         general.add(appearance)
         general.add(look.theme_group)
         general.add(look.shape_group)
-        self._add_prefs_page(general)
 
         # -- Wheel base -----------------------------------------------------
-        wheel = Adw.PreferencesPage(title=_("Wheel Base"), name="wheelbase",
-                                    icon_name="understeer-steering-symbolic")
+        wheel = self._prefs_page("wheelbase", _("Wheel Base"), "understeer-steering-symbolic")
         hardware = Adw.PreferencesGroup(title=_("Hardware"))
         self.base_row = Adw.ActionRow(title=_("Wheel Base"), subtitle_selectable=True)
         self.rim_row = Adw.ActionRow(title=_("Steering Wheel"), subtitle_selectable=True)
@@ -126,18 +133,14 @@ class PreferencesMixin:
         rumble.add(fire)
         self.rumble_group = rumble
         wheel.add(rumble)
-        self._add_prefs_page(wheel)
 
         # -- Games ----------------------------------------------------------
-        games_prefs = Adw.PreferencesPage(title=_("Games"), name="games",
-                                          icon_name="applications-games-symbolic")
+        games_prefs = self._prefs_page("games", _("Games"), "applications-games-symbolic")
         games_prefs.add(self.games_page.options)
         games_prefs.add(self._background_group())
-        self._add_prefs_page(games_prefs)
 
         # -- Data -----------------------------------------------------------
-        data = Adw.PreferencesPage(title=_("Data"), name="data",
-                                   icon_name="folder-symbolic")
+        data = self._prefs_page("data", _("Data"), "folder-symbolic")
         transfer = Adw.PreferencesGroup(
             title=_("Transfer"),
             description=_("Presets, games with their pictures and all "
@@ -177,16 +180,8 @@ class PreferencesMixin:
             log_row.add_suffix(button)
         problems.add(log_row)
         data.add(problems)
-        self._add_prefs_page(data)
-
-        # The new pages are in; now the old ones can go without the window
-        # showing another page in between.
-        for page in old_pages:
-            self.prefs.remove(page)
-        if shown:
-            self.prefs.set_visible_page_name(shown)
-        if old_pages:
-            self.prefs.set_focus(None)
+        if rebuilt:
+            prefs.set_focus(None)   # not on whatever took the old focus' place
 
     def _background_group(self):
         """Running in the background and starting at login."""
@@ -230,9 +225,18 @@ class PreferencesMixin:
         group.add(login)
         return group
 
-    def _add_prefs_page(self, page):
-        self.prefs.add(page)
-        self._prefs_pages.append(page)
+    def _prefs_page(self, name, title, icon_name):
+        """The preferences page name, emptied, or a new one."""
+        page = self._prefs_pages.get(name)
+        if page is None:
+            page = Adw.PreferencesPage(name=name, icon_name=icon_name)
+            self.prefs.add(page)
+            self._prefs_pages[name] = page
+        else:
+            for group in list(_groups(page)):
+                page.remove(group)
+        page.set_title(title)
+        return page
 
     def _show_preferences(self, page=None):
         if page:

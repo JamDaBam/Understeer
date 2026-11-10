@@ -245,6 +245,16 @@ def steps(win):
         check(win.prefs.get_visible_page_name() == "wheelbase",
               f"prefs page kept: {win.prefs.get_visible_page_name()}"))
 
+    # Another page chosen right before the language changes: replacing the
+    # pages then made Libadwaita crash now and then.
+    for i in range(16):
+        yield f"page and language {i}", lambda i=i: (
+            win._show_preferences(("general", "wheelbase", "games", "data")[i % 4]),
+            win._set_language("en" if i % 2 else "de"))
+    yield "prefs after many changes", lambda: check(
+        win.prefs.get_visible_page_name() == "data" and win._prefs_open(),
+        f"prefs page kept: {win.prefs.get_visible_page_name()}")
+
     def toast_in_prefs():
         before = win._toast
         win._notify("Shown in the preferences")
@@ -438,6 +448,8 @@ def main():
         def next_step():
             try:
                 name, fn = next(it)
+                if os.environ.get("SMOKE_TRACE"):
+                    print("step:", name, file=sys.stderr, flush=True)
             except StopIteration:
                 finished.append(True)
                 application.quit()

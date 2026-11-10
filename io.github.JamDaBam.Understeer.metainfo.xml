@@ -46,6 +46,8 @@
                     <li xml:lang="de">Die Einstellungen zeigen die Wheelbase, das Lenkrad darauf und ihre Firmware (mit hid-fanatecff ab Oktober 2026)</li>
                     <li>Before a preset is overwritten, also from the Presets menu, Understeer lists every setting that changes in it, e.g. Force Feedback Strength 70 % → 85 %</li>
                     <li xml:lang="de">Bevor ein Preset überschrieben wird, auch über das Presets-Menü, zeigt Understeer jede Einstellung, die sich darin ändert, z. B. Force-Feedback-Stärke 70 % → 85 %</li>
+                    <li>Changing the language right after switching pages in the preferences no longer makes Understeer crash now and then</li>
+                    <li xml:lang="de">Ein Sprachwechsel direkt nach dem Wechsel der Seite in den Einstellungen lässt Understeer nicht mehr ab und zu abstürzen</li>
                     <li>Without a wheel base connected, changing the language no longer resets the shown values</li>
                     <li xml:lang="de">Ohne angeschlossene Wheelbase setzt ein Sprachwechsel die angezeigten Werte nicht mehr zurück</li>
                     <li>After an update, Understeer says so once and shows what is new</li>
