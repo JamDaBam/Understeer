@@ -40,6 +40,10 @@
         <release version="1.9.0" date="2026-11-10">
             <description>
                 <ul>
+                    <li>Understeer can keep running in the background, with an icon in the system tray, so the presets of your games are applied without opening it first; it can also start at login</li>
+                    <li xml:lang="de">Understeer kann im Hintergrund weiterlaufen, mit einem Symbol in der Systemleiste, damit die Presets deiner Spiele angewendet werden, ohne es vorher zu öffnen; es kann auch bei der Anmeldung starten</li>
+                    <li>The preferences show the wheel base, the steering wheel on it and their firmware (with hid-fanatecff from October 2026)</li>
+                    <li xml:lang="de">Die Einstellungen zeigen die Wheelbase, das Lenkrad darauf und ihre Firmware (mit hid-fanatecff ab Oktober 2026)</li>
                     <li>After an update, Understeer says so once and shows what is new</li>
                     <li xml:lang="de">Nach einem Update weist Understeer einmal darauf hin und zeigt, was neu ist</li>
                     <li>The About dialog shows the changes of the installed version</li>

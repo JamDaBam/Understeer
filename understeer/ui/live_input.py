@@ -80,6 +80,8 @@ class LiveInputMixin:
         column.append(tile)
 
     def _start_inputs(self):
+        if getattr(self, "_in_background", False):
+            return          # nobody sees the live display; show_again() starts it
         self.inputs.start()
         self._rebuild_axes_list()
         self._update_inputs()

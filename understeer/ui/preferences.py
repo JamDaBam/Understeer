@@ -4,7 +4,7 @@ import time
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import backup, config, i18n
+from .. import background, backup, config, i18n
 from .. import log as session_log
 from ..i18n import _
 from .look_prefs import LookGroups
@@ -70,6 +70,14 @@ class PreferencesMixin:
         # -- Wheel base -----------------------------------------------------
         wheel = Adw.PreferencesPage(title=_("Wheel Base"), name="wheelbase",
                                     icon_name="understeer-steering-symbolic")
+        hardware = Adw.PreferencesGroup(title=_("Hardware"))
+        self.base_row = Adw.ActionRow(title=_("Wheel Base"), subtitle_selectable=True)
+        self.rim_row = Adw.ActionRow(title=_("Steering Wheel"), subtitle_selectable=True)
+        hardware.add(self.base_row)
+        hardware.add(self.rim_row)
+        wheel.add(hardware)
+        self._show_wheel_info()
+
         self.slot_names_group = Adw.PreferencesGroup(
             title=_("Slot Names"),
             description=_("Name the slots like on the display of your wheel "
@@ -124,6 +132,7 @@ class PreferencesMixin:
         games_prefs = Adw.PreferencesPage(title=_("Games"), name="games",
                                           icon_name="applications-games-symbolic")
         games_prefs.add(self.games_page.options)
+        games_prefs.add(self._background_group())
         self._add_prefs_page(games_prefs)
 
         # -- Data -----------------------------------------------------------
@@ -178,6 +187,48 @@ class PreferencesMixin:
             self.prefs.set_visible_page_name(shown)
         if old_pages:
             self.prefs.set_focus(None)
+
+    def _background_group(self):
+        """Running in the background and starting at login."""
+        group = Adw.PreferencesGroup(title=_("Background"))
+        run = Adw.SwitchRow(
+            title=_("Run in the Background"),
+            subtitle=_("Presets of games are also applied with the window "
+                       "closed. An icon in the system tray shows that "
+                       "Understeer runs; quit it there or in the main menu."))
+        run.set_active(bool(config.get_setting("background")))
+        login = Adw.SwitchRow(
+            title=_("Start at Login"),
+            subtitle=_("Starts in the background when you log in."))
+        login.set_active(background.autostart_enabled())
+        login.set_sensitive(run.get_active())
+
+        def run_changed(row, _param):
+            on = row.get_active()
+            config.set_setting("background", on or None)
+            log.info("Running in the background %s", "on" if on else "off")
+            self.get_application().update_tray()
+            login.set_sensitive(on)
+            if not on:
+                login.set_active(False)
+
+        def login_changed(row, _param):
+            on = row.get_active()
+            if on == background.autostart_enabled():
+                return
+            try:
+                background.set_autostart(on)
+                log.info("Start at login %s (%s)", "on" if on else "off",
+                         background.autostart_file())
+            except OSError as e:
+                self._error(_("Could not change the start at login"), str(e))
+                row.set_active(not on)      # back; the check above stops here
+
+        run.connect("notify::active", run_changed)
+        login.connect("notify::active", login_changed)
+        group.add(run)
+        group.add(login)
+        return group
 
     def _add_prefs_page(self, page):
         self.prefs.add(page)
