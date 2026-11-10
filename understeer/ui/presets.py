@@ -8,7 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config
 from ..i18n import _
-from ..settings import SIM_DEFAULTS
+from ..settings import SIM_DEFAULTS, changes
 
 log = logging.getLogger("understeer.window")
 
@@ -69,7 +69,8 @@ class PresetsMixin:
             buttons = Gtk.Box(spacing=6)
             apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
-            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
+            apply_btn.connect("clicked", lambda b, p=path:
+                              self._confirm_apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
@@ -108,8 +109,10 @@ class PresetsMixin:
         sub.add_css_class("dim-label")
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
-        apply_btn.connect("clicked", lambda b: self._apply_values(
-            SIM_DEFAULTS, _("Sim racing defaults applied")))
+        apply_btn.connect("clicked", lambda b: self._confirm_apply(
+            _("Sim Racing Defaults"), SIM_DEFAULTS,
+            lambda: self._apply_values(SIM_DEFAULTS,
+                                       _("Sim racing defaults applied"))))
         for w in (title, sub, apply_btn):
             tile.append(w)
         return tile
@@ -152,8 +155,7 @@ class PresetsMixin:
 
     def _preset_diff(self, stored):
         """[(attr id, stored value or None, current value)] that differ."""
-        return [(a, stored.get(a), v) for a, v in self._collect_values().items()
-                if stored.get(a) != v]
+        return changes(stored, self._collect_values())
 
     def _update_preset_indicator(self):
         if self.active_preset is None:
@@ -211,6 +213,52 @@ class PresetsMixin:
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
 
+    def _confirm_apply_preset(self, path):
+        """Apply a preset by hand: first show what it changes."""
+        path = pathlib.Path(path)
+        try:
+            name, values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError) as e:
+            self._error(_("Could not load preset"), str(e))
+            return
+        self._confirm_apply(name, values, lambda: self._apply_preset(path))
+
+    def _confirm_apply(self, name, values, apply):
+        """Show the settings that values would change, then apply() on
+        confirmation. Nothing to change: apply() right away."""
+        current = self._collect_values()
+        # Like _apply_values: settings the wheel doesn't offer stay as they are
+        diff = changes(current, {a: v for a, v in values.items() if a in current})
+        if not diff:
+            apply()
+            return
+        dialog = Adw.AlertDialog(
+            heading=_("Apply “{name}”?").format(name=name),
+            body=_("Settings that change:"))
+        dialog.set_extra_child(self._changes_list(diff))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("apply", _("Apply"))
+        dialog.set_default_response("apply")
+        dialog.set_close_response("cancel")
+        dialog.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", lambda d, r: apply() if r == "apply" else None)
+        dialog.present(self)
+
+    def _changes_list(self, diff):
+        """A list of setting: before → after, scrolling when it is long."""
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        for attr_id, old, new in diff:
+            row = self.rows[attr_id]
+            before = row.format(old) if old is not None else "—"
+            item = Adw.ActionRow(title=_(row.setting["label"]))
+            item.add_suffix(Gtk.Label(label=f"{before} → {row.format(new)}",
+                                      css_classes=["numeric"]))
+            listbox.append(item)
+        return Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
+                                  max_content_height=320,
+                                  hscrollbar_policy=Gtk.PolicyType.NEVER)
+
     def _ask_preset_name(self):
         entry = Gtk.Entry(placeholder_text=_("e.g. BeamNG Drift"),
                           activates_default=True)
@@ -251,16 +299,6 @@ class PresetsMixin:
         self._set_active_preset(path, values)
         return True
 
-    def _describe_diff(self, diff, limit=6):
-        lines = []
-        for attr_id, old, new in diff[:limit]:
-            row = self.rows[attr_id]
-            before = row.format(old) if old is not None else "—"
-            lines.append(f"{_(row.setting['label'])}: {before} → {row.format(new)}")
-        if len(diff) > limit:
-            lines.append(_("and {n} more").format(n=len(diff) - limit))
-        return "\n".join(lines)
-
     def _confirm_overwrite(self, path, new_name=None):
         """Ask before replacing a preset file with the current settings."""
         try:
@@ -269,11 +307,12 @@ class PresetsMixin:
             name, stored = path.stem, {}
         name = new_name or name
         diff = self._preset_diff(stored)
-        body = (_("Settings that change:") + "\n" + self._describe_diff(diff)
-                if diff else _("The preset already matches the current "
-                               "settings."))
+        body = (_("Settings that change:") if diff else
+                _("The preset already matches the current settings."))
         dialog = Adw.AlertDialog(
             heading=_("Overwrite “{name}”?").format(name=name), body=body)
+        if diff:
+            dialog.set_extra_child(self._changes_list(diff))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("overwrite", _("Overwrite"))
         dialog.set_response_appearance("overwrite",

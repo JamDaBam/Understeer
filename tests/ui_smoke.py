@@ -105,6 +105,24 @@ def close_dialogs(win):
         d.force_close()
 
 
+def walk(widget):
+    """The widget and everything inside it."""
+    if widget is None:
+        return
+    yield widget
+    child = widget.get_first_child()
+    while child is not None:
+        yield from walk(child)
+        child = child.get_next_sibling()
+
+
+def r_suffix(row):
+    """Text of the labels in an Adw.ActionRow besides its title."""
+    return " ".join(w.get_label() for w in walk(row)
+                    if isinstance(w, Gtk.Label) and w.get_label() not in
+                    (row.get_title(), row.get_subtitle(), ""))
+
+
 def steps(win):
     """Each step runs on its own main loop turn, so the UI can settle."""
     yield "start", lambda: check(win.device_path is not None, "fake wheel base found")
@@ -144,6 +162,28 @@ def steps(win):
         win._apply_preset(config.preset_path("Test GT3"))
         check((dev / "SHO").read_text().strip() == "40", "preset applied to device")
     yield "apply preset", apply_preset
+
+    def compare_before_applying():
+        win._apply_values({"FF": 70, "SHO": 80})
+        win._confirm_apply_preset(config.preset_path("Test GT3"))
+    yield "compare before applying", compare_before_applying
+
+    def compared():
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog), "comparison shown before applying")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        check(lines == ["Force Feedback Strength: 70 % → 55 %",
+                        "Wheel Vibration: 80 % → 40 %"], f"changes listed: {lines}")
+        check((dev / "SHO").read_text().strip() == "80", "nothing written yet")
+        d.emit("response", "apply")
+        d.force_close()
+        check((dev / "SHO").read_text().strip() == "40", "applied after confirming")
+        win._confirm_apply_preset(config.preset_path("Test GT3"))
+        check(win.get_visible_dialog() is None, "no question when nothing changes")
+    yield "compared and applied", compared
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")
