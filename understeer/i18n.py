@@ -82,6 +82,18 @@ def load_catalog(locale_dir=None, language=None):
 
 
 _CATALOG = load_catalog()
+_LANGUAGE = None
+
+
+def current_language(locale_dir=None):
+    """Code of the language the text is shown in, e.g. "de"; "en" if none
+    of the wanted languages is translated."""
+    if _LANGUAGE:
+        return _LANGUAGE
+    for lang in _wanted_languages():
+        if ((locale_dir or LOCALE_DIR) / f"{lang}.po").is_file():
+            return lang
+    return "en"
 
 
 def set_language(language):
@@ -89,8 +101,9 @@ def set_language(language):
 
     Only affects text created afterwards, so the window is rebuilt.
     """
-    global _CATALOG
+    global _CATALOG, _LANGUAGE
     _CATALOG = load_catalog(language=language)
+    _LANGUAGE = language
 
 
 def _(text):

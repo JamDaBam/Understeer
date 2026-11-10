@@ -34,6 +34,8 @@ cp $APP_ID.desktop AppDir/
 cp $APP_ID.desktop AppDir/usr/share/applications/
 # appimagetool only looks for the older .appdata.xml file name
 cp $APP_ID.metainfo.xml AppDir/usr/share/metainfo/$APP_ID.appdata.xml
+# The app reads its release notes from it, next to the package as in git
+cp $APP_ID.metainfo.xml AppDir/usr/share/understeer/
 
 # App icon: PNG in the root becomes .DirIcon (must be PNG), SVG for desktops
 cp $APP_ID.png AppDir/

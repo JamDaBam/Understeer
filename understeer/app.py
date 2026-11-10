@@ -2,7 +2,7 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, config, games, i18n, log
+from . import DATA_DIR, config, games, i18n, log, releases
 from .ui.window import TunerWindow  # also selects the GTK version
 from .ui import theme
 
@@ -21,6 +21,9 @@ class TunerApplication(Adw.Application):
         # Which games run; kept here so a rebuilt window doesn't apply
         # their presets again.
         self.game_watch = games.StartWatch()
+        # Before this start saves anything: was Understeer used here before?
+        # Then a first start of a new version counts as an update.
+        self.used_before = releases.was_used(config.CONFIG_DIR)
 
     def do_startup(self):
         Adw.Application.do_startup(self)

@@ -33,6 +33,52 @@
 
     <content_rating type="oars-1.1" />
 
+    <!-- Newest first. The app shows the notes of its version after an
+         update, and the release build takes the GitHub notes from here.
+         Translations: the same element again with xml:lang. -->
+    <releases>
+        <release version="1.9.0" date="2026-11-10">
+            <description>
+                <ul>
+                    <li>After an update, Understeer says so once and shows what is new</li>
+                    <li xml:lang="de">Nach einem Update weist Understeer einmal darauf hin und zeigt, was neu ist</li>
+                    <li>The About dialog shows the changes of the installed version</li>
+                    <li xml:lang="de">Der Info-Dialog zeigt die Änderungen der installierten Version</li>
+                </ul>
+            </description>
+        </release>
+        <release version="1.8.1" date="2026-11-09">
+            <description>
+                <ul>
+                    <li>Set Up now re-triggers only the devices of the Fanatec rule instead of every device of the system</li>
+                    <li xml:lang="de">„Einrichten“ löst nur noch die Geräte der Fanatec-Regel neu aus statt aller Geräte des Systems</li>
+                    <li>Imported game entries can no longer point to files outside the presets and pictures folders</li>
+                    <li xml:lang="de">Importierte Spiel-Einträge können nicht mehr auf Dateien außerhalb der Ordner für Presets und Bilder zeigen</li>
+                    <li>The whole app is now tested automatically on every change</li>
+                    <li xml:lang="de">Die ganze App wird jetzt bei jeder Änderung automatisch getestet</li>
+                </ul>
+            </description>
+        </release>
+        <release version="1.8.0" date="2026-11-09">
+            <description>
+                <ul>
+                    <li>The SteamGridDB API key takes effect as soon as it is entered; no need to click the check mark</li>
+                    <li xml:lang="de">Der SteamGridDB-API-Schlüssel gilt, sobald er eingetragen ist, ohne Klick auf den Haken</li>
+                    <li>Settings and presets are saved completely or not at all</li>
+                    <li xml:lang="de">Einstellungen und Presets werden ganz oder gar nicht gespeichert</li>
+                    <li>Report a Problem and the cover search open as dialogs in the main window</li>
+                    <li xml:lang="de">„Problem melden“ und die Cover-Suche öffnen sich als Dialoge im Hauptfenster</li>
+                    <li>Fixed an error when SteamGridDB refused the API key in the cover search</li>
+                    <li xml:lang="de">Fehler behoben, wenn SteamGridDB den API-Schlüssel in der Cover-Suche ablehnte</li>
+                    <li>The reset confirmation no longer mentions a fixed number of tuning slots</li>
+                    <li xml:lang="de">Die Rückfrage beim Zurücksetzen nennt keine feste Anzahl von Tuning-Slots mehr</li>
+                </ul>
+                <p>Understeer now needs Libadwaita 1.5 or newer (e.g. Ubuntu 24.04, Fedora 40, Debian 13). On older systems, stay on 1.7.0.</p>
+                <p xml:lang="de">Understeer braucht jetzt Libadwaita 1.5 oder neuer (z. B. Ubuntu 24.04, Fedora 40, Debian 13). Auf älteren Systemen bleibt man bei 1.7.0.</p>
+            </description>
+        </release>
+    </releases>
+
     <provides>
         <binary>understeer.py</binary>
     </provides>

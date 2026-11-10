@@ -8,7 +8,7 @@ import os
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import config, games, report
+from .. import config, games, releases, report
 from .. import log as session_log
 from ..device import (can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -84,6 +84,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self._game_watch = getattr(app, "game_watch", None) or games.StartWatch()
         self._games_watch = GLib.timeout_add(GAMES_WATCH_MS, self._check_games)
         GLib.idle_add(lambda: self._check_games() and False)
+        GLib.idle_add(lambda: self._announce_update() and False)
         self.connect("close-request", self._on_close)
 
     def flush_live(self):
@@ -434,6 +435,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             license_type=Gtk.License.GPL_3_0,
             debug_info=report.system_info(self.report_details()),
             debug_info_filename="understeer-debug.txt")
+        version = releases.plain_version(props["version"])
+        notes = releases.notes(version, i18n.current_language())
+        if notes:                   # "What's New" of the installed version
+            props.update(release_notes=notes, release_notes_version=version)
         about = Adw.AboutDialog(**props)
         about.add_acknowledgement_section(_("Started as a fork of"), [
             "SimPower (FanatecLinux) by BenryBoi "
@@ -441,6 +446,20 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         about.add_acknowledgement_section(_("Kernel driver"), [
             "hid-fanatecff by gotzl https://github.com/gotzl/hid-fanatecff"])
         about.present(self)
+
+    def _announce_update(self):
+        """After an update, say so once, with a way to what is new."""
+        current = releases.plain_version(session_log.version())
+        last = config.get_setting("last_version")
+        used = getattr(self.get_application(), "used_before", True)
+        if releases.should_announce(current, last, used):
+            log.info("Updated from %s to %s", last or "an older version", current)
+            self._notify(_("Understeer was updated to {version}").format(
+                version=current), _("What's New"),
+                lambda: (self._hide_toast(), self._show_about()))
+        # Only released versions are remembered, not ones run from git.
+        if last != current and releases.has_notes(current):
+            config.set_setting("last_version", current)
 
     # -----------------------------------------------------------------------
     # Actions

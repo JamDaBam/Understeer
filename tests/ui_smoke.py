@@ -8,6 +8,7 @@ exit code is the number of failures.
 """
 import logging
 import pathlib
+import xml.etree.ElementTree as ET
 import sys
 import traceback
 
@@ -43,7 +44,7 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, backup, config, inputs, log as session_log  # noqa: E402
+from understeer import app, backup, config, inputs, releases, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
@@ -242,6 +243,32 @@ def steps(win):
         check(cover["c"].nav.get_visible_page().get_tag() != "key", "search shown"),
         check(key_entry().row.get_text() == "good-2", "prefs row shows the key"),
         cover["c"].dialog.close())
+
+    # -- after an update: message once, "What's New" in the About dialog ---
+    newest = ET.parse(releases.METAINFO).getroot().find("releases/release")
+    newest, older = newest.get("version"), "1.0.0"
+
+    def updated():
+        session_log.version = lambda: f"v{newest}"
+        config.set_setting("last_version", older)
+        win._announce_update()
+        check(win._toast is not None and newest in win._toast.get_title(),
+              "update message shown")
+        check(config.get_setting("last_version") == newest, "new version remembered")
+    yield "update message", updated
+
+    def not_again():
+        win._hide_toast()
+        win._announce_update()
+        check(win._toast is None, "update message only once")
+        win._show_about()
+    yield "update message once", not_again
+    yield "what's new", lambda: (
+        check(isinstance(win.get_visible_dialog(), Adw.AboutDialog), "About shown"),
+        check(win.get_visible_dialog().get_release_notes_version() == newest,
+              "About has the notes of this version"),
+        check(bool(win.get_visible_dialog().get_release_notes()), "notes not empty"),
+        win.get_visible_dialog().close())
 
     # -- export, import, layout ---------------------------------------------
     def export_import():

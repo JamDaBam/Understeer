@@ -1211,186 +1211,194 @@ msgstr "About this setting"
 msgid "Not supported by your hardware"
 msgstr "Not supported by your hardware"
 
-#: understeer/ui/window.py:168
+#: understeer/ui/window.py:169
 msgid "Slot {n}"
 msgstr "Slot {n}"
 
-#: understeer/ui/window.py:170
+#: understeer/ui/window.py:171
 msgid "Tuning slot on the wheel base that is being edited"
 msgstr "Tuning slot on the wheel base that is being edited"
 
-#: understeer/ui/window.py:182
+#: understeer/ui/window.py:183
 msgid "Main Menu"
 msgstr "Main Menu"
 
-#: understeer/ui/window.py:185
+#: understeer/ui/window.py:186
 msgid "Reload from Device"
 msgstr "Reload from Device"
 
-#: understeer/ui/window.py:190
+#: understeer/ui/window.py:191
 msgid "Report a Problem…"
 msgstr "Report a Problem…"
 
-#: understeer/ui/window.py:191
+#: understeer/ui/window.py:192
 msgid "About Understeer"
 msgstr "About Understeer"
 
-#: understeer/ui/window.py:198
+#: understeer/ui/window.py:199
 msgid "Undo all changes since the values were loaded"
 msgstr "Undo all changes since the values were loaded"
 
-#: understeer/ui/window.py:222
+#: understeer/ui/window.py:223
 msgid "Discard"
 msgstr "Discard"
 
-#: understeer/ui/window.py:375
+#: understeer/ui/window.py:376
 msgid "{group} (advanced)"
 msgstr "{group} (advanced)"
 
-#: understeer/ui/window.py:410
+#: understeer/ui/window.py:411
 msgid "Quick Select"
 msgstr "Quick Select"
 
-#: understeer/ui/window.py:417
+#: understeer/ui/window.py:418
 msgid "Use the maximum range of the wheel base"
 msgstr "Use the maximum range of the wheel base"
 
-#: understeer/ui/window.py:438
+#: understeer/ui/window.py:443
 msgid "Started as a fork of"
 msgstr "Started as a fork of"
 
-#: understeer/ui/window.py:441
+#: understeer/ui/window.py:446
 msgid "Kernel driver"
 msgstr "Kernel driver"
 
-#: understeer/ui/window.py:591
+#: understeer/ui/window.py:457
+msgid "Understeer was updated to {version}"
+msgstr "Understeer was updated to {version}"
+
+#: understeer/ui/window.py:458
+msgid "What's New"
+msgstr "What's New"
+
+#: understeer/ui/window.py:609
 msgid "No Fanatec wheel base found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr "No Fanatec wheel base found. Check that it is switched on and the hid-fanatecff driver is loaded."
 
-#: understeer/ui/window.py:593
+#: understeer/ui/window.py:611
 msgid "Retry"
 msgstr "Retry"
 
-#: understeer/ui/window.py:598
+#: understeer/ui/window.py:616
 msgid "Changes need a password each time. Join the “{group}” group to tune live."
 msgstr "Changes need a password each time. Join the “{group}” group to tune live."
 
-#: understeer/ui/window.py:601
+#: understeer/ui/window.py:619
 msgid "Join Group"
 msgstr "Join Group"
 
-#: understeer/ui/window.py:603
+#: understeer/ui/window.py:621
 msgid "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 msgstr "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 
-#: understeer/ui/window.py:610
+#: understeer/ui/window.py:628
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr "Changes need a password each time. Set up write permissions to tune live."
 
-#: understeer/ui/window.py:633
+#: understeer/ui/window.py:651
 msgid "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 msgstr "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 
-#: understeer/ui/window.py:639
+#: understeer/ui/window.py:657
 msgid "Log out and back in to finish joining the “{group}” group."
 msgstr "Log out and back in to finish joining the “{group}” group."
 
-#: understeer/ui/window.py:643
+#: understeer/ui/window.py:661
 msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 
-#: understeer/ui/window.py:658
+#: understeer/ui/window.py:676
 msgid "Setting up permissions failed"
 msgstr "Setting up permissions failed"
 
-#: understeer/ui/window.py:661
+#: understeer/ui/window.py:679
 msgid "Added to “{group}”. Log out and back in to tune live."
 msgstr "Added to “{group}”. Log out and back in to tune live."
 
-#: understeer/ui/window.py:704
+#: understeer/ui/window.py:722
 msgid "Wheel base connected"
 msgstr "Wheel base connected"
 
-#: understeer/ui/window.py:706
+#: understeer/ui/window.py:724
 msgid "Wheel base disconnected"
 msgstr "Wheel base disconnected"
 
-#: understeer/ui/window.py:718
+#: understeer/ui/window.py:736
 msgid "No device"
 msgstr "No device"
 
-#: understeer/ui/window.py:735
+#: understeer/ui/window.py:753
 msgid "In sync with device"
 msgstr "In sync with device"
 
-#: understeer/ui/window.py:747
+#: understeer/ui/window.py:765
 msgid "Writing…"
 msgstr "Writing…"
 
-#: understeer/ui/window.py:772
+#: understeer/ui/window.py:790
 msgid "Write failed: {names}"
 msgstr "Write failed: {names}"
 
-#: understeer/ui/window.py:774
+#: understeer/ui/window.py:792
 msgid "Could not write: {names}"
 msgstr "Could not write: {names}"
 
-#: understeer/ui/window.py:791
+#: understeer/ui/window.py:809
 msgid "Pending changes: {n}"
 msgstr "Pending changes: {n}"
 
-#: understeer/ui/window.py:793
+#: understeer/ui/window.py:811
 msgid "Changes not applied yet"
 msgstr "Changes not applied yet"
 
-#: understeer/ui/window.py:829
+#: understeer/ui/window.py:847
 msgid "Changes undone"
 msgstr "Changes undone"
 
-#: understeer/ui/window.py:914
+#: understeer/ui/window.py:932
 msgid "Slot changed on the wheel base: {name}. Unapplied changes were discarded."
 msgstr "Slot changed on the wheel base: {name}. Unapplied changes were discarded."
 
-#: understeer/ui/window.py:916
+#: understeer/ui/window.py:934
 msgid "Slot changed on the wheel base: {name}"
 msgstr "Slot changed on the wheel base: {name}"
 
-#: understeer/ui/window.py:942
+#: understeer/ui/window.py:960
 msgid "The driver can only switch to slots 1–{n}. Choose this slot on the wheel base."
 msgstr "The driver can only switch to slots 1–{n}. Choose this slot on the wheel base."
 
-#: understeer/ui/window.py:944
+#: understeer/ui/window.py:962
 msgid "Could not switch slot"
 msgstr "Could not switch slot"
 
-#: understeer/ui/window.py:958
+#: understeer/ui/window.py:976
 msgid "Could not send rumble"
 msgstr "Could not send rumble"
 
-#: understeer/ui/window.py:971
+#: understeer/ui/window.py:989
 msgid "Permissions set up — changes now apply live"
 msgstr "Permissions set up — changes now apply live"
 
-#: understeer/ui/window.py:1016
+#: understeer/ui/window.py:1034
 msgid "Reset All Tuning Slots?"
 msgstr "Reset All Tuning Slots?"
 
-#: understeer/ui/window.py:1017
+#: understeer/ui/window.py:1035
 msgid "All tuning slots stored on the wheel base will be cleared. This cannot be undone."
 msgstr "All tuning slots stored on the wheel base will be cleared. This cannot be undone."
 
-#: understeer/ui/window.py:1020
+#: understeer/ui/window.py:1038
 msgid "Reset"
 msgstr "Reset"
 
-#: understeer/ui/window.py:1029
+#: understeer/ui/window.py:1047
 msgid "Not Available"
 msgstr "Not Available"
 
-#: understeer/ui/window.py:1030
+#: understeer/ui/window.py:1048
 msgid "This wheel base does not support resetting."
 msgstr "This wheel base does not support resetting."
 
-#: understeer/ui/window.py:1041
+#: understeer/ui/window.py:1059
 msgid "OK"
 msgstr "OK"
