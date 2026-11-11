@@ -40,6 +40,8 @@ def test_plain_version():
     assert releases.plain_version("v1.8.1") == "1.8.1"
     assert releases.plain_version("1.8.1\n") == "1.8.1"
     assert releases.plain_version("v1.8.1-3-gabc") == "1.8.1-3-gabc"
+    assert releases.plain_version(None) == ""
+    assert releases.plain_version(5) == ""          # from a damaged settings file
 
 
 def test_notes_in_english(metainfo):

@@ -3,6 +3,7 @@
 All user-visible text goes through _() (see README for adding a language).
 """
 import os
+import re
 
 from . import DATA_DIR
 
@@ -12,12 +13,15 @@ LOCALE_DIR = DATA_DIR / "locale"
 LANGUAGE_NAMES = {"de": "Deutsch", "en": "English"}
 
 
+_ESCAPES = {"n": "\n", "t": "\t"}
+
+
 def _unquote_po(s):
     s = s.strip()
     if not (s.startswith('"') and s.endswith('"')):
         return ""
-    return (s[1:-1].replace('\\n', '\n').replace('\\t', '\t')
-            .replace('\\"', '"').replace('\\\\', '\\'))
+    # In one pass: "\\n" is a backslash and an n, not a line break
+    return re.sub(r"\\(.)", lambda m: _ESCAPES.get(m[1], m[1]), s[1:-1])
 
 
 def parse_po(text):

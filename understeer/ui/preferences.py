@@ -7,7 +7,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from .. import background, backup, config, i18n, updates
 from .. import log as session_log
 from ..i18n import _
-from . import theme
+from . import files, theme
 from .look_prefs import LookGroups
 from .report_dialog import ReportDialog
 
@@ -63,7 +63,7 @@ class PreferencesMixin:
         appearance.add(layout_row)
 
         languages = [None] + i18n.available_languages()
-        current = config.get_setting("language")
+        current = config.get_text("language")
         language_row = Adw.ComboRow(title=_("Language"))
         language_row.set_model(Gtk.StringList.new(
             [_("System language")] + [i18n.language_name(c) for c in languages[1:]]))
@@ -77,7 +77,7 @@ class PreferencesMixin:
         general.add(look.shape_group)
         general.add(self._updates_group())
 
-        # -- Wheel base -----------------------------------------------------
+        # -- Wheelbase -----------------------------------------------------
         wheel = self._prefs_page("wheelbase", _("Wheelbase"), "understeer-steering-symbolic")
         hardware = Adw.PreferencesGroup(title=_("Hardware"))
         self.base_row = Adw.ActionRow(title=_("Wheelbase"), subtitle_selectable=True)
@@ -291,29 +291,20 @@ class PreferencesMixin:
         return self.prefs.get_parent() is not None
 
     @staticmethod
-    def _zip_filters():
-        zips = Gtk.FileFilter(name=_("Understeer Export (ZIP)"))
-        zips.add_pattern("*.zip")
-        zips.add_mime_type("application/zip")
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(zips)
-        return filters, zips
+    def _zip_dialog(title, **props):
+        """A file dialog for an export of everything."""
+        return files.file_dialog(title, _("Understeer Export (ZIP)"), ("*.zip",),
+                                 ("application/zip",), **props)
 
     def _ask_export(self):
-        filters, zips = self._zip_filters()
-        dialog = Gtk.FileDialog(
-            title=_("Export"), filters=filters, default_filter=zips,
-            initial_name=time.strftime("Understeer-%Y-%m-%d.zip"))
+        dialog = self._zip_dialog(
+            _("Export"), initial_name=time.strftime("Understeer-%Y-%m-%d.zip"))
         dialog.save(self, None, self._export_chosen)
 
     def _export_chosen(self, dialog, result):
-        try:
-            file = dialog.save_finish(result)
-        except GLib.Error:
-            return                              # cancelled
-        path = file.get_path() if file else None
+        path = files.chosen_path(dialog.save_finish, result)
         if path is None:
-            return
+            return                              # cancelled
         if not path.lower().endswith(".zip"):
             path += ".zip"
         try:
@@ -322,24 +313,15 @@ class PreferencesMixin:
             self._error(_("Could not export"), str(e))
             return
         self._notify(_("Exported (presets: {presets}, games: {games})").format(
-            **counts), _("Show Folder"),
-            lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(path))
-            .open_containing_folder(self, None, None))
+            **counts), _("Show Folder"), lambda: files.show_in_folder(self, path))
 
     def _ask_import(self):
-        filters, zips = self._zip_filters()
-        dialog = Gtk.FileDialog(title=_("Import"), filters=filters,
-                                default_filter=zips)
-        dialog.open(self, None, self._import_chosen)
+        self._zip_dialog(_("Import")).open(self, None, self._import_chosen)
 
     def _import_chosen(self, dialog, result):
-        try:
-            file = dialog.open_finish(result)
-        except GLib.Error:
-            return                              # cancelled
-        path = file.get_path() if file else None
+        path = files.chosen_path(dialog.open_finish, result)
         if path is None:
-            return
+            return                              # cancelled
         try:
             found = backup.read(path)
         except (backup.Error, OSError) as e:
@@ -375,12 +357,12 @@ class PreferencesMixin:
             return
         # Show what was imported: language, look, layout, the tray icon,
         # presets, games, names.
-        i18n.set_language(config.get_setting("language"))
+        i18n.set_language(config.get_text("language"))
         theme.apply()
         app = self.get_application()
         if app is not None:
             app.update_tray()
-        layout = config.get_setting("layout")
+        layout = config.get_text("layout")
         self.layout = layout if layout in LAYOUTS else "full"
         self._apply_layout()
         self.axis_roles = config.load_axis_roles()
@@ -399,5 +381,4 @@ class PreferencesMixin:
                 str(session_log.LOG_FILE))).launch(self, None, None)
 
     def _open_log_folder(self):
-        Gtk.FileLauncher.new(Gio.File.new_for_path(
-            str(session_log.LOG_FILE))).open_containing_folder(self, None, None)
+        files.show_in_folder(self, session_log.LOG_FILE)

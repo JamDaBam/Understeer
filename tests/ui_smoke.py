@@ -1,4 +1,4 @@
-"""Drive the whole app against a fake wheel base; run by test_ui.py.
+"""Drive the whole app against a fake wheelbase; run by test_ui.py.
 
 Usage: ui_smoke.py <scratch dir>
 Expects an isolated HOME and a display (test_ui.py starts Xvfb). Nothing
@@ -6,17 +6,20 @@ goes to the network: SteamGridDB is replaced. Every uncaught exception,
 every ERROR log line and every failed check counts as a failure; the
 exit code is the number of failures.
 """
+import json
 import logging
 import os
 import pathlib
+import struct
 import xml.etree.ElementTree as ET
 import sys
 import traceback
+import zlib
 
 scratch = pathlib.Path(sys.argv[1])
 sys.argv = sys.argv[:1]
 
-# A fake wheel base: one sysfs folder with every setting as a plain file.
+# A fake wheelbase: one sysfs folder with every setting as a plain file.
 dev = scratch / "sysfs" / "ftec_tuning" / "0003:0EB7:0020.0005"
 dev.mkdir(parents=True, exist_ok=True)
 VALUES = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0, "FFS": 1,
@@ -53,10 +56,11 @@ steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
-from understeer.ui import cover_search, theme  # noqa: E402
+from understeer.ui import cover_search, files, theme  # noqa: E402
+from understeer.ui.setting_tile import SettingTile  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 failures, steps_done = [], []
 finished = []           # set once every step ran
@@ -64,7 +68,8 @@ STEP_MS = 300
 
 
 EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
-                   "Could not load preset: Broken.json holds no preset"}
+                   "Could not load preset: Broken.json holds no preset",
+                   "Could not delete preset: Disk full"}
 
 
 class Collect(logging.Handler):
@@ -81,6 +86,31 @@ sys.excepthook = lambda kind, value, tb: failures.append(
 def check(cond, what):
     if not cond:
         failures.append(f"check failed: {what}")
+
+
+class ChosenFile:
+    """Stands in for a file dialog: its user picks path at once."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def open(self, _parent, _cancellable, callback):
+        callback(self, None)
+
+    def open_finish(self, _result):
+        return Gio.File.new_for_path(str(self.path))
+
+    save, save_finish = open, open_finish
+
+
+def tiny_png():
+    """A picture of one pixel that GTK can show."""
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data)))
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00")) + chunk(b"IEND", b""))
 
 
 def find_row(widget, title):
@@ -127,7 +157,7 @@ def r_suffix(row):
 
 def steps(win):
     """Each step runs on its own main loop turn, so the UI can settle."""
-    yield "start", lambda: check(win.device_path is not None, "fake wheel base found")
+    yield "start", lambda: check(win.device_path is not None, "fake wheelbase found")
 
     def live_write():
         win.rows["FF"].set(55, silent=False)
@@ -137,9 +167,9 @@ def steps(win):
 
     def changed_on_wheel_base():
         (dev / "SHO").write_text("60\n")
-    yield "change on the wheel base", changed_on_wheel_base
+    yield "change on the wheelbase", changed_on_wheel_base
     yield "change followed", lambda: check(win.rows["SHO"].get() == 60,
-                                           "control follows the wheel base")
+                                           "control follows the wheelbase")
 
     def steering_auto():
         (dev / "SEN").write_text("2530\n")     # how a CSL DD reports Auto
@@ -248,7 +278,7 @@ def steps(win):
         _n, vals = config.read_preset(win.active_preset)
         check(quits and vals.get("SHO") == 40, "quit, preset left as it was")
         check((dev / "SHO").read_text().strip() == "20",
-              "wheel base keeps the changed value")
+              "wheelbase keeps the changed value")
     yield "quit without saving", quit_without_saving
 
     def quit_and_save():
@@ -822,12 +852,187 @@ def steps(win):
             win.get_visible_dialog().emit("response", "overwrite")
             check(config.preset_folder(path) == "Saved Into",
                   f"saved over it into the folder chosen: {config.preset_folder(path)}")
+            win._save_preset("Folder Test", "")
+            win.get_visible_dialog().emit("response", "overwrite")
+            check(config.preset_folder(path) == "Saved Into",
+                  "no folder entered: saved over it where it is")
         finally:
             close_dialogs(win)
             path.unlink(missing_ok=True)
             config.delete_folder("Saved Into")
             win._set_active_preset(*before)
     yield "save as preset into a folder", save_as_into_folder
+
+    def no_write_access():
+        """Every write would ask for a password: changes wait for Apply."""
+        before = (win.active_preset, win.active_values)
+        values = win._collect_values()
+        waiting = config.preset_path("Waiting")
+        win._load_from_device()         # as at the start: nothing to undo
+        ff = win.rows["FF"].get()
+        win.writable = False
+        try:
+            win.rows["FF"].set(ff - 7, silent=False)
+            check(win.pending == {"FF": ff - 7} and win.pending_bar.get_revealed(),
+                  f"a change waits for Apply: {win.pending}")
+            check((dev / "FF").read_text().strip() == str(ff), "nothing written yet")
+            win._undo_all()                             # Discard
+            check(not win.pending and not win.pending_bar.get_revealed(),
+                  f"nothing left to apply after Discard: {win.pending}")
+            outcome, _failed = win._apply_values(values)
+            check(outcome == "written" and not win.pending,
+                  f"no password for what the wheelbase has: {outcome} {win.pending}")
+            # The preset of a game that starts while the window is closed
+            config.write_preset(waiting, "Waiting", {"FF": ff - 10})
+            win._presets_changed()
+            win._desktop_notify = lambda *a: None
+            win.go_to_background(announce=False)
+            win._apply_preset(waiting, game="Some Game")
+            check(win.pending == {"FF": ff - 10}, f"preset waits: {win.pending}")
+            win.show_again()
+            check(win.pending == {"FF": ff - 10} and win.pending_bar.get_revealed()
+                  and win.rows["FF"].get() == ff - 10,
+                  f"still waiting for Apply with the window open: {win.pending}")
+            win._flush_pending()                        # Apply
+            check((dev / "FF").read_text().strip() == str(ff - 10), "written by Apply")
+        finally:
+            win.writable = True
+            win._cancel_pending()
+            del win._desktop_notify
+            waiting.unlink(missing_ok=True)
+            win._apply_values(values)
+            win._set_active_preset(*before)
+    yield "no write access", no_write_access
+    yield "window open again", lambda: check(win.get_visible(), "window shown")
+
+    def damaged_settings():
+        """Settings changed by hand or from a damaged export: the window
+        is still built, with what can be used of them."""
+        kept = {f: f.read_bytes() if f.exists() else None
+                for f in (config.APP_SETTINGS_FILE, config.AXES_FILE,
+                          config.SLOT_NAMES_FILE, config.SLOT_COUNTS_FILE)}
+        old_page = win.games_page
+        try:
+            data = config.load_json(config.APP_SETTINGS_FILE, {})
+            data.update({"theme": ["carbon"], "accent": {"a": 1}, "color_scheme": 5,
+                         "steamgriddb_key": 123, "last_version": 7, "layout": [],
+                         "language": {"de": 1}})
+            config.APP_SETTINGS_FILE.write_text(json.dumps(data))
+            config.AXES_FILE.write_text('{"FANATEC Pedals:1": ["x"]}')
+            config.SLOT_NAMES_FILE.write_text(
+                '{"0EB7:0020": {"\u00b2": "x", "1": "Race"}}')
+            config.SLOT_COUNTS_FILE.write_text('{"0EB7:0020": 1000000}')
+            theme.apply()
+            win.axis_roles = config.load_axis_roles()
+            win.relocalize()
+            win._announce_update()
+            check(win.slot_names == {1: "Race"} and win.slot_count == 15,
+                  f"usable slot names kept: {win.slot_names} {win.slot_count}")
+            check(win.games_page.key_row.get_text() == "", "a key that is no text is none")
+            check(old_page.replaced and not win.games_page.replaced,
+                  "the Games page before the rebuild no longer saves")
+        finally:
+            for f, content in kept.items():
+                if content is None:
+                    f.unlink(missing_ok=True)
+                else:
+                    f.write_bytes(content)
+            theme.apply()
+            win.axis_roles = config.load_axis_roles()
+            win.relocalize()
+    yield "damaged settings", damaged_settings
+
+    def not_utf8():
+        bad = config.CONFIG_DIR / "Latin.json"
+        bad.write_bytes(b'{"name": "N\xfcrburgring", "values": {"FF": 50}}')
+        win._presets_changed()
+        win._delete_presets([bad])
+        check(not bad.exists(), "a preset file that is no UTF-8 can be deleted")
+        trash.empty()
+        win._trash_changed()
+    yield "delete a file that is no UTF-8", not_utf8
+
+    def folder_partly_deleted():
+        """Delete with Presets, but one can't go: its folder stays."""
+        first, second = config.preset_path("Part A"), config.preset_path("Part B")
+        config.write_preset(first, "Part A", {"FF": 10}, "Partly")
+        config.write_preset(second, "Part B", {"FF": 20}, "Partly")
+        win._presets_changed()
+        real = trash.put_preset
+
+        def fail_second(path):
+            if pathlib.Path(path) == second:
+                raise OSError("Disk full")
+            return real(path)
+        trash.put_preset = fail_second
+        try:
+            win._delete_presets([first, second], folder="Partly")
+            check(config.preset_folder(second) == "Partly"
+                  and "Partly" in config.list_folders(),
+                  "the folder stays with the preset that could not be deleted")
+            check(win._toast_text.get_label() == "“Part A” deleted",
+                  f"told what was deleted: {win._toast_text.get_label()!r}")
+        finally:
+            trash.put_preset = real
+            close_dialogs(win)
+            second.unlink(missing_ok=True)
+            config.delete_folder("Partly")
+            trash.empty()
+            win._presets_changed()
+            win._trash_changed()
+    yield "folder deleted in part", folder_partly_deleted
+
+    def no_auto():
+        """A wheelbase without Auto (e.g. ClubSport V2.5) takes its largest
+        angle for it."""
+        tile = SettingTile(win.rows["SEN"].setting, lambda t: None)
+        tile.set_upper(900, has_auto=False)
+        tile.set(0)
+        check(tile.get() == 900 and tile.value_label.get_label() == "900°",
+              f"largest angle instead of Auto: {tile.value_label.get_label()!r}")
+        tile.set_upper(2520, has_auto=True)
+        tile.set(0)
+        check(tile.get() == 0 and tile.value_label.get_label() == "Auto", "Auto with it")
+    yield "wheelbase without Auto", no_auto
+
+    def file_dialogs():
+        """What happens once a file is chosen, for every file dialog."""
+        real = files.file_dialog
+        shared, exported = scratch / "shared.json", scratch / "by-dialog"
+        picture = scratch / "cover.png"
+        picture.write_bytes(tiny_png())
+        page = win.games_page
+        try:
+            files.file_dialog = lambda *a, **k: ChosenFile(shared)
+            win._export_preset(str(gt3))
+            check("understeer_preset" in shared.read_text(), "preset saved as file")
+            win._ask_import_preset()
+            d = win.get_visible_dialog()
+            check(isinstance(d, Adw.AlertDialog) and d.has_response("replace"),
+                  "preset file read: its name is taken")
+            close_dialogs(win)
+            files.file_dialog = lambda *a, **k: ChosenFile(exported)
+            win._ask_export()
+            check(exported.with_suffix(".zip").is_file(), ".zip added and written")
+            files.file_dialog = lambda *a, **k: ChosenFile(exported.with_suffix(".zip"))
+            win._ask_import()
+            d = win.get_visible_dialog()
+            check(isinstance(d, Adw.AlertDialog)
+                  and d.get_heading() == "Import from This File?", "export read")
+            close_dialogs(win)
+            page._add("dummy:cover", "Cover Test")
+            game = [g for g in page.games if g["game"] == "dummy:cover"][0]
+            files.file_dialog = lambda *a, **k: ChosenFile(picture)
+            page._choose_cover(game)
+            check(config.game_cover_path(game) is not None, "picture chosen for a game")
+            config.remove_game_cover(game)
+        finally:
+            files.file_dialog = real
+            close_dialogs(win)
+            page.games = [g for g in page.games if g["game"] != "dummy:cover"]
+            page._save()
+            page.refresh()
+    yield "file dialogs", file_dialogs
 
 
     def rename():
@@ -846,14 +1051,14 @@ def steps(win):
             win.relocalize()
             shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
             check(shown == {"SEN": 540, "SHO": 30},
-                  f"values kept without a wheel base: {shown}")
+                  f"values kept without a wheelbase: {shown}")
             win._set_setting("SEN", 0)                  # the Auto button
             check(win.rows["SEN"].value_label.get_label() == "Auto",
                   "Auto also without a wheelbase, e.g. for a preset")
         finally:
             win.device_path = path
             win.relocalize()
-    yield "rebuilt without wheel base", rebuilt_without_wheel_base
+    yield "rebuilt without wheelbase", rebuilt_without_wheel_base
 
     def dialogs():
         win._ask_preset_name()
@@ -1160,11 +1365,11 @@ def steps(win):
         win._show_update_banner()
     yield "update check off", update_check_off
 
-    # -- wheel base and steering wheel ---------------------------------------
+    # -- wheelbase and steering wheel ---------------------------------------
     yield "hardware shown", lambda: (
         win._show_preferences("wheelbase"),
         check(win.base_row.get_subtitle() == "CSL DD · Firmware 1234",
-              f"wheel base row: {win.base_row.get_subtitle()!r}"),
+              f"wheelbase row: {win.base_row.get_subtitle()!r}"),
         check(win.rim_row.get_visible() and win.rim_row.get_subtitle() ==
               "ClubSport Steering Wheel Formula V2 · Firmware 52",
               f"wheel row: {win.rim_row.get_subtitle()!r}"),
@@ -1241,12 +1446,12 @@ def steps(win):
         win._game_watch.running.add("test-game")
         path, win.device_path = win.device_path, None
         try:
-            win._apply_preset(bg_preset, game="BeamNG")     # no wheel base yet
+            win._apply_preset(bg_preset, game="BeamNG")     # no wheelbase yet
             (dev / "FF").write_text("20\n")                 # its own value
             notes.clear()
             win._plug_tick = -1                             # look right now
             win._check_plugged()
-            check(win.device_path == path, "wheel base found again")
+            check(win.device_path == path, "wheelbase found again")
             check((dev / "FF").read_text().strip() == "64",
                   "preset of the running game written once connected")
             check(notes == [("game-preset", "Wheelbase connected, BeamNG runs",
@@ -1282,7 +1487,7 @@ def steps(win):
             finally:
                 win.device_path = path
             check(notes and "was not written" in notes[0][2],
-                  f"told it was not written without a wheel base: {notes}")
+                  f"told it was not written without a wheelbase: {notes}")
             # Unsaved changes: the window opens and asks before they are lost
             application._tray_apply_preset(str(tray_preset))
             win._set_setting("FF", 55)           # written, as by the user

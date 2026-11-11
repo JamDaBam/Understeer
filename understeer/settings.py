@@ -1,4 +1,4 @@
-"""The wheel base settings shown in the app, without depending on GTK."""
+"""The wheelbase settings shown in the app, without depending on GTK."""
 from .i18n import _, N_
 
 # ---------------------------------------------------------------------------

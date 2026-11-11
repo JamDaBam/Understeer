@@ -9,8 +9,8 @@ from .. import config, sharing, trash
 from ..i18n import _
 from ..names import free_name, menu_label
 from ..settings import (SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS, TABS, changes,
-                        fit_step, format_value)
-from . import layout
+                        format_value)
+from . import files, layout
 from .names import cap_row, full_name_tip, join_names, name_label, short
 from .selection import Selection
 
@@ -381,8 +381,7 @@ class PresetsMixin:
         """Return (name, values) of a preset file: the settings shown here,
         with valid values. Raises OSError or ValueError."""
         name, values = config.read_preset(path)
-        return name, {k: fit_step(SETTINGS_BY_ID[k], v)
-                      for k, v in sharing.clean_values(values).items()
+        return name, {k: v for k, v in sharing.clean_values(values).items()
                       if k in self.rows}
 
     def _set_active_preset(self, path, values):
@@ -392,7 +391,7 @@ class PresetsMixin:
 
     def _apply_preset(self, path, game=None, connected=False):
         """Apply a preset; game: the game it is applied for, connected: the
-        wheel base just got connected while the game runs."""
+        wheelbase just got connected while the game runs."""
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
@@ -416,7 +415,7 @@ class PresetsMixin:
                   "click Apply to write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed, connected)
         elif game:
-            # Without a wheel base, it is written once one is connected
+            # Without a wheelbase, it is written once one is connected
             # (_apply_running_game_preset).
             outcome, failed = self._apply_values(
                 values,
@@ -508,15 +507,15 @@ class PresetsMixin:
         dialog.present(self)
 
     def _apply_running_game_preset(self):
-        """After a wheel base got connected: apply the preset of a running
-        game, chosen before there was a wheel base to write it to. Returns
+        """After a wheelbase got connected: apply the preset of a running
+        game, chosen before there was a wheelbase to write it to. Returns
         whether there was one."""
         for game in self.games_page.games:
             if game["game"] not in self._game_watch.running or not game["auto"]:
                 continue
             path = config.game_preset_path(game)
             if path is not None:
-                log.info("Wheel base connected while %s runs", game["name"])
+                log.info("Wheelbase connected while %s runs", game["name"])
                 self._apply_preset(path, game=game["name"], connected=True)
                 return True
         return False
@@ -524,7 +523,7 @@ class PresetsMixin:
     def _notify_game_preset(self, game, name, outcome, failed, connected=False):
         """While the window is closed, tell with a notification of the
         desktop what became of the preset of a game that started, or that
-        runs while the wheel base got connected."""
+        runs while the wheelbase got connected."""
         if not self._in_background or not config.get_setting(
                 "game_notifications", True):
             return
@@ -583,16 +582,16 @@ class PresetsMixin:
             entry, _("Enter a name for the preset."),
             self._suggestion_list(folder, _("Pick a Folder")))
 
-    def _save_preset(self, name, folder=config.KEEP):
-        """folder: the one entered, also for a preset of that name that is
-        replaced; left out, such a preset stays in its folder."""
+    def _save_preset(self, name, folder=None):
+        """folder: the one entered. A preset of that name is replaced and
+        moves there; with none entered it stays in its folder."""
         if not name:
             return                          # the dialog asks for one
         path = config.preset_path(name)
-        if folder is not config.KEEP:
-            folder = config.existing_folder(folder)
+        folder = config.existing_folder(folder)
         if path.exists():
-            self._confirm_overwrite(path, new_name=name, folder=folder)
+            self._confirm_overwrite(path, new_name=name,
+                                    folder=folder or config.KEEP)
             return
         if self._write_preset(path, name, folder):
             self._notify(_("Preset “{name}” saved").format(name=short(name)))
@@ -763,8 +762,9 @@ class PresetsMixin:
         if not count:
             self._delete_folder(folder)
             return
-        files = {p.name for name, p in dict(config.list_presets_by_folder(
-            empty=True)).get(folder, [])}
+        paths = [p for _n, p in dict(config.list_presets_by_folder(
+            empty=True)).get(folder, [])]
+        files = {p.name for p in paths}
         body = _("Presets in it: {n}. Keep them, shown without a folder, or "
                  "delete them too? Deleted presets go to the trash.").format(n=count)
         body += self._games_note(files)
@@ -782,24 +782,10 @@ class PresetsMixin:
             if response == "keep":
                 self._delete_folder(folder)
             elif response == "all":
-                self._delete_folder_with_presets(folder)
+                self._delete_presets(paths, folder=folder)
 
         dialog.connect("response", on_response)
         dialog.present(self)
-
-    def _delete_folder_with_presets(self, folder):
-        """Its presets go to the bin; Undo there brings back the folder too."""
-        paths = [p for _n, p in dict(config.list_presets_by_folder(
-            empty=True)).get(folder, [])]
-        log.info("Folder %r deleted with %d presets", folder, len(paths))
-        self._delete_presets(paths, _(
-            "Folder “{folder}” deleted. Presets deleted: {n}").format(
-                folder=short(folder), n=len(paths)))
-        try:
-            config.delete_folder(folder)
-        except OSError as e:
-            self._error(_("Could not delete folder"), str(e))
-        self._presets_changed()
 
     def _delete_folder(self, folder):
         try:
@@ -891,13 +877,13 @@ class PresetsMixin:
 
     def confirm_quit(self, quit_now):
         """Call quit_now(), but first offer to save unsaved changes of the
-        active preset. The wheel base keeps its settings either way."""
+        active preset. The wheelbase keeps its settings either way."""
         if self._shut_down or not self._unsaved_preset_changes():
             if self._save_dialog is None:
                 quit_now()
             return
         if self._in_background:
-            self.show_again()               # also reads the wheel base again
+            self.show_again()               # also reads the wheelbase again
         self._ask_save_changes(
             quit_now, "quit",
             _("These settings differ from the preset. The wheelbase "
@@ -1001,32 +987,23 @@ class PresetsMixin:
         self._notify(message.format(name=short(name)))
 
     @staticmethod
-    def _preset_filters():
-        presets = Gtk.FileFilter(name=_("Presets (JSON or text)"))
-        for pattern in ("*.json", "*.txt"):
-            presets.add_pattern(pattern)
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(presets)
-        return filters, presets
+    def _preset_dialog(title, **props):
+        """A file dialog for shared presets."""
+        return files.file_dialog(title, _("Presets (JSON or text)"),
+                                 ("*.json", "*.txt"), **props)
 
     def _export_preset(self, path):
         shared = self._shared(path)
         if shared is None:
             return
         name, values, folder = shared
-        filters, presets = self._preset_filters()
-        dialog = Gtk.FileDialog(title=_("Save Preset as File"), filters=filters,
-                                default_filter=presets,
-                                initial_name=pathlib.Path(path).name)
+        dialog = self._preset_dialog(_("Save Preset as File"),
+                                     initial_name=pathlib.Path(path).name)
 
         def chosen(d, result):
-            try:
-                file = d.save_finish(result)
-            except GLib.Error:
-                return                          # cancelled
-            dest = file.get_path() if file else None
+            dest = files.chosen_path(d.save_finish, result)
             if dest is None:
-                return
+                return                          # cancelled
             try:
                 config.write_file(pathlib.Path(dest),
                                   sharing.preset_json(name, values, folder))
@@ -1035,25 +1012,17 @@ class PresetsMixin:
                 return
             log.info("Preset %s saved as file", pathlib.Path(path).name)
             self._notify(_("Preset “{name}” saved as file").format(name=short(name)),
-                         _("Show Folder"),
-                         lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(dest))
-                         .open_containing_folder(self, None, None))
+                         _("Show Folder"), lambda: files.show_in_folder(self, dest))
 
         dialog.save(self, None, chosen)
 
     def _ask_import_preset(self):
-        filters, presets = self._preset_filters()
-        dialog = Gtk.FileDialog(title=_("Import Presets"), filters=filters,
-                                default_filter=presets)
+        dialog = self._preset_dialog(_("Import Presets"))
 
         def chosen(d, result):
-            try:
-                file = d.open_finish(result)
-            except GLib.Error:
-                return                          # cancelled
-            source = file.get_path() if file else None
+            source = files.chosen_path(d.open_finish, result)
             if source is None:
-                return
+                return                          # cancelled
             source = pathlib.Path(source)
             try:
                 if source.stat().st_size > sharing.MAX_SIZE:
@@ -1320,11 +1289,8 @@ class PresetsMixin:
     def _write_imported(self, path, name, values, folder=None):
         """folder: the shared one; without, a replaced preset keeps its own."""
         try:
-            if folder:
-                config.write_preset(path, name, values,
-                                    config.existing_folder(folder))
-            else:
-                config.write_preset(path, name, values)
+            config.write_preset(path, name, values, config.existing_folder(folder)
+                                if folder else config.KEEP)
         except OSError as e:
             self._error(_("Could not save preset"), str(e))
             return False
@@ -1390,9 +1356,11 @@ class PresetsMixin:
         return "\n\n" + _("Used by: {games}. Without their preset, these games "
                            "get none applied.").format(games=join_names(games))
 
-    def _delete_presets(self, paths, text=None):
+    def _delete_presets(self, paths, folder=None):
         """Put presets in the bin; the message offers Undo, and they stay
-        in the bin (the Trash button) for trash.KEEP_DAYS days."""
+        in the bin (the Trash button) for trash.KEEP_DAYS days. folder:
+        their folder, deleted with them if all of them went; Undo brings
+        it back too."""
         items, names, files = [], [], set()
         for path in paths:
             name = self._preset_name(path)
@@ -1407,12 +1375,25 @@ class PresetsMixin:
                 self.active_preset, self.active_values = None, {}
         if not items:
             return
+        if folder is not None and len(items) == len(paths):
+            try:
+                config.delete_folder(folder)
+                log.info("Folder %r deleted with %d presets", folder, len(items))
+            except OSError as e:
+                self._error(_("Could not delete folder"), str(e))
+                folder = None
+        else:
+            folder = None
         self._presets_changed()
         self._trash_changed()
         games = self._games_using(files)
-        text = text or (_("“{name}” deleted").format(name=short(names[0]))
-                        if len(names) == 1 else
-                        _("Presets deleted: {n}").format(n=len(names)))
+        if folder is not None:
+            text = _("Folder “{folder}” deleted. Presets deleted: {n}").format(
+                folder=short(folder), n=len(names))
+        elif len(names) == 1:
+            text = _("“{name}” deleted").format(name=short(names[0]))
+        else:
+            text = _("Presets deleted: {n}").format(n=len(names))
         if games:
             text += " · " + _("Used by: {games}").format(games=join_names(games))
 

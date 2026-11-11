@@ -6,7 +6,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import config, games, steamgriddb, trash
 from ..i18n import _
-from . import cover_search, layout, tasks
+from . import cover_search, files, layout, tasks
 from .live import CoverView
 from .names import cap_row, full_name_tip, label_factory, name_label, short
 from .selection import Selection
@@ -30,9 +30,10 @@ class GamesPage:
         self.window = window
         self.games = config.load_games()
         self.running = set()
+        self.replaced = False       # the window made a new page (language, import)
         self._downloading = set()   # ids of games whose cover is being fetched
         self._failed = set()        # ... or that had no cover online
-        self._search = None         # [asked, found] of a search the user started
+        self._search = None         # counts of a search the user started
         roots = games.steam_roots()
         log.info("Steam installations: %s", ", ".join(map(str, roots)) or "none")
         for root in roots:
@@ -359,22 +360,15 @@ class GamesPage:
 
     # -- own pictures --------------------------------------------------------
     def _choose_cover(self, game):
-        images = Gtk.FileFilter(name=_("Pictures"))
-        images.add_pixbuf_formats()
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(images)
-        dialog = Gtk.FileDialog(title=_("Picture for {game}").format(game=short(game["name"])),
-                                filters=filters, default_filter=images)
+        dialog = files.file_dialog(
+            _("Picture for {game}").format(game=short(game["name"])),
+            _("Pictures"), pictures=True)
         dialog.open(self.window, None,
                     lambda d, result: self._cover_chosen(game, d, result))
 
     def _cover_chosen(self, game, dialog, result):
-        try:
-            file = dialog.open_finish(result)
-        except GLib.Error:
-            return                              # cancelled
-        path = file.get_path() if file else None
-        if path is not None:
+        path = files.chosen_path(dialog.open_finish, result)
+        if path is not None:                    # else cancelled
             self.set_cover(game, path)
 
     def set_cover(self, game, path, quiet=False):
@@ -409,7 +403,7 @@ class GamesPage:
     @staticmethod
     def _can_download(game):
         """Steam games always; others only through SteamGridDB."""
-        return bool(_steam_appid(game) or config.get_setting(cover_search.KEY_SETTING))
+        return bool(_steam_appid(game) or cover_search.saved_key())
 
     def search_covers(self, which=None):
         """Download missing covers and report the result.
@@ -446,7 +440,7 @@ class GamesPage:
             return
         self._downloading.add(game_id)
         appid = _steam_appid(game)
-        key = config.get_setting(cover_search.KEY_SETTING)
+        key = cover_search.saved_key()
 
         def work():
             """(where from, path) of the cover, or None"""
@@ -469,13 +463,19 @@ class GamesPage:
             self._downloading.discard(game_id)
             if error is not None:
                 log.warning("SteamGridDB cover for %s: %s", game["name"], error)
+            shown = False
             if source == "steamgriddb":
-                if game in self.games and self._cover_file(game) is None:
-                    self.set_cover(game, str(path), quiet=True)
+                # Not from a page the window has replaced: its games are
+                # old, saving them would undo what changed since
+                if not self.replaced and game in self.games \
+                        and self._cover_file(game) is None:
+                    shown = self.set_cover(game, str(path), quiet=True)
                 try:
                     path.unlink()
                 except OSError:
                     pass
+            if self.replaced:
+                return
             found = source is not None and self._cover_file(game) is not None
             if found:
                 log.info("Downloaded cover for %s from %s", game["name"], source)
@@ -483,7 +483,8 @@ class GamesPage:
                 log.info("No cover online for %s", game["name"])
                 self._failed.add(game_id)
             self._report_search(game_id, found, error)
-            self.refresh()
+            if not shown:                       # set_cover() showed it already
+                self.refresh()
 
         tasks.in_thread(work, done, steamgriddb.Error)
 
@@ -515,7 +516,7 @@ class GamesPage:
                      _("Found {found} of {n} covers").format(found=found_n, n=total)]
         if search["skipped"]:
             parts.append(_("Games not on Steam need a SteamGridDB API key."))
-        if missed and config.get_setting(cover_search.KEY_SETTING):
+        if missed and cover_search.saved_key():
             # Names that didn't match exactly: let the user pick them
             parts.append(_("Choose the others on SteamGridDB?") if found_n
                          else _("Choose on SteamGridDB?"))
@@ -602,7 +603,7 @@ class GamesPage:
         linked.set_visible(False)
         name_row.add_suffix(linked)
         state = {"timer": 0, "search": 0, "setting": False}
-        key = config.get_setting(cover_search.KEY_SETTING)
+        key = cover_search.saved_key()
         if not key:
             return box
 

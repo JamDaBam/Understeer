@@ -17,7 +17,7 @@ _LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 def plain_version(version):
     """"v1.8.1" -> "1.8.1"; a version from git like "v1.8.1-3-gabc" stays
     as it is apart from the "v", so it matches no release."""
-    version = (version or "").strip()
+    version = version.strip() if isinstance(version, str) else ""
     return version[1:] if version[:1] == "v" else version
 
 

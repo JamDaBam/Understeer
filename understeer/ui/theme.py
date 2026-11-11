@@ -15,9 +15,9 @@ _provider = None
 
 def current():
     """(theme, colour scheme, accent, radius) as chosen by the user."""
-    return (themes.theme_key(config.get_setting("theme")),
-            config.get_setting("color_scheme") or "system",
-            config.get_setting("accent"),
+    return (themes.theme_key(config.get_text("theme")),
+            config.get_text("color_scheme") or "system",
+            config.get_text("accent"),
             themes.radius(config.get_setting("corner_radius",
                                               themes.DEFAULT_RADIUS)))
 

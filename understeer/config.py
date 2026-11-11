@@ -86,7 +86,8 @@ def migrate_config():
 
 
 def load_axis_roles():
-    return _read_json(AXES_FILE)
+    """{axis key: role} as the user assigned them."""
+    return {k: v for k, v in _read_json(AXES_FILE).items() if isinstance(v, str)}
 
 
 def save_axis_roles(roles):
@@ -94,12 +95,12 @@ def save_axis_roles(roles):
 
 
 def load_slot_names(model):
-    """{slot number: name} the user gave the slots of this wheel base model."""
+    """{slot number: name} the user gave the slots of this wheelbase model."""
     names = _read_json(SLOT_NAMES_FILE).get(model)
     if not isinstance(names, dict):
         return {}
     return {int(k): v.strip() for k, v in names.items()
-            if k.isdigit() and isinstance(v, str) and v.strip()}
+            if k.isdecimal() and isinstance(v, str) and v.strip()}
 
 
 def save_slot_name(model, slot, name):
@@ -119,7 +120,7 @@ def save_slot_name(model, slot, name):
 
 
 def load_slot_count(model):
-    """Highest slot number seen on this wheel base model, 0 if unknown."""
+    """Highest slot number seen on this wheelbase model, 0 if unknown."""
     count = _read_json(SLOT_COUNTS_FILE).get(model)
     return count if isinstance(count, int) and count > 0 else 0
 
@@ -134,6 +135,13 @@ def get_setting(key, default=None):
     """App setting such as "language" or "layout" from settings/app.json."""
     value = _read_json(APP_SETTINGS_FILE).get(key)
     return default if value is None else value
+
+
+def get_text(key):
+    """An app setting that is text, such as "theme"; None if it is unset
+    or something else, e.g. in a file changed by hand."""
+    value = get_setting(key)
+    return value if isinstance(value, str) else None
 
 
 def set_setting(key, value):
@@ -197,11 +205,17 @@ def set_game_cover(game, source):
     """Copy the picture at source for game; returns its path. Raises OSError."""
     suffix = pathlib.Path(source).suffix.lower() or ".img"
     name = hashlib.sha1(game["game"].encode()).hexdigest()[:16] + suffix
-    data = pathlib.Path(source).read_bytes()
-    remove_game_cover(game)
-    write_file(CUSTOM_COVER_DIR / name, data)
+    path = CUSTOM_COVER_DIR / name
+    old = game_cover_path(game)
+    # The old picture goes only once the new one is there
+    write_file(path, pathlib.Path(source).read_bytes())
     game["cover"] = name
-    return CUSTOM_COVER_DIR / name
+    if old is not None and old != path:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return path
 
 
 def remove_game_cover(game):

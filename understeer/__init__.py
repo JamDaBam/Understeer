@@ -1,4 +1,4 @@
-"""Understeer: tune Fanatec wheel bases through the hid-fanatecff driver.
+"""Understeer: tune Fanatec wheelbases through the hid-fanatecff driver.
 
 Start it with  python3 -m understeer
 """

@@ -19,8 +19,10 @@ class SettingTile:
         self.baseline = None
         self._silent = False
         # Auto (value 0 of a setting with "auto") is no place on the
-        # slider: the slider then sits at its end and the value says Auto
+        # slider: the slider then sits at its end and the value says Auto.
+        # Hardware without Auto takes its largest value instead.
         self._auto = False
+        self.has_auto = bool(setting.get("auto"))
         self._placing = False       # set() moves the slider, not the user
         kind = setting.get("kind", "slider")
 
@@ -176,8 +178,9 @@ class SettingTile:
                 if value in self.values:
                     self.combo.set_selected(self.values.index(value))
             else:
-                self._auto = bool(self.setting.get("auto")) and value == 0
-                self.adj.set_value(self.adj.get_upper() if self._auto
+                auto = bool(self.setting.get("auto")) and value == 0
+                self._auto = auto and self.has_auto
+                self.adj.set_value(self.adj.get_upper() if auto
                                    else fit_step(self.setting, value))
         finally:
             self._silent = self._placing = False
@@ -185,12 +188,15 @@ class SettingTile:
         if not silent and self.get() != before:
             self.on_change(self)
 
-    def set_upper(self, hi):
+    def set_upper(self, hi, has_auto=True):
         """The largest value the hardware takes, e.g. the steering angle
-        of the connected wheelbase; a larger value shown is cut to it."""
-        if not hasattr(self, "adj") or hi == self.adj.get_upper():
+        of the connected wheelbase, and whether it has Auto; a larger
+        value shown is cut to it."""
+        if not hasattr(self, "adj") or (hi == self.adj.get_upper()
+                                        and has_auto == self.has_auto):
             return
         value = self.get()
+        self.has_auto = has_auto
         self.adj.set_upper(hi)
         self.set(value)
 
