@@ -1,6 +1,6 @@
 import pytest
 
-from understeer import i18n
+from understeer import i18n, settings
 from understeer.settings import (ADVANCED_GROUPS, SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS,
                                  TABS, changes, format_value)
 
@@ -71,3 +71,14 @@ def test_changes_in_settings_order():
     assert changes(before, after) == [("FF", 70, 85), ("DPR", 10, 0),
                                       ("SHO", None, 40)]
     assert changes(after, after) == []
+
+
+@pytest.mark.parametrize("attr, value, kept", [
+    ("SEN", 2356, 2350),            # hid-fanatecff rounds down to tens
+    ("SEN", 0, 0),                  # Auto
+    ("SHO", 35, 30),
+    ("FF", 73, 73),                 # in steps of one
+    ("DRI", -3, -3),
+])
+def test_fit_step(attr, value, kept):
+    assert settings.fit_step(settings.SETTINGS_BY_ID[attr], value) == kept

@@ -9,7 +9,7 @@ from .. import config, sharing, trash
 from ..i18n import _
 from ..names import free_name, menu_label
 from ..settings import (SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS, TABS, changes,
-                        format_value)
+                        fit_step, format_value)
 from . import layout
 from .names import cap_row, full_name_tip, join_names, name_label, short
 from .selection import Selection
@@ -381,7 +381,8 @@ class PresetsMixin:
         """Return (name, values) of a preset file: the settings shown here,
         with valid values. Raises OSError or ValueError."""
         name, values = config.read_preset(path)
-        return name, {k: v for k, v in sharing.clean_values(values).items()
+        return name, {k: fit_step(SETTINGS_BY_ID[k], v)
+                      for k, v in sharing.clean_values(values).items()
                       if k in self.rows}
 
     def _set_active_preset(self, path, values):
