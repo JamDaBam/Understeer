@@ -86,17 +86,17 @@ def versions_since(last, current, path=None):
         root = ET.parse(path or METAINFO).getroot()
     except (OSError, ET.ParseError):
         return []
-    old, new = _number(last) if last else None, _number(current)
+    old, new = number(last) if last else None, number(current)
     found = []
     for release in root.iterfind("releases/release"):
         version = release.get("version")
         if release.find("description") is None:
             continue
-        number = _number(version)
+        this = number(version)
         if version == plain_version(current) or (
-                old is not None and new is not None and number is not None
-                and old < number <= new):
-            found.append((number or (), version))
+                old is not None and new is not None and this is not None
+                and old < this <= new):
+            found.append((this or (), version))
     return [v for _n, v in sorted(found, reverse=True)]
 
 
@@ -138,7 +138,8 @@ def markdown(version, path=None):
     return "\n\n".join(parts) or None
 
 
-def _number(version):
+def number(version):
+    """(1, 9, 5) of "1.9.5" or "v1.9.5"; None for e.g. "1.9.5-3-gabc"."""
     try:
         return tuple(int(n) for n in plain_version(version).split("."))
     except ValueError:
@@ -159,7 +160,7 @@ def should_announce(current, last, used_before, path=None):
         return False
     if last is None:
         return used_before
-    old, new = _number(last), _number(current)
+    old, new = number(last), number(current)
     if old is not None and new is not None:
         return new > old
     return plain_version(last) != current

@@ -52,7 +52,7 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, background, backup, config, inputs, releases, sharing, log as session_log  # noqa: E402
+from understeer import app, background, backup, config, inputs, releases, sharing, updates, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
@@ -696,6 +696,45 @@ def steps(win):
         check(isinstance(win.get_visible_dialog(), Adw.AboutDialog),
               "closing the report window goes back to About"),
         close_dialogs(win))
+
+    # -- new versions on GitHub (only the AppImage looks) --------------------
+    fetched = []
+
+    def ask_update_check():
+        check(not win.update_banner.get_revealed(), "no update banner from git")
+        os.environ["APPIMAGE"] = str(scratch / "Understeer.AppImage")
+        updates.fetch_latest = lambda: fetched.append(1) or {
+            "version": "99.0.0", "url": updates.RELEASES_URL + "/tag/v99.0.0"}
+        win._start_update_check()
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_heading() == "Look for New Versions?", "asked once")
+        check(not fetched, "nothing fetched before agreeing")
+        if isinstance(d, Adw.AlertDialog):
+            d.emit("response", "yes")
+            d.force_close()
+    yield "look for new versions?", ask_update_check
+    yield "new version shown", lambda: (
+        check(fetched == [1], "fetched once"),
+        check(win.update_banner.get_revealed() and
+              "99.0.0" in win.update_banner.get_title(),
+              f"update banner: {win.update_banner.get_title()!r}"),
+        win._start_update_check(),
+        check(fetched == [1] and win.get_visible_dialog() is None,
+              "not asked or fetched again within the hour"))
+
+    def update_check_off():
+        win._show_preferences("general")
+        row = find_row(win.prefs, "Look for New Versions")
+        check(row is not None and row.get_sensitive() and row.get_active(),
+              "preference on after agreeing")
+        row.set_active(False)
+        check(config.get_setting("update_check") is False, "switched off")
+        check(not win.update_banner.get_revealed(), "banner gone when off")
+        win.prefs.close()
+        del os.environ["APPIMAGE"]
+        win._show_update_banner()
+    yield "update check off", update_check_off
 
     # -- wheel base and steering wheel ---------------------------------------
     yield "hardware shown", lambda: (

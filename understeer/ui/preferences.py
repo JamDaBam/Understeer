@@ -4,7 +4,7 @@ import time
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import background, backup, config, i18n
+from .. import background, backup, config, i18n, updates
 from .. import log as session_log
 from ..i18n import _
 from .look_prefs import LookGroups
@@ -74,6 +74,7 @@ class PreferencesMixin:
         general.add(appearance)
         general.add(look.theme_group)
         general.add(look.shape_group)
+        general.add(self._updates_group())
 
         # -- Wheel base -----------------------------------------------------
         wheel = self._prefs_page("wheelbase", _("Wheel Base"), "understeer-steering-symbolic")
@@ -183,6 +184,28 @@ class PreferencesMixin:
         if rebuilt:
             prefs.set_focus(None)   # not on whatever took the old focus' place
 
+    def _updates_group(self):
+        """Looking for new versions; only the AppImage can."""
+        group = Adw.PreferencesGroup(title=_("Updates"))
+        row = Adw.SwitchRow(title=_("Look for New Versions"))
+        row.connect("notify::active", lambda r, _p: r.get_sensitive() and
+                    r.get_active() != bool(config.get_setting("update_check"))
+                    and self.set_update_check(r.get_active()))
+        self.update_row = row
+        self._refresh_update_row()
+        group.add(row)
+        return group
+
+    def _refresh_update_row(self):
+        possible = updates.can_check(self._current_version())
+        row = self.update_row
+        row.set_subtitle(
+            _("At start and every hour, Understeer asks GitHub whether there "
+              "is a newer version and shows a note at the top.") if possible else
+            _("Only in the AppImage; a copy from git is updated with git."))
+        row.set_sensitive(possible)
+        row.set_active(bool(config.get_setting("update_check")) and possible)
+
     def _background_group(self):
         """Running in the background and starting at login."""
         group = Adw.PreferencesGroup(title=_("Background"))
@@ -256,6 +279,7 @@ class PreferencesMixin:
         if page:
             self.prefs.set_visible_page_name(page)
         self.fit_dialog(self.prefs)
+        self._refresh_update_row()
         self.prefs.present(self)
         self.prefs.set_focus(None)      # don't start typing in a slot name
 
