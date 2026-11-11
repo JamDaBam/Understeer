@@ -56,7 +56,9 @@ class LookGroups:
             else:
                 button.set_group(first)
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            preview = Gtk.Box(spacing=4)
+            # Not vexpand: the accent bar inside would hand it on, and in a
+            # tall dialog the free space went to the previews
+            preview = Gtk.Box(spacing=4, vexpand=False)
             preview.add_css_class("theme-preview")
             preview.add_css_class(f"theme-{key}")
             for accent_bar in (False, True):
