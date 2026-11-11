@@ -186,15 +186,20 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         log.info("Running in the background")
         if announce and not config.get_setting("background_hint_shown"):
             config.set_setting("background_hint_shown", True)
-            note = Gio.Notification.new(_("Understeer runs in the background"))
-            note.set_body(_("It applies the presets of your games when they "
-                            "start. Open or quit it with its icon in the "
-                            "system tray."))
-            # Without an installed .desktop file the desktop knows no icon
-            icon = DATA_DIR / "io.github.JamDaBam.Understeer.png"
-            if icon.is_file():
-                note.set_icon(Gio.FileIcon.new(Gio.File.new_for_path(str(icon))))
-            self.get_application().send_notification("background", note)
+            self._desktop_notify(
+                "background", _("Understeer runs in the background"),
+                _("It applies the presets of your games when they start. "
+                  "Open or quit it with its icon in the system tray."))
+
+    def _desktop_notify(self, key, title, body):
+        """A notification of the desktop; clicking it opens the window."""
+        note = Gio.Notification.new(title)
+        note.set_body(body)
+        # Without an installed .desktop file the desktop knows no icon
+        icon = DATA_DIR / "io.github.JamDaBam.Understeer.png"
+        if icon.is_file():
+            note.set_icon(Gio.FileIcon.new(Gio.File.new_for_path(str(icon))))
+        self.get_application().send_notification(key, note)
 
     def show_again(self, token=None):
         """Show the window (again). token: Wayland activation token."""
@@ -801,7 +806,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         had_device = self.device_path is not None
         self._detect_device()
         if self.device_path:
-            self._notify(_("Wheel base connected"))
+            if not self._apply_running_game_preset():
+                self._notify(_("Wheel base connected"))
         elif had_device:
             self._notify(_("Wheel base disconnected"))
         return True
@@ -857,8 +863,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         return GLib.SOURCE_REMOVE
 
     def _flush_pending(self):
+        """Write the pending changes; returns the names that failed."""
         if not self.pending:
-            return
+            return []
         written = list(self.pending)
         writes = {self._attr_file(a): v for a, v in self.pending.items()}
         self.pending = {}
@@ -874,8 +881,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             message = _("Could not write: {names}").format(names=names)
             self._notify(message, _("Report…"),
                          lambda: ReportDialog(self, title=message))
-        else:
-            self._set_status(_("In sync with device"))
+            return [os.path.basename(p) for p in failed]
+        self._set_status(_("In sync with device"))
+        return []
 
     def _cancel_pending(self):
         if self._live_timer:
@@ -904,7 +912,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             row.set(value, silent=False)
 
     def _apply_values(self, values, message=None, pending_message=None):
-        """Set several settings at once and write them in one go."""
+        """Set several settings at once and write them in one go. Returns
+        what happened: "written", "pending" (to apply by hand), "failed"
+        or "no device", and the names of the settings that failed."""
         for attr_id, value in values.items():
             row = self.rows.get(attr_id)
             if row is None or not row.row.get_sensitive():
@@ -912,14 +922,23 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             row.set(value)
             if self.device_path:
                 self.pending[attr_id] = row.get()
-        if self.writable or not self.device_path:
+        outcome, failed = "written", []
+        if not self.device_path:
             self._flush_pending()
+            outcome = "no device"
+        elif self.writable:
+            failed = self._flush_pending()
+            if failed:
+                outcome = "failed"
+                message = None          # _flush_pending told already
         else:
             self._update_pending_bar()
             message = pending_message or message
+            outcome = "pending"
         self._update_preset_indicator()
         if message:
             self._notify(message)
+        return outcome, failed
 
     def _undo_all(self):
         self._cancel_pending()

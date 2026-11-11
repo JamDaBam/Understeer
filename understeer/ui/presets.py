@@ -8,7 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config, sharing
 from ..i18n import _
-from ..settings import SETTINGS, SIM_DEFAULTS, changes, format_value
+from ..settings import SETTINGS, SIM_DEFAULTS, TABS, changes, format_value
 
 log = logging.getLogger("understeer.window")
 
@@ -93,6 +93,10 @@ class PresetsMixin:
             rename_btn.set_tooltip_text(_("Change the name of this preset"))
             rename_btn.connect("clicked", lambda b, p=path, n=name:
                                self._ask_rename_preset(p, n))
+            info_btn = Gtk.Button(icon_name="help-about-symbolic",
+                                  tooltip_text=_("Show Values"))
+            info_btn.add_css_class("flat")
+            info_btn.connect("clicked", lambda b, p=path: self._show_preset(p))
             share_btn = Gtk.MenuButton(icon_name="understeer-share-symbolic",
                                        menu_model=self._share_menu(path),
                                        tooltip_text=_("Share"))
@@ -104,7 +108,7 @@ class PresetsMixin:
                             self._confirm_delete_preset(p, n))
             # Apply on its own row: with the text buttons in one row, the
             # tiles would get too wide for two of them side by side.
-            for w in (save_btn, rename_btn, share_btn, del_btn):
+            for w in (save_btn, rename_btn, info_btn, share_btn, del_btn):
                 buttons.append(w)
             save_btn.set_hexpand(True)
             rename_btn.set_hexpand(True)
@@ -224,7 +228,9 @@ class PresetsMixin:
         self.active_values = dict(values)
         self._presets_changed()
 
-    def _apply_preset(self, path, game=None):
+    def _apply_preset(self, path, game=None, connected=False):
+        """Apply a preset; game: the game it is applied for, connected: the
+        wheel base just got connected while the game runs."""
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
@@ -237,18 +243,124 @@ class PresetsMixin:
         self.active_preset, self.active_values = path, dict(values)
         self._rebuild_preset_menu()
         self._rebuild_presets_list()
-        if game:
-            self._apply_values(
+        if game and connected:
+            outcome, failed = self._apply_values(
+                values,
+                _("Wheel base connected: preset “{name}” for {game} applied")
+                .format(game=game, name=name),
+                _("Wheel base connected: preset “{name}” for {game} loaded — "
+                  "click Apply to write it").format(game=game, name=name))
+            self._notify_game_preset(game, name, outcome, failed, connected)
+        elif game:
+            # Without a wheel base, it is written once one is connected
+            # (_apply_running_game_preset).
+            outcome, failed = self._apply_values(
                 values,
                 _("{game} started: preset “{name}” applied").format(
-                    game=game, name=name),
+                    game=game, name=name) if self.device_path else
+                _("{game} started: preset “{name}” is applied once the wheel "
+                  "base is connected").format(game=game, name=name),
                 _("{game} started: preset “{name}” loaded — click Apply to "
                   "write it").format(game=game, name=name))
+            self._notify_game_preset(game, name, outcome, failed)
         else:
             self._apply_values(
                 values, _("Preset “{name}” applied").format(name=name),
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
+
+    def _show_preset(self, path):
+        """The values of a preset, by tab, without applying it; those that
+        differ from the current settings are marked."""
+        path = pathlib.Path(path)
+        try:
+            name, values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError) as e:
+            self._error(_("Could not load preset"), str(e))
+            return
+        current = self._collect_values()
+        differ = {a for a, v in values.items() if a in current and current[a] != v}
+        dialog = Adw.Dialog(title=name, content_width=520, content_height=680)
+        apply_btn = Gtk.Button(label=_("Apply"))
+        apply_btn.add_css_class("suggested-action")
+
+        def apply(_button):
+            dialog.close()
+            self._ask_apply_preset(path)
+
+        apply_btn.connect("clicked", apply)
+        header = Adw.HeaderBar()
+        header.pack_start(apply_btn)
+        page = Adw.PreferencesPage()
+        if differ:
+            note = _("Settings that differ from the current ones: {n}. Their "
+                     "current value is shown below them.").format(n=len(differ))
+        else:
+            note = _("The current settings match this preset.")
+        page.set_description(note)
+        for tab, title in TABS:
+            # Group titles are markup: "Pedals & Paddles"
+            group = Adw.PreferencesGroup(title=GLib.markup_escape_text(_(title)))
+            for setting in SETTINGS:
+                attr_id = setting["id"]
+                if setting["page"] != tab or attr_id not in values:
+                    continue
+                row = Adw.ActionRow(title=_(setting["label"]))
+                row.set_use_markup(False)
+                value = Gtk.Label(label=format_value(setting, values[attr_id]),
+                                  css_classes=["numeric"])
+                if attr_id in differ:
+                    row.set_subtitle(_("Now: {value}").format(
+                        value=format_value(setting, current[attr_id])))
+                    value.add_css_class("heading")
+                    value.add_css_class("accent")
+                row.add_suffix(value)
+                group.add(row)
+            if any(s["page"] == tab and s["id"] in values for s in SETTINGS):
+                page.add(group)
+        toolbar = Adw.ToolbarView(content=page)
+        toolbar.add_top_bar(header)
+        dialog.set_child(toolbar)
+        log.info("Showing the values of preset %s", path.name)
+        dialog.present(self)
+
+    def _apply_running_game_preset(self):
+        """After a wheel base got connected: apply the preset of a running
+        game, chosen before there was a wheel base to write it to. Returns
+        whether there was one."""
+        for game in self.games_page.games:
+            if game["game"] not in self._game_watch.running or not game["auto"]:
+                continue
+            path = config.game_preset_path(game)
+            if path is not None:
+                log.info("Wheel base connected while %s runs", game["name"])
+                self._apply_preset(path, game=game["name"], connected=True)
+                return True
+        return False
+
+    def _notify_game_preset(self, game, name, outcome, failed, connected=False):
+        """While the window is closed, tell with a notification of the
+        desktop what became of the preset of a game that started, or that
+        runs while the wheel base got connected."""
+        if not self._in_background or not config.get_setting(
+                "game_notifications", True):
+            return
+        bodies = {
+            "written": _("Preset “{name}” applied."),
+            "pending": _("Preset “{name}” loaded, but not written: open "
+                         "Understeer and click Apply."),
+            "failed": _("Preset “{name}” could not be written completely. "
+                        "Failed: {names}"),
+            "no device": _("Preset “{name}” chosen. It is applied as soon as "
+                           "the wheel base is connected."),
+        }
+        title = (_("Wheel base connected, {game} runs") if connected
+                 else _("{game} started")).format(game=game)
+        log.info("Notification for %s: preset %s %s%s", game, name, outcome,
+                 " after connecting" if connected else "")
+        self._desktop_notify(
+            "game-preset", title,
+            bodies[outcome].format(name=name, names=", ".join(failed)))
 
     def _changes_list(self, diff):
         """Setting, before → after in aligned columns; scrolls when long."""

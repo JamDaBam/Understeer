@@ -197,6 +197,12 @@ class PreferencesMixin:
             subtitle=_("Starts in the background when you log in."))
         login.set_active(background.autostart_enabled())
         login.set_sensitive(run.get_active())
+        notify = Adw.SwitchRow(
+            title=_("Notify When a Game Starts"),
+            subtitle=_("With the window closed, a notification tells whether "
+                       "the preset of the game was applied."))
+        notify.set_active(bool(config.get_setting("game_notifications", True)))
+        notify.set_sensitive(run.get_active())
 
         def run_changed(row, _param):
             on = row.get_active()
@@ -204,8 +210,14 @@ class PreferencesMixin:
             log.info("Running in the background %s", "on" if on else "off")
             self.get_application().update_tray()
             login.set_sensitive(on)
+            notify.set_sensitive(on)
             if not on:
                 login.set_active(False)
+
+        def notify_changed(row, _param):
+            on = row.get_active()
+            config.set_setting("game_notifications", None if on else False)
+            log.info("Notifications when a game starts %s", "on" if on else "off")
 
         def login_changed(row, _param):
             on = row.get_active()
@@ -221,8 +233,10 @@ class PreferencesMixin:
 
         run.connect("notify::active", run_changed)
         login.connect("notify::active", login_changed)
+        notify.connect("notify::active", notify_changed)
         group.add(run)
         group.add(login)
+        group.add(notify)
         return group
 
     def _prefs_page(self, name, title, icon_name):
