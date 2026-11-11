@@ -221,7 +221,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._in_background = False
             log.info("Window shown again")
             self._start_inputs()
-            self._load_from_device()
+            # Not over changes that wait for Apply, e.g. the preset of a
+            # game that started meanwhile
+            if not self.pending:
+                self._load_from_device()
         self.present()
         GLib.idle_add(lambda: self._show_news() and False)   # after an update
         GLib.idle_add(lambda: self._start_update_check() and False)
@@ -941,7 +944,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._update_preset_indicator()
         if not self.device_path or not row.row.get_sensitive():
             return
-        self.pending[row.setting["id"]] = row.get()
+        self._queue(row.setting["id"], row.get())
         if self.writable:
             self._set_status(_("Writing…"))
             if self._live_timer:
@@ -949,6 +952,15 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._live_timer = GLib.timeout_add(LIVE_DELAY_MS, self._flush_live)
         else:
             self._update_pending_bar()
+
+    def _queue(self, attr_id, value):
+        """A value to write. Where every write asks for a password, one
+        the wheelbase has already is left out, so that nothing is asked
+        for it, e.g. after Discard or for a preset it matches."""
+        if self.writable or value != self.device_values.get(attr_id):
+            self.pending[attr_id] = value
+        else:
+            self.pending.pop(attr_id, None)
 
     def _flush_live(self):
         self._live_timer = 0
@@ -1014,10 +1026,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 continue
             row.set(value)
             if self.device_path:
-                self.pending[attr_id] = row.get()
+                self._queue(attr_id, row.get())
         outcome, failed = "written", []
         if not self.device_path:
-            self._flush_pending()
             outcome = "no device"
         elif self.writable:
             failed = self._flush_pending()
@@ -1026,8 +1037,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 message = None          # _flush_pending told already
         else:
             self._update_pending_bar()
-            message = pending_message or message
-            outcome = "pending"
+            if self.pending:
+                message = pending_message or message
+                outcome = "pending"
         self._update_preset_indicator()
         if message:
             self._notify(message)

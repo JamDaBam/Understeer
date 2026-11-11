@@ -856,6 +856,48 @@ def steps(win):
             win._set_active_preset(*before)
     yield "save as preset into a folder", save_as_into_folder
 
+    def no_write_access():
+        """Every write would ask for a password: changes wait for Apply."""
+        before = (win.active_preset, win.active_values)
+        values = win._collect_values()
+        waiting = config.preset_path("Waiting")
+        win._load_from_device()         # as at the start: nothing to undo
+        ff = win.rows["FF"].get()
+        win.writable = False
+        try:
+            win.rows["FF"].set(ff - 7, silent=False)
+            check(win.pending == {"FF": ff - 7} and win.pending_bar.get_revealed(),
+                  f"a change waits for Apply: {win.pending}")
+            check((dev / "FF").read_text().strip() == str(ff), "nothing written yet")
+            win._undo_all()                             # Discard
+            check(not win.pending and not win.pending_bar.get_revealed(),
+                  f"nothing left to apply after Discard: {win.pending}")
+            outcome, _failed = win._apply_values(values)
+            check(outcome == "written" and not win.pending,
+                  f"no password for what the wheelbase has: {outcome} {win.pending}")
+            # The preset of a game that starts while the window is closed
+            config.write_preset(waiting, "Waiting", {"FF": ff - 10})
+            win._presets_changed()
+            win._desktop_notify = lambda *a: None
+            win.go_to_background(announce=False)
+            win._apply_preset(waiting, game="Some Game")
+            check(win.pending == {"FF": ff - 10}, f"preset waits: {win.pending}")
+            win.show_again()
+            check(win.pending == {"FF": ff - 10} and win.pending_bar.get_revealed()
+                  and win.rows["FF"].get() == ff - 10,
+                  f"still waiting for Apply with the window open: {win.pending}")
+            win._flush_pending()                        # Apply
+            check((dev / "FF").read_text().strip() == str(ff - 10), "written by Apply")
+        finally:
+            win.writable = True
+            win._cancel_pending()
+            del win._desktop_notify
+            waiting.unlink(missing_ok=True)
+            win._apply_values(values)
+            win._set_active_preset(*before)
+    yield "no write access", no_write_access
+    yield "window open again", lambda: check(win.get_visible(), "window shown")
+
     def file_dialogs():
         """What happens once a file is chosen, for every file dialog."""
         real = files.file_dialog
