@@ -135,6 +135,16 @@ class PresetsMixin:
             tile.add_css_class("active")
         title = Gtk.Label(label=name, xalign=0, wrap=True)
         title.add_css_class("preset-name")
+        # Right after the name, like at a folder
+        rename_btn = Gtk.Button(icon_name="document-edit-symbolic",
+                                valign=Gtk.Align.CENTER,
+                                tooltip_text=_("Change the name of this preset"))
+        rename_btn.add_css_class("flat")
+        rename_btn.connect("clicked", lambda b, p=path, n=name:
+                           self._ask_rename_preset(p, n))
+        head = Gtk.Box(spacing=6)
+        head.append(title)
+        head.append(rename_btn)
         sub = Gtk.Label(label=_("Active preset") if active else path.name,
                         xalign=0, vexpand=True, valign=Gtk.Align.START)
         sub.set_ellipsize(3)                # Pango.EllipsizeMode.END
@@ -147,19 +157,15 @@ class PresetsMixin:
         save_btn.set_tooltip_text(_("Save current settings to this preset"))
         save_btn.connect("clicked", lambda b, p=path:
                          self._confirm_overwrite(p))
-        rename_btn = Gtk.Button(label=_("Rename"))
-        rename_btn.set_tooltip_text(_("Change the name of this preset"))
-        rename_btn.connect("clicked", lambda b, p=path, n=name:
-                           self._ask_rename_preset(p, n))
+        group_btn = Gtk.Button(label=_("Group"))
+        group_btn.set_tooltip_text(_("Put this preset into a folder, e.g. "
+                                     "with others for the same game"))
+        group_btn.connect("clicked", lambda b, p=path, n=name:
+                          self._ask_preset_folder(p, n))
         info_btn = Gtk.Button(icon_name="help-about-symbolic",
                               tooltip_text=_("Show Values"))
         info_btn.add_css_class("flat")
         info_btn.connect("clicked", lambda b, p=path: self._show_preset(p))
-        folder_btn = Gtk.Button(icon_name="folder-symbolic",
-                                tooltip_text=_("Move to Folder…"))
-        folder_btn.add_css_class("flat")
-        folder_btn.connect("clicked", lambda b, p=path, n=name:
-                           self._ask_preset_folder(p, n))
         share_btn = Gtk.MenuButton(icon_name="understeer-share-symbolic",
                                    menu_model=self._share_menu(path),
                                    tooltip_text=_("Share"))
@@ -171,12 +177,11 @@ class PresetsMixin:
                         self._confirm_delete_preset(p, n))
         # Apply on its own row: with the text buttons in one row, the
         # tiles would get too wide for two of them side by side.
-        for w in (save_btn, rename_btn, info_btn, folder_btn, share_btn,
-                  del_btn):
+        for w in (save_btn, group_btn, info_btn, share_btn, del_btn):
             buttons.append(w)
         save_btn.set_hexpand(True)
-        rename_btn.set_hexpand(True)
-        for w in (title, sub, apply_btn, buttons):
+        group_btn.set_hexpand(True)
+        for w in (head, sub, apply_btn, buttons):
             tile.append(w)
         return tile
 
@@ -571,14 +576,14 @@ class PresetsMixin:
         folder.set_title(_("Folder"))
         fields.append(folder)
         dialog = Adw.AlertDialog(
-            heading=_("Move “{name}” to a Folder").format(name=name),
+            heading=_("Group “{name}”").format(name=name),
             body=_("Type a new folder or pick one. A folder groups presets "
                    "here and in the menus, e.g. several for one game."))
         dialog.set_extra_child(self._with_suggestions(fields, folder))
         dialog.add_response("cancel", _("Cancel"))
         if current:
             dialog.add_response("none", _("No Folder"))
-        dialog.add_response("move", _("Move"))
+        dialog.add_response("move", _("Group"))
         dialog.set_default_response("move")
         dialog.set_close_response("cancel")
         dialog.set_response_appearance("move", Adw.ResponseAppearance.SUGGESTED)

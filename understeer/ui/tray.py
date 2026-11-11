@@ -326,7 +326,6 @@ class Tray:
             keys[item_id] = key
             items[item_id] = {"label": self._label(name), **self._toggle(active)}
             children[parent].append(item_id)
-            return active
 
         for entry in entries:
             if len(entry) == 3:
@@ -336,13 +335,13 @@ class Tray:
             folder_id, next_id = next_id, next_id + 1
             children[0].append(folder_id)
             children[folder_id] = []
-            has_active = False
             for preset in presets:
-                has_active = add_preset(folder_id, *preset) or has_active
+                add_preset(folder_id, *preset)
+            # No check mark on a folder: KDE then shows a choice instead
+            # of a submenu
             items[folder_id] = {
                 "label": self._label(folder),
-                "children-display": GLib.Variant("s", "submenu"),
-                **self._toggle(has_active)}
+                "children-display": GLib.Variant("s", "submenu")}
         if entries:
             items[4] = {"type": GLib.Variant("s", "separator")}
             children[0].append(4)

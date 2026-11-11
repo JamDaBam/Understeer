@@ -275,10 +275,13 @@ def test_folders_are_submenus(panel, with_presets):
     t.start()
     spin(lambda: t.registered)
     _revision, (_root, _props, children) = layout(conn, t)
+    # A folder has no check mark: KDE would show a choice, no submenu
+    assert all("toggle-type" not in c[1] for c in children
+               if c[1].get("children-display"))
     top = [(c[1].get("label"), c[1].get("children-display"), c[1].get("toggle-state"))
            for c in children]
     assert top == [("Open", None, None), (None, None, None), ("Daily", None, 0),
-                   ("BeamNG", "submenu", 1), ("Rally", "submenu", 0),
+                   ("BeamNG", "submenu", None), ("Rally", "submenu", None),
                    (None, None, None), ("Quit", None, None)]
     beamng = children[3]
     assert [(c[1]["label"], c[1]["toggle-state"]) for c in beamng[2]] == \
