@@ -276,11 +276,11 @@ def test_folders_are_submenus(panel, with_presets):
     spin(lambda: t.registered)
     _revision, (_root, _props, children) = layout(conn, t)
     # A folder has no check mark: KDE would show a choice, no submenu
-    assert all("toggle-type" not in c[1] for c in children
-               if c[1].get("children-display"))
+    assert all(c[1].get("toggle-type", "") == "" for c in children
+               if c[1].get("children-display") == "submenu")
     top = [(c[1].get("label"), c[1].get("children-display"), c[1].get("toggle-state"))
            for c in children]
-    assert top == [("Open", None, None), (None, None, None), ("Daily", None, 0),
+    assert top == [("Open", None, None), (None, None, None), ("Daily", "", 0),
                    ("BeamNG", "submenu", None), ("Rally", "submenu", None),
                    (None, None, None), ("Quit", None, None)]
     beamng = children[3]
@@ -331,3 +331,40 @@ def test_submenus_are_read_again(panel, with_presets):
         GLib.Variant("(iias)", (folder, 1, [])))
     assert [(k[1]["label"], k[1]["toggle-state"]) for k in kids] == \
         [("Drift", 0), ("Climb", 1)]
+
+
+def test_ids_stay_with_their_item(panel, with_presets):
+    """A folder that goes away and comes back keeps its id, and no id is
+    ever a preset once and a folder later: KDE keeps items by id."""
+    conn, _items = panel
+    t, state = with_presets
+    t.start()
+    spin(lambda: t.registered)
+
+    def kinds():
+        _revision, (_root, _props, children) = layout(conn, t)
+        found = {}
+        for c in children:
+            if c[1].get("children-display") == "submenu":
+                found[c[0]] = ("folder", c[1]["label"])
+                for k in c[2]:
+                    found[k[0]] = ("preset", k[1]["label"])
+            elif c[1].get("toggle-type") == "radio":
+                found[c[0]] = ("preset", c[1]["label"])
+        return found
+
+    seen = {}
+    for presets in (
+            [("A", [("One", "1", False)]), ("B", [("Two", "2", True)])],
+            [("B", [("One", "1", False), ("Two", "2", True)])],        # A emptied
+            [("A", [("Two", "2", True)]), ("B", [("One", "1", False)])],  # back
+            [("Loose", "3", False), ("A", [("Two", "2", True)])]):
+        state["presets"] = presets
+        t.update_menu()
+        for item_id, what in kinds().items():
+            assert seen.setdefault(item_id, what) == what, (item_id, what)
+    _revision, (_root, _props, children) = layout(conn, t)
+    folder = [c for c in children if c[1].get("children-display") == "submenu"][0]
+    assert folder[1]["toggle-type"] == ""               # never a choice
+    preset = [c for c in children if c[1].get("toggle-type") == "radio"][0]
+    assert preset[1]["children-display"] == ""          # never a submenu
