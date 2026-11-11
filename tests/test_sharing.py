@@ -26,6 +26,18 @@ def test_json_round_trip():
     assert one(text) == ("GT3", {"SEN": 540, "FF": 85})
 
 
+def test_folder_is_shared():
+    text = sharing.preset_json("Drift", {"FF": 55}, "BeamNG")
+    assert json.loads(text)["folder"] == "BeamNG"
+    found = sharing.find_presets(text).presets[0]
+    assert (found.name, found.folder) == ("Drift", "BeamNG")
+    found = sharing.find_presets(sharing.preset_text("Drift", {"FF": 55}, "Beam")).presets[0]
+    assert found.folder == "Beam"
+    assert sharing.find_presets(sharing.preset_json("Drift", {"FF": 55})).presets[0].folder is None
+    odd = json.dumps({"name": "Drift", "folder": {"x": 1}, "values": {"FF": 55}})
+    assert sharing.find_presets(odd).presets[0].folder is None
+
+
 def test_text_is_readable_and_round_trips():
     text = sharing.preset_text("GT3 Nordschleife", SIM_DEFAULTS)
     lines = text.splitlines()

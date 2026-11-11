@@ -144,8 +144,9 @@ class Tray:
     texts() returns {"title", "tooltip", "open", "quit"} in the current
     language; call relocalize() after it changed. activate(token) shows the
     window (token: the Wayland activation token from the panel, or None),
-    quit() ends Understeer. presets() returns [(name, key, active)] for the
-    menu and apply_preset(key) applies one; call update_menu() when they
+    quit() ends Understeer. presets() returns the menu entries: (name, key,
+    active) for a preset, (folder, [presets]) for a folder, shown as a
+    submenu; apply_preset(key) applies one. Call update_menu() when they
     changed.
     """
     OPEN, QUIT = 1, 3
@@ -164,6 +165,7 @@ class Tray:
         self._token = None
         self._revision = 1
         self._preset_keys = {}  # menu id -> key, of the menu last given out
+        self._folder_ids = []   # submenus in it
         self._ids = []          # registration ids to undo in stop()
         self._owner = self._watch = 0
         self.name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -241,12 +243,14 @@ class Tray:
 
     def update_menu(self):
         """The presets or the active one changed: the panel reads the menu
-        again."""
+        again. KDE reads only the level a signal names, so each submenu
+        gets one too, or its check marks stay as they were."""
         if not self._owner:
             return
         self._revision += 1
-        self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
-                   GLib.Variant("(ui)", (self._revision, 0)))
+        for parent in [0, *self._folder_ids]:
+            self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
+                       GLib.Variant("(ui)", (self._revision, parent)))
 
     def _emit(self, path, interface, signal, params):
         try:
@@ -293,36 +297,76 @@ class Tray:
         GLib.idle_add(lambda: self.on_activate(token) and False)
 
     # -- the menu ------------------------------------------------------------
+    @staticmethod
+    def _label(text):
+        # "_" marks a mnemonic in dbusmenu labels, "__" is a "_"
+        return GLib.Variant("s", text.replace("_", "__"))
+
+    @staticmethod
+    def _toggle(on):
+        return {"toggle-type": GLib.Variant("s", "radio"),
+                "toggle-state": GLib.Variant("i", 1 if on else 0)}
+
     def _items(self):
-        """({id: properties} in menu order: open, the presets, quit;
-        {id: preset key})."""
+        """The menu as ({id: properties}, {id: [child ids]} with 0 for the
+        top, {id: preset key}): open, the presets and folders, quit."""
         texts = self.texts()
-        items = {self.OPEN: {"label": GLib.Variant("s", texts["open"])},
+        items = {0: {"children-display": GLib.Variant("s", "submenu")},
+                 self.OPEN: {"label": GLib.Variant("s", texts["open"])},
                  2: {"type": GLib.Variant("s", "separator")}}
+        children = {0: [self.OPEN, 2]}
         keys = {}
         try:
-            presets = list(self.presets())
+            entries = list(self.presets())
         except Exception:                   # never break the whole menu
             log.exception("Presets for the tray menu not readable")
-            presets = []
-        for item_id, (name, key, active) in enumerate(presets, self.FIRST_PRESET):
-            keys[item_id] = key
-            items[item_id] = {
-                # "_" marks a mnemonic in dbusmenu labels, "__" is a "_"
-                "label": GLib.Variant("s", name.replace("_", "__")),
-                "toggle-type": GLib.Variant("s", "radio"),
-                "toggle-state": GLib.Variant("i", 1 if active else 0)}
-        if presets:
-            items[4] = {"type": GLib.Variant("s", "separator")}
-        items[self.QUIT] = {"label": GLib.Variant("s", texts["quit"])}
-        return items, keys
+            entries = []
+        next_id = self.FIRST_PRESET
 
-    def _layout(self):
-        items, self._preset_keys = self._items()    # what a click refers to
-        children = [GLib.Variant("(ia{sv}av)", (item_id, props, []))
-                    for item_id, props in items.items()]
-        root = {"children-display": GLib.Variant("s", "submenu")}
-        return (0, root, children)
+        def add_preset(parent, name, key, active):
+            nonlocal next_id
+            item_id, next_id = next_id, next_id + 1
+            keys[item_id] = key
+            items[item_id] = {"label": self._label(name), **self._toggle(active)}
+            children[parent].append(item_id)
+
+        for entry in entries:
+            if len(entry) == 3:
+                add_preset(0, *entry)
+                continue
+            folder, presets = entry             # a folder: a submenu
+            folder_id, next_id = next_id, next_id + 1
+            children[0].append(folder_id)
+            children[folder_id] = []
+            for preset in presets:
+                add_preset(folder_id, *preset)
+            # No check mark on a folder: KDE then shows a choice instead
+            # of a submenu
+            items[folder_id] = {
+                "label": self._label(folder),
+                "children-display": GLib.Variant("s", "submenu")}
+        if entries:
+            items[4] = {"type": GLib.Variant("s", "separator")}
+            children[0].append(4)
+        items[self.QUIT] = {"label": GLib.Variant("s", texts["quit"])}
+        children[0].append(self.QUIT)
+        return items, children, keys
+
+    def _layout(self, parent=0, depth=-1):
+        items, children, self._preset_keys = self._items()  # what a click means
+        self._folder_ids = [i for i in children if i]
+        if parent not in items:
+            parent = 0
+
+        def node(item_id, depth):
+            kids = children.get(item_id, [])
+            props = dict(items[item_id])
+            if item_id and not kids:
+                props.pop("children-display", None)
+            below = [] if depth == 0 else [
+                GLib.Variant("(ia{sv}av)", node(k, depth - 1)) for k in kids]
+            return (item_id, props, below)
+        return node(parent, depth)
 
     def _menu_property(self, _conn, _sender, _path, _iface, name):
         values = {"Version": ("u", 3), "TextDirection": ("s", "ltr"),
@@ -335,9 +379,9 @@ class Tray:
             items = self._items()[0]
         if method == "GetLayout":
             invocation.return_value(GLib.Variant(
-                "(u(ia{sv}av))", (self._revision, self._layout())))
+                "(u(ia{sv}av))", (self._revision, self._layout(args[0], args[1]))))
         elif method == "GetGroupProperties":
-            ids = args[0] or list(items)
+            ids = args[0] or [i for i in items if i]
             invocation.return_value(GLib.Variant(
                 "(a(ia{sv}))", ([(i, items[i]) for i in ids if i in items],)))
         elif method == "GetProperty":
@@ -354,10 +398,12 @@ class Tray:
             for item_id, event_id, _data, _time in args[0]:
                 self._event(item_id, event_id)
             invocation.return_value(GLib.Variant("(ai)", ([],)))
+        # Always read a (sub)menu again before it opens: the active preset
+        # may have changed, also from the window
         elif method == "AboutToShow":
-            invocation.return_value(GLib.Variant("(b)", (False,)))
+            invocation.return_value(GLib.Variant("(b)", (True,)))
         elif method == "AboutToShowGroup":
-            invocation.return_value(GLib.Variant("(aiai)", ([], [])))
+            invocation.return_value(GLib.Variant("(aiai)", (list(args[0]), [])))
         else:
             invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod",
                                          method)

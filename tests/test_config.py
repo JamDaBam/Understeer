@@ -183,3 +183,83 @@ def test_write_preset_raises(home, monkeypatch):
     monkeypatch.setattr(config.pathlib.Path, "replace", _disk_full)
     with pytest.raises(OSError):
         config.write_preset(config.preset_path("GT3"), "GT3", {"FF": 70})
+
+
+# -- folders --------------------------------------------------------------------
+def test_presets_by_folder(home):
+    config.write_preset(config.preset_path("Daily"), "Daily", {"FF": 50})
+    config.write_preset(config.preset_path("Drift"), "Drift", {"FF": 55}, "BeamNG")
+    config.write_preset(config.preset_path("Climb"), "Climb", {"FF": 60}, "beamng ")
+    config.write_preset(config.preset_path("Stage"), "Stage", {"FF": 70}, "Assetto")
+    path = config.preset_path
+    # "beamng" is the same folder as "BeamNG"; the spelling of the first
+    # file by name counts
+    assert config.list_presets_by_folder() == [
+        (None, [("Daily", path("Daily"))]),
+        ("Assetto", [("Stage", path("Stage"))]),
+        ("beamng", [("Climb", path("Climb")), ("Drift", path("Drift"))])]
+    assert config.list_folders() == ["Assetto", "beamng"]
+    assert config.rename_folder("BEAMNG", "BeamNG") == 1    # "Climb" only
+    assert config.list_folders() == ["Assetto", "BeamNG"]
+    assert config.existing_folder(" beamNG ") == "BeamNG"
+    assert config.existing_folder("New") == "New"
+    assert config.existing_folder("") is None
+    config.set_preset_folder(path("Daily"), "ASSETTO")
+    assert config.preset_folder(path("Daily")) == "Assetto"
+    assert config.rename_folder("assetto", "beamng") == 2       # merged
+    assert config.list_folders() == ["BeamNG"]
+    # The folder doesn't change the list without folders
+    assert [n for n, _p in config.list_presets()] == ["Climb", "Daily", "Drift", "Stage"]
+
+
+def test_no_loose_presets(home):
+    config.write_preset(config.preset_path("Drift"), "Drift", {"FF": 55}, "BeamNG")
+    assert config.list_presets_by_folder() == [
+        ("BeamNG", [("Drift", config.preset_path("Drift"))])]
+
+
+def test_saved_again_stays_in_its_folder(home):
+    path = config.preset_path("Drift")
+    config.write_preset(path, "Drift", {"FF": 55}, "BeamNG")
+    config.write_preset(path, "Drift", {"FF": 60})
+    assert config.preset_folder(path) == "BeamNG"
+    assert config.read_preset(path) == ("Drift", {"FF": 60})
+    config.write_preset(path, "Drift", {"FF": 60}, None)
+    assert config.preset_folder(path) is None
+    assert "folder" not in json.loads(path.read_text())
+
+
+def test_move_and_rename_folders(home, monkeypatch):
+    monkeypatch.setattr(config, "GAMES_FILE", config.CONFIG_DIR / "settings" / "games.json")
+    drift, climb = config.preset_path("Drift"), config.preset_path("Climb")
+    config.write_preset(drift, "Drift", {"FF": 55})
+    config.write_preset(climb, "Climb", {"FF": 60}, "Beam")
+    config.set_preset_folder(drift, "  Beam ")
+    assert config.preset_folder(drift) == "Beam"
+    assert config.rename_folder("Beam", "BeamNG") == 2
+    assert config.rename_folder("BeamNG", "BeamNG") == 0
+    assert config.list_folders() == ["BeamNG"]
+    config.write_preset(config.preset_path("Stage"), "Stage", {"FF": 70}, "Rally")
+    assert config.rename_folder("Rally", "BeamNG") == 1         # merged
+    assert config.list_folders() == ["BeamNG"]
+    assert config.rename_folder("BeamNG", "") == 3              # out of it
+    assert config.list_folders() == []
+    assert config.read_preset(drift) == ("Drift", {"FF": 55})
+    config.set_preset_folder(drift, "BeamNG")
+    renamed = config.rename_preset(drift, "Drifting")
+    assert config.preset_folder(renamed) == "BeamNG"
+
+
+@pytest.mark.parametrize("folder, expected", [
+    ("BeamNG", "BeamNG"), ("  Beam   NG \n", "Beam NG"), ("", None), ("   ", None),
+    (None, None), (5, None), ("a\x00b\x1bc", "abc"), ("x" * 100, "x" * 80)])
+def test_clean_folder(folder, expected):
+    assert config.clean_folder(folder) == expected
+
+
+def test_odd_folder_in_file(home):
+    cfg = config.CONFIG_DIR
+    cfg.mkdir(parents=True)
+    (cfg / "a.json").write_text(json.dumps({"name": "A", "folder": ["x"], "values": {}}))
+    (cfg / "b.json").write_text(json.dumps(["not", "a", "preset"]))
+    assert [f for f, _g in config.list_presets_by_folder()] == [None]
