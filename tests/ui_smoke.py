@@ -502,25 +502,28 @@ def steps(win):
             rows = {r.get_title(): r.get_text() for r in walk(d)
                     if isinstance(r, Adw.EntryRow)}
             check(rows == {"Name": "", "Folder (optional)": "BeamNG"}, f"save as: {rows}")
-            pick = [w for w in walk(d) if isinstance(w, Gtk.MenuButton)]
-            offered = [w.get_label() for w in walk(pick[0].get_popover())
-                       if isinstance(w, Gtk.Label)] if pick else []
-            check("BeamNG" in offered, f"folders suggested: {offered}")
+            offered = [r for r in walk(d) if isinstance(r, Adw.ActionRow)]
+            check([r.get_title() for r in offered] == ["BeamNG"],
+                  f"folders suggested: {[r.get_title() for r in offered]}")
+            folder_row = [r for r in walk(d) if isinstance(r, Adw.EntryRow)][1]
+            folder_row.set_text("")
+            offered[0].emit("activated")
+            check(folder_row.get_text() == "BeamNG", "a click fills in the folder")
             d.force_close()
             # A new folder, empty: on the page, not in the menus
             win._ask_new_folder()
             d = win.get_visible_dialog()
-            check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "New Folder",
+            check(isinstance(d, Adw.Dialog) and d.get_title() == "New Folder",
                   "new folder asked")
             entry = [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0]
             hint = [w for w in walk(d) if isinstance(w, Gtk.Label)
                     and "error" in w.get_css_classes()][0]
-            check(not d.get_response_enabled("create") and not hint.get_visible(),
+            check(not d.ok_button.get_sensitive() and not hint.get_visible(),
                   "no name yet: Create off, no red hint")
             entry.set_text("x")
-            check(d.get_response_enabled("create"), "Create on with a name")
+            check(d.ok_button.get_sensitive(), "Create on with a name")
             entry.set_text("  ")
-            check(not d.get_response_enabled("create") and hint.get_visible()
+            check(not d.ok_button.get_sensitive() and hint.get_visible()
                   and "error" in entry.get_css_classes(), "emptied: red hint")
             d.force_close()
             win._new_folder(" Rally ")
@@ -536,10 +539,11 @@ def steps(win):
             # A preset dropped on New Folder: asked for the name, then in it
             win._ask_new_folder(drift)
             d = win.get_visible_dialog()
-            check("“Drift F” is put into it." in d.get_body(), f"body: {d.get_body()}")
+            body = [g.get_description() for g in walk(d)
+                    if isinstance(g, Adw.PreferencesGroup) and g.get_description()]
+            check("“Drift F” is put into it." in body, f"body: {body}")
             [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0].set_text("Stage")
-            d.emit("response", "create")
-            d.force_close()
+            d.ok_button.emit("clicked")
             check(config.preset_folder(drift) == "Stage", "new folder with the preset")
             win._ask_delete_folder("Stage", 1)
             answer("keep")
