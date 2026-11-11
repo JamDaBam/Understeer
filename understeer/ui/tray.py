@@ -138,24 +138,32 @@ def argb_pixmaps(path, sizes=ICON_SIZES):
 
 
 class Tray:
-    """A StatusNotifierItem with a menu: open the window, or quit.
+    """A StatusNotifierItem with a menu: open the window, apply a preset,
+    or quit.
 
     texts() returns {"title", "tooltip", "open", "quit"} in the current
     language; call relocalize() after it changed. activate(token) shows the
     window (token: the Wayland activation token from the panel, or None),
-    quit() ends Understeer.
+    quit() ends Understeer. presets() returns [(name, key, active)] for the
+    menu and apply_preset(key) applies one; call update_menu() when they
+    changed.
     """
     OPEN, QUIT = 1, 3
+    FIRST_PRESET = 100
 
-    def __init__(self, icon_path, texts, activate, quit, connection=None):
+    def __init__(self, icon_path, texts, activate, quit, presets=None,
+                 apply_preset=None, connection=None):
         self.icon_path = icon_path
         self.texts = texts
         self.on_activate = activate
         self.on_quit = quit
+        self.presets = presets or (lambda: [])
+        self.on_apply_preset = apply_preset
         self.connection = connection
         self._pixmaps = None
         self._token = None
         self._revision = 1
+        self._preset_keys = {}  # menu id -> key, of the menu last given out
         self._ids = []          # registration ids to undo in stop()
         self._owner = self._watch = 0
         self.name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -227,9 +235,16 @@ class Tray:
         """Texts changed (language): tell the panel to read them again."""
         if not self._owner:
             return
-        self._revision += 1
         for signal in ("NewTitle", "NewToolTip"):
             self._emit(ITEM_PATH, "org.kde.StatusNotifierItem", signal, None)
+        self.update_menu()
+
+    def update_menu(self):
+        """The presets or the active one changed: the panel reads the menu
+        again."""
+        if not self._owner:
+            return
+        self._revision += 1
         self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
                    GLib.Variant("(ui)", (self._revision, 0)))
 
@@ -279,14 +294,33 @@ class Tray:
 
     # -- the menu ------------------------------------------------------------
     def _items(self):
+        """({id: properties} in menu order: open, the presets, quit;
+        {id: preset key})."""
         texts = self.texts()
-        return {self.OPEN: {"label": GLib.Variant("s", texts["open"])},
-                2: {"type": GLib.Variant("s", "separator")},
-                self.QUIT: {"label": GLib.Variant("s", texts["quit"])}}
+        items = {self.OPEN: {"label": GLib.Variant("s", texts["open"])},
+                 2: {"type": GLib.Variant("s", "separator")}}
+        keys = {}
+        try:
+            presets = list(self.presets())
+        except Exception:                   # never break the whole menu
+            log.exception("Presets for the tray menu not readable")
+            presets = []
+        for item_id, (name, key, active) in enumerate(presets, self.FIRST_PRESET):
+            keys[item_id] = key
+            items[item_id] = {
+                # "_" marks a mnemonic in dbusmenu labels, "__" is a "_"
+                "label": GLib.Variant("s", name.replace("_", "__")),
+                "toggle-type": GLib.Variant("s", "radio"),
+                "toggle-state": GLib.Variant("i", 1 if active else 0)}
+        if presets:
+            items[4] = {"type": GLib.Variant("s", "separator")}
+        items[self.QUIT] = {"label": GLib.Variant("s", texts["quit"])}
+        return items, keys
 
     def _layout(self):
+        items, self._preset_keys = self._items()    # what a click refers to
         children = [GLib.Variant("(ia{sv}av)", (item_id, props, []))
-                    for item_id, props in self._items().items()]
+                    for item_id, props in items.items()]
         root = {"children-display": GLib.Variant("s", "submenu")}
         return (0, root, children)
 
@@ -297,7 +331,8 @@ class Tray:
 
     def _menu_call(self, _conn, _sender, _path, _iface, method, params, invocation):
         args = params.unpack()
-        items = self._items()
+        if method in ("GetGroupProperties", "GetProperty"):
+            items = self._items()[0]
         if method == "GetLayout":
             invocation.return_value(GLib.Variant(
                 "(u(ia{sv}av))", (self._revision, self._layout())))
@@ -334,3 +369,6 @@ class Tray:
             self._open()
         elif item_id == self.QUIT:
             GLib.idle_add(lambda: self.on_quit() and False)
+        elif item_id in self._preset_keys and self.on_apply_preset:
+            key = self._preset_keys[item_id]
+            GLib.idle_add(lambda: self.on_apply_preset(key) and False)

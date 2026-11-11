@@ -18,6 +18,22 @@ def _menu_text(text):
     return text.replace("_", "__")
 
 
+def _outcome_text(name, outcome, failed, no_device):
+    """What became of an applied preset, for a notification of the
+    desktop; no_device: the text for "no device", with {name}."""
+    if outcome == "written":
+        text = _("Preset “{name}” applied.")
+    elif outcome == "pending":
+        text = _("Preset “{name}” loaded, but not written: open Understeer "
+                 "and click Apply.")
+    elif outcome == "failed":
+        text = _("Preset “{name}” could not be written completely. "
+                 "Failed: {names}")
+    else:
+        text = no_device
+    return text.format(name=name, names=", ".join(failed))
+
+
 class PresetsMixin:
     """Part of TunerWindow. self.active_preset is the path of the last
     applied or saved preset, self.active_values the values stored in it."""
@@ -168,6 +184,9 @@ class PresetsMixin:
             presets.append_item(item)
         if presets.get_n_items():
             menu.append_section(None, presets)
+        app = self.get_application()
+        if app is not None and hasattr(app, "tray"):
+            app.tray.update_menu()          # the same presets there
         manage = Gio.Menu()
         manage.append(_("Save as Preset…"), "win.save-preset")
         manage.append(_("Import Preset File…"), "win.import-preset")
@@ -235,6 +254,8 @@ class PresetsMixin:
         try:
             name, values = self._read_preset(path)
         except (OSError, json.JSONDecodeError) as e:
+            if self._in_background:
+                self.show_again()           # from the tray: show the error
             self._error(_("Could not load preset"), str(e))
             return
         log.info("Applying preset %s (%s)%s: %s", name, path.name,
@@ -264,10 +285,29 @@ class PresetsMixin:
                   "write it").format(game=game, name=name))
             self._notify_game_preset(game, name, outcome, failed)
         else:
-            self._apply_values(
+            outcome, failed = self._apply_values(
                 values, _("Preset “{name}” applied").format(name=name),
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
+            if self._in_background:         # chosen in the tray menu
+                self._notify_tray_preset(name, outcome, failed)
+
+    def apply_from_tray(self, path):
+        """A preset chosen in the tray menu. Unsaved changes of the active
+        preset would be lost: then the window opens and asks first."""
+        log.info("Preset %s chosen in the tray menu", pathlib.Path(path).name)
+        if self._unsaved_preset_changes() or self._save_dialog is not None:
+            self.show_again()
+        self._ask_apply_preset(path)
+
+    def _notify_tray_preset(self, name, outcome, failed):
+        """While the window is closed, the only sign of what became of a
+        preset chosen in the tray menu."""
+        log.info("Notification for the tray: preset %s %s", name, outcome)
+        self._desktop_notify("tray-preset", "Understeer", _outcome_text(
+            name, outcome, failed,
+            _("No wheel base is connected, so preset “{name}” was not "
+              "written.")))
 
     def _show_preset(self, path):
         """The values of a preset, by tab, without applying it; those that
@@ -345,22 +385,14 @@ class PresetsMixin:
         if not self._in_background or not config.get_setting(
                 "game_notifications", True):
             return
-        bodies = {
-            "written": _("Preset “{name}” applied."),
-            "pending": _("Preset “{name}” loaded, but not written: open "
-                         "Understeer and click Apply."),
-            "failed": _("Preset “{name}” could not be written completely. "
-                        "Failed: {names}"),
-            "no device": _("Preset “{name}” chosen. It is applied as soon as "
-                           "the wheel base is connected."),
-        }
         title = (_("Wheel base connected, {game} runs") if connected
                  else _("{game} started")).format(game=game)
         log.info("Notification for %s: preset %s %s%s", game, name, outcome,
                  " after connecting" if connected else "")
-        self._desktop_notify(
-            "game-preset", title,
-            bodies[outcome].format(name=name, names=", ".join(failed)))
+        self._desktop_notify("game-preset", title, _outcome_text(
+            name, outcome, failed,
+            _("Preset “{name}” chosen. It is applied as soon as the wheel "
+              "base is connected.")))
 
     def _changes_list(self, diff):
         """Setting, before → after in aligned columns; scrolls when long."""
