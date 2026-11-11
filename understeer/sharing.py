@@ -11,6 +11,7 @@ from collections import namedtuple
 
 from .config import clean_folder
 from .i18n import _
+from .names import one_line
 from .settings import SETTINGS, SETTINGS_BY_ID, format_value
 
 FORMAT = 1                  # "understeer_preset" in shared presets
@@ -120,8 +121,7 @@ def _name(data, fallback_name):
     name = data.get("name")
     if not isinstance(name, str):
         name = ""
-    name = "".join(c for c in " ".join(name.split()) if c.isprintable())
-    name = name[:MAX_NAME]
+    name = one_line(name, MAX_NAME)
     while len(name.encode()) > MAX_NAME_BYTES:     # a file is named after it
         name = name[:-1]
     return name.strip() or fallback_name or _("Imported Preset")
@@ -160,12 +160,3 @@ def find_presets(text, fallback_name=""):
                       "preset, or its JSON."))
     return Result(presets, skipped, cut)
 
-
-def free_name(name, taken):
-    """name, or "name (2)", "name (3)", … if taken(name) is true."""
-    if not taken(name):
-        return name
-    n = 2
-    while taken(f"{name} ({n})"):
-        n += 1
-    return f"{name} ({n})"

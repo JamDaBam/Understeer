@@ -17,7 +17,7 @@ import pathlib
 import time
 
 from . import config
-from .sharing import free_name
+from .names import free_name
 
 KEEP_DAYS = 30
 

@@ -7,18 +7,14 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from .. import config, sharing, trash
 from ..i18n import _
-from ..settings import SETTINGS, SIM_DEFAULTS, TABS, changes, format_value
+from ..names import free_name, menu_label
+from ..settings import (SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS, TABS, changes,
+                        format_value)
 from . import layout
 from .names import cap_row, full_name_tip, join_names, name_label, short
 from .selection import Selection
 
 log = logging.getLogger("understeer.window")
-
-
-def _menu_text(text):
-    """A name in a menu: short, and with its "_" kept (menus read "_" as
-    a keyboard shortcut)."""
-    return short(text).replace("_", "__")
 
 
 def _outcome_text(name, outcome, failed, no_device):
@@ -196,11 +192,7 @@ class PresetsMixin:
 
     def _drop_preset(self, path, folder):
         """A preset dropped into folder (None: out of any)."""
-        try:
-            name, _values = self._read_preset(path)
-        except (OSError, ValueError):
-            name = pathlib.Path(path).stem
-        self._set_preset_folder(path, name, folder)
+        self._set_preset_folder(path, self._preset_name(path), folder)
 
     def _preset_tile(self, name, path):
         """A tile of a saved preset: its name with a pencil and a menu for
@@ -283,8 +275,12 @@ class PresetsMixin:
                        css_classes=["card", "tile", "preset-tile"])
         title = Gtk.Label(label=_("Sim Racing Defaults"), xalign=0, wrap=True)
         title.add_css_class("preset-name")
-        sub = Gtk.Label(label=_("Built in · 900°, 70 % force feedback, no "
-                                "spring or damper"),
+        sub = Gtk.Label(label=_("Built in · {angle}, {strength} force feedback, "
+                                "no spring or damper").format(
+                                    angle=format_value(SETTINGS_BY_ID["SEN"],
+                                                       SIM_DEFAULTS["SEN"]),
+                                    strength=format_value(SETTINGS_BY_ID["FF"],
+                                                          SIM_DEFAULTS["FF"])),
                         xalign=0, wrap=True, vexpand=True, valign=Gtk.Align.START,
                         max_width_chars=30)     # else the tiles get too wide
         sub.add_css_class("dim-label")
@@ -306,16 +302,16 @@ class PresetsMixin:
         if self.active_preset is not None:
             update = Gio.Menu()
             update.append(_("Save to “{name}”").format(
-                name=_menu_text(self._active_name())), "win.update-preset")
+                name=menu_label(self._active_name())), "win.update-preset")
             menu.append_section(None, update)
         presets = Gio.Menu()
         for folder, group in groups:
             target = presets
             if folder is not None:              # a folder: a submenu
                 target = Gio.Menu()
-                presets.append_submenu(_menu_text(folder), target)
+                presets.append_submenu(menu_label(folder), target)
             for name, path in group:
-                item = Gio.MenuItem.new(_menu_text(name), None)
+                item = Gio.MenuItem.new(menu_label(name), None)
                 item.set_action_and_target_value(
                     "win.apply-preset", GLib.Variant.new_string(str(path)))
                 target.append_item(item)
@@ -373,6 +369,13 @@ class PresetsMixin:
     def _collect_values(self):
         return {a: r.get() for a, r in self.rows.items()
                 if r.row.get_sensitive()}
+
+    def _preset_name(self, path):
+        """The name of the preset at path, its file name if it can't be read."""
+        try:
+            return self._read_preset(path)[0]
+        except (OSError, ValueError):
+            return pathlib.Path(path).stem
 
     def _read_preset(self, path):
         """Return (name, values) of a preset file: the settings shown here,
@@ -532,6 +535,12 @@ class PresetsMixin:
             name, outcome, failed,
             _("Preset “{name}” chosen. It is applied as soon as the "
               "wheelbase is connected.")))
+
+    def _show_changes(self, dialog, diff):
+        """Show diff in an Adw.AlertDialog, wide enough for its columns."""
+        dialog.set_extra_child(self._changes_list(diff))
+        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
+            dialog.set_prefer_wide_layout(True)
 
     def _changes_list(self, diff):
         """Setting, before → after in aligned columns; scrolls when long."""
@@ -719,12 +728,7 @@ class PresetsMixin:
 
     def _ask_new_folder(self, path=None):
         """Make a folder; path: a preset dropped on "New Folder", put in it."""
-        name = None
-        if path is not None:
-            try:
-                name, _values = self._read_preset(path)
-            except (OSError, ValueError):
-                name = pathlib.Path(path).stem
+        name = self._preset_name(path) if path is not None else None
         entry = self._folder_entry(None)
         entry.set_title(_("Name"))
         return self._name_dialog(
@@ -874,9 +878,7 @@ class PresetsMixin:
         dialog = Adw.AlertDialog(
             heading=_("Overwrite “{name}”?").format(name=short(name)), body=body)
         if diff:
-            dialog.set_extra_child(self._changes_list(diff))
-            if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
-                dialog.set_prefer_wide_layout(True)
+            self._show_changes(dialog, diff)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("overwrite", _("Overwrite"))
         dialog.set_close_response("cancel")
@@ -904,10 +906,7 @@ class PresetsMixin:
         """Apply a preset chosen by the user; first offer to save unsaved
         changes of the active preset, applying would lose them."""
         path = pathlib.Path(path)
-        try:
-            name, _values = self._read_preset(path)
-        except (OSError, ValueError):
-            name = path.stem
+        name = self._preset_name(path)
         self._ask_save_changes(
             lambda: self._apply_preset(path), f"apply {path.name}",
             _("These settings differ from the preset. Then “{name}” is "
@@ -925,9 +924,7 @@ class PresetsMixin:
         path, name = self.active_preset, self._active_name()
         dialog = Adw.AlertDialog(
             heading=_("Save Changes to “{name}”?").format(name=short(name)), body=body)
-        dialog.set_extra_child(self._changes_list(diff))
-        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
-            dialog.set_prefer_wide_layout(True)
+        self._show_changes(dialog, diff)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("discard", _("Don't Save"))
         dialog.add_response("save", _("Save"))
@@ -1070,15 +1067,7 @@ class PresetsMixin:
             except OSError as e:
                 self._error(_("Could not load preset"), str(e))
                 return
-            try:
-                result = sharing.find_presets(text, source.stem)
-            except sharing.Error as e:
-                self._not_a_preset(str(e))
-                return
-            if len(result.presets) == 1 and not result.skipped:
-                self._import_presets(result.presets)
-            else:                           # choose which ones
-                self._ask_paste_preset(text, source.stem)
+            self._import_text(text, source.stem)
 
         dialog.open(self, None, chosen)
 
@@ -1256,14 +1245,18 @@ class PresetsMixin:
         dialog.add_response("ok", _("OK"))
         dialog.present(self)
 
-    def _import_preset(self, text, fallback_name=""):
-        """Add the presets in text; asks first for names already taken."""
+    def _import_text(self, text, fallback_name=""):
+        """Add the presets in a shared text or file: one right away (asking
+        first if its name is taken), more to choose from."""
         try:
             result = sharing.find_presets(text, fallback_name)
         except sharing.Error as e:
             self._not_a_preset(str(e))
             return
-        self._import_presets(result.presets)
+        if len(result.presets) == 1 and not result.skipped:
+            self._import_presets(result.presets)
+        else:                           # choose which ones
+            self._ask_paste_preset(text, fallback_name)
 
     def _import_presets(self, found, added=None):
         """Add presets found, one after another; for a name already taken,
@@ -1302,9 +1295,7 @@ class PresetsMixin:
         dialog = Adw.AlertDialog(
             heading=_("“{name}” Already Exists").format(name=short(name)), body=body)
         if diff:
-            dialog.set_extra_child(self._changes_list(diff))
-            if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
-                dialog.set_prefer_wide_layout(True)
+            self._show_changes(dialog, diff)
         dialog.add_response("cancel", _("Skip") if rest else _("Cancel"))
         dialog.add_response("keep", _("Keep Both"))
         dialog.add_response("replace", _("Replace"))
@@ -1317,7 +1308,7 @@ class PresetsMixin:
             if response == "replace":
                 add(path, name)
             elif response == "keep":
-                new = sharing.free_name(
+                new = free_name(
                     name, lambda n: config.preset_path(n).exists())
                 add(config.preset_path(new), new)
             self._import_presets(rest, added)
@@ -1384,11 +1375,15 @@ class PresetsMixin:
         self._presets_changed()
         self._notify(_("Preset renamed to “{name}”").format(name=short(new_name)))
 
+    def _games_using(self, files):
+        """Names of the games that use one of these preset files."""
+        return [g["name"] for g in getattr(self.games_page, "games", [])
+                if g.get("preset") in files]
+
     def _games_note(self, files):
         """For a delete dialog: which games use one of these preset files,
         or ""."""
-        games = [g["name"] for g in getattr(self.games_page, "games", [])
-                 if g.get("preset") in files]
+        games = self._games_using(files)
         if not games:
             return ""
         return "\n\n" + _("Used by: {games}. Without their preset, these games "
@@ -1399,10 +1394,7 @@ class PresetsMixin:
         in the bin (the Trash button) for trash.KEEP_DAYS days."""
         items, names, files = [], [], set()
         for path in paths:
-            try:
-                name, _values = self._read_preset(path)
-            except (OSError, ValueError):
-                name = pathlib.Path(path).stem
+            name = self._preset_name(path)
             try:
                 items.append(trash.put_preset(path))
             except OSError as e:
@@ -1416,8 +1408,7 @@ class PresetsMixin:
             return
         self._presets_changed()
         self._trash_changed()
-        games = [g["name"] for g in getattr(self.games_page, "games", [])
-                 if g.get("preset") in files]
+        games = self._games_using(files)
         text = text or (_("“{name}” deleted").format(name=short(names[0]))
                         if len(names) == 1 else
                         _("Presets deleted: {n}").format(n=len(names)))

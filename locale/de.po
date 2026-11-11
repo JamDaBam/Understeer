@@ -275,7 +275,7 @@ msgstr "Verhalten der analogen Kupplungspaddles. Bei Lenkrädern mit Hardware-Sc
 msgid "Auto"
 msgstr "Auto"
 
-#: understeer/sharing.py:49
+#: understeer/sharing.py:50
 msgid "Understeer preset “{name}”"
 msgstr "Understeer-Preset „{name}“"
 
@@ -363,415 +363,415 @@ msgstr "Lila"
 msgid "Slate"
 msgstr "Schiefer"
 
-#: understeer/ui/cover_search.py:33
+#: understeer/ui/cover_search.py:30
 msgid "SteamGridDB did not accept the API key."
 msgstr "SteamGridDB hat den API-Schlüssel nicht akzeptiert."
 
-#: understeer/ui/cover_search.py:35
+#: understeer/ui/cover_search.py:32
 msgid "Could not save the picture"
 msgstr "Das Bild konnte nicht gespeichert werden"
 
-#: understeer/ui/cover_search.py:36
+#: understeer/ui/cover_search.py:33
 msgid "SteamGridDB could not be reached. Check your internet connection."
 msgstr "SteamGridDB ist nicht erreichbar. Prüf deine Internetverbindung."
 
-#: understeer/ui/cover_search.py:64
+#: understeer/ui/cover_search.py:61
 msgid "SteamGridDB API Key"
 msgstr "SteamGridDB-API-Schlüssel"
 
-#: understeer/ui/cover_search.py:107
+#: understeer/ui/cover_search.py:104
 msgid "SteamGridDB API key removed"
 msgstr "SteamGridDB-API-Schlüssel entfernt"
 
-#: understeer/ui/cover_search.py:117
+#: understeer/ui/cover_search.py:114
 msgid "SteamGridDB API key saved"
 msgstr "SteamGridDB-API-Schlüssel gespeichert"
 
-#: understeer/ui/cover_search.py:143
+#: understeer/ui/cover_search.py:140
 msgid "Cover from SteamGridDB"
 msgstr "Cover von SteamGridDB"
 
-#: understeer/ui/cover_search.py:165
+#: understeer/ui/cover_search.py:162
 msgid "{game} · {i} of {n}"
 msgstr "{game} · {i} von {n}"
 
-#: understeer/ui/cover_search.py:174
+#: understeer/ui/cover_search.py:171
 msgid "Skip"
 msgstr "Überspringen"
 
-#: understeer/ui/cover_search.py:175
+#: understeer/ui/cover_search.py:172
 msgid "Leave this game without a cover"
 msgstr "Dieses Spiel ohne Cover lassen"
 
-#: understeer/ui/cover_search.py:194
+#: understeer/ui/cover_search.py:191
 msgid "API Key Needed"
 msgstr "API-Schlüssel nötig"
 
-#: understeer/ui/cover_search.py:195
+#: understeer/ui/cover_search.py:192
 msgid "SteamGridDB answers only with a personal API key. It is free: sign in on SteamGridDB, open your preferences and copy the key from the API section."
 msgstr "SteamGridDB antwortet nur mit einem persönlichen API-Schlüssel. Er ist kostenlos: Melde dich bei SteamGridDB an, öffne deine Einstellungen und kopiere den Schlüssel aus dem Bereich „API“."
 
-#: understeer/ui/cover_search.py:200
+#: understeer/ui/cover_search.py:197
 msgid "Get API Key"
 msgstr "API-Schlüssel holen"
 
-#: understeer/ui/cover_search.py:235
+#: understeer/ui/cover_search.py:230
 msgid "Game name"
 msgstr "Spielname"
 
-#: understeer/ui/cover_search.py:258
+#: understeer/ui/cover_search.py:253
 msgid "Choose the Game"
 msgstr "Spiel auswählen"
 
-#: understeer/ui/cover_search.py:271
+#: understeer/ui/cover_search.py:266
 msgid "Enter the name of the game"
 msgstr "Gib den Namen des Spiels ein"
 
-#: understeer/ui/cover_search.py:282
+#: understeer/ui/cover_search.py:277
 msgid "Search failed"
 msgstr "Suche fehlgeschlagen"
 
-#: understeer/ui/cover_search.py:299
+#: understeer/ui/cover_search.py:294
 msgid "No games found"
 msgstr "Keine Spiele gefunden"
 
-#: understeer/ui/cover_search.py:300
+#: understeer/ui/cover_search.py:295
 msgid "Try a shorter or different name."
 msgstr "Versuch einen kürzeren oder anderen Namen."
 
-#: understeer/ui/cover_search.py:330
+#: understeer/ui/cover_search.py:321
 msgid "Covers could not be loaded"
 msgstr "Cover konnten nicht geladen werden"
 
-#: understeer/ui/cover_search.py:334
+#: understeer/ui/cover_search.py:325
 msgid "No covers"
 msgstr "Keine Cover"
 
-#: understeer/ui/cover_search.py:335
+#: understeer/ui/cover_search.py:326
 msgid "SteamGridDB has no portrait covers for this game yet."
 msgstr "SteamGridDB hat für dieses Spiel noch keine Cover im Hochformat."
 
-#: understeer/ui/cover_search.py:354
+#: understeer/ui/cover_search.py:345
 msgid "By {author}"
 msgstr "Von {author}"
 
-#: understeer/ui/cover_search.py:396
+#: understeer/ui/cover_search.py:387
 msgid "Cover from SteamGridDB set"
 msgstr "Cover von SteamGridDB übernommen"
 
-#: understeer/ui/games_page.py:50
+#: understeer/ui/games_page.py:47
 msgid "Delete"
 msgstr "Löschen"
 
-#: understeer/ui/games_page.py:63
+#: understeer/ui/games_page.py:55
 msgid "Give each game a preset. While Understeer is open, it applies the preset as soon as the game starts."
 msgstr "Gib jedem Spiel ein Preset. Solange Understeer geöffnet ist, wird das Preset angewendet, sobald das Spiel startet."
 
-#: understeer/ui/games_page.py:75
+#: understeer/ui/games_page.py:61
 msgid "Covers"
 msgstr "Cover"
 
-#: understeer/ui/games_page.py:77
+#: understeer/ui/games_page.py:63
 msgid "Download Missing Covers"
 msgstr "Fehlende Cover herunterladen"
 
-#: understeer/ui/games_page.py:78
+#: understeer/ui/games_page.py:64
 msgid "Steam games from Steam, other games from SteamGridDB if an API key is entered below. When off, Understeer uses only the pictures already on this computer."
 msgstr "Steam-Spiele von Steam, andere Spiele von SteamGridDB, wenn unten ein API-Schlüssel eingetragen ist. Ist das aus, nutzt Understeer nur Bilder, die schon auf diesem Computer liegen."
 
-#: understeer/ui/games_page.py:85
+#: understeer/ui/games_page.py:71
 msgid "Search missing covers now"
 msgstr "Fehlende Cover jetzt suchen"
 
-#: understeer/ui/games_page.py:97
+#: understeer/ui/games_page.py:83
 msgid "Get a free API key on SteamGridDB"
 msgstr "Kostenlosen API-Schlüssel bei SteamGridDB holen"
 
-#: understeer/ui/games_page.py:148
-msgid "{folder} – {name}"
-msgstr "{folder} – {name}"
-
-#: understeer/ui/games_page.py:170
+#: understeer/ui/games_page.py:122
 msgid "Add Game…"
 msgstr "Spiel hinzufügen …"
 
-#: understeer/ui/games_page.py:205
+#: understeer/ui/games_page.py:128
+msgid "{folder} – {name}"
+msgstr "{folder} – {name}"
+
+#: understeer/ui/games_page.py:168
 msgid "Searching for a cover…"
 msgstr "Cover wird gesucht …"
 
-#: understeer/ui/games_page.py:209
+#: understeer/ui/games_page.py:172
 msgid "No cover found online"
 msgstr "Online kein Cover gefunden"
 
-#: understeer/ui/games_page.py:210
+#: understeer/ui/games_page.py:173
 msgid "No cover"
 msgstr "Kein Cover"
 
-#: understeer/ui/games_page.py:237
+#: understeer/ui/games_page.py:200
 msgid "Choose Picture…"
 msgstr "Bild auswählen …"
 
-#: understeer/ui/games_page.py:239
+#: understeer/ui/games_page.py:202
 msgid "Use Steam Cover"
 msgstr "Steam-Cover verwenden"
 
-#: understeer/ui/games_page.py:240
+#: understeer/ui/games_page.py:203
 msgid "Remove Picture"
 msgstr "Bild entfernen"
 
-#: understeer/ui/games_page.py:242
+#: understeer/ui/games_page.py:205
 msgid "Download Cover"
 msgstr "Cover herunterladen"
 
-#: understeer/ui/games_page.py:243
+#: understeer/ui/games_page.py:206
 msgid "Search SteamGridDB…"
 msgstr "Bei SteamGridDB suchen …"
 
-#: understeer/ui/games_page.py:245
+#: understeer/ui/games_page.py:208
 msgid "Delete Game"
 msgstr "Spiel löschen"
 
-#: understeer/ui/games_page.py:253
+#: understeer/ui/games_page.py:216
 msgid "Picture and More"
 msgstr "Bild und mehr"
 
-#: understeer/ui/games_page.py:271
+#: understeer/ui/games_page.py:232
 msgid "Running"
 msgstr "Läuft"
 
-#: understeer/ui/games_page.py:284
+#: understeer/ui/games_page.py:245
 msgid "Change the name shown for this game"
 msgstr "Den angezeigten Namen dieses Spiels ändern"
 
-#: understeer/ui/games_page.py:295
+#: understeer/ui/games_page.py:256
 msgid "No Preset"
 msgstr "Kein Preset"
 
-#: understeer/ui/games_page.py:301
+#: understeer/ui/games_page.py:262
 msgid "Preset for this game"
 msgstr "Preset für dieses Spiel"
 
-#: understeer/ui/games_page.py:308
+#: understeer/ui/games_page.py:269
 msgid "Auto-apply"
 msgstr "Automatisch"
 
-#: understeer/ui/games_page.py:309
+#: understeer/ui/games_page.py:270
 msgid "Apply the preset as soon as the game starts"
 msgstr "Das Preset anwenden, sobald das Spiel startet"
 
-#: understeer/ui/games_page.py:332
+#: understeer/ui/games_page.py:293
 msgid "Could not delete game"
 msgstr "Spiel konnte nicht gelöscht werden"
 
-#: understeer/ui/games_page.py:342
+#: understeer/ui/games_page.py:303
 msgid "“{name}” deleted"
 msgstr "„{name}“ gelöscht"
 
-#: understeer/ui/games_page.py:344
+#: understeer/ui/games_page.py:305
 msgid "Games deleted: {n}"
 msgstr "Gelöschte Spiele: {n}"
 
-#: understeer/ui/games_page.py:350
+#: understeer/ui/games_page.py:311
 msgid "Undo"
 msgstr "Rückgängig"
 
-#: understeer/ui/games_page.py:357
+#: understeer/ui/games_page.py:318
 msgid "Could not restore game"
 msgstr "Spiel konnte nicht wiederhergestellt werden"
 
-#: understeer/ui/games_page.py:367
+#: understeer/ui/games_page.py:328
 msgid "Name"
 msgstr "Name"
 
-#: understeer/ui/games_page.py:370
+#: understeer/ui/games_page.py:331
 msgid "Only the name shown in Understeer changes; the game is found as before."
 msgstr "Nur der Name in Understeer ändert sich; das Spiel wird weiter wie bisher erkannt."
 
-#: understeer/ui/games_page.py:370
+#: understeer/ui/games_page.py:331
 msgid "Rename Game"
 msgstr "Spiel umbenennen"
 
-#: understeer/ui/games_page.py:372
+#: understeer/ui/games_page.py:333
 msgid "Rename"
 msgstr "Umbenennen"
 
-#: understeer/ui/games_page.py:373
+#: understeer/ui/games_page.py:334
 msgid "Enter a name for the game."
 msgstr "Gib einen Namen für das Spiel ein."
 
-#: understeer/ui/games_page.py:401
+#: understeer/ui/games_page.py:362
 msgid "Pictures"
 msgstr "Bilder"
 
-#: understeer/ui/games_page.py:405
+#: understeer/ui/games_page.py:366
 msgid "Picture for {game}"
 msgstr "Bild für {game}"
 
-#: understeer/ui/games_page.py:427
+#: understeer/ui/games_page.py:388
 msgid "This picture can't be opened"
 msgstr "Dieses Bild lässt sich nicht öffnen"
 
-#: understeer/ui/games_page.py:463
+#: understeer/ui/games_page.py:424
 msgid "All games already have a cover"
 msgstr "Alle Spiele haben schon ein Cover"
 
-#: understeer/ui/games_page.py:466
+#: understeer/ui/games_page.py:427
 msgid "Covers of games not on Steam come from SteamGridDB. Enter an API key under Covers to search them."
 msgstr "Cover für Spiele ohne Steam kommen von SteamGridDB. Trag unter „Cover“ einen API-Schlüssel ein, um sie zu suchen."
 
-#: understeer/ui/games_page.py:475
+#: understeer/ui/games_page.py:436
 msgid "Searching covers for {n} games…"
 msgstr "Cover für {n} Spiele werden gesucht …"
 
-#: understeer/ui/games_page.py:553
+#: understeer/ui/games_page.py:510
 msgid "Found all {n} covers"
 msgstr "Alle {n} Cover gefunden"
 
-#: understeer/ui/games_page.py:554
+#: understeer/ui/games_page.py:511
 msgid "Cover found"
 msgstr "Cover gefunden"
 
-#: understeer/ui/games_page.py:556
+#: understeer/ui/games_page.py:513
 msgid "No cover found"
 msgstr "Kein Cover gefunden"
 
-#: understeer/ui/games_page.py:557
+#: understeer/ui/games_page.py:514
 msgid "No covers found"
 msgstr "Keine Cover gefunden"
 
-#: understeer/ui/games_page.py:558
+#: understeer/ui/games_page.py:515
 msgid "Found {found} of {n} covers"
 msgstr "{found} von {n} Covern gefunden"
 
-#: understeer/ui/games_page.py:560
+#: understeer/ui/games_page.py:517
 msgid "Games not on Steam need a SteamGridDB API key."
 msgstr "Spiele ohne Steam brauchen einen SteamGridDB-API-Schlüssel."
 
-#: understeer/ui/games_page.py:563
+#: understeer/ui/games_page.py:520
 msgid "Choose the others on SteamGridDB?"
 msgstr "Die übrigen bei SteamGridDB auswählen?"
 
-#: understeer/ui/games_page.py:564
+#: understeer/ui/games_page.py:521
 msgid "Choose on SteamGridDB?"
 msgstr "Bei SteamGridDB auswählen?"
 
-#: understeer/ui/games_page.py:565
+#: understeer/ui/games_page.py:522
 msgid "Choose"
 msgstr "Auswählen"
 
-#: understeer/ui/games_page.py:585
+#: understeer/ui/games_page.py:542
 msgid "Search games"
 msgstr "Spiele suchen"
 
-#: understeer/ui/games_page.py:596
+#: understeer/ui/games_page.py:553
 msgid "No installed Steam games found"
 msgstr "Keine installierten Steam-Spiele gefunden"
 
-#: understeer/ui/games_page.py:597
+#: understeer/ui/games_page.py:554
 msgid "Add other games by their program."
 msgstr "Andere Spiele fügst du über ihr Programm hinzu."
 
-#: understeer/ui/games_page.py:610
+#: understeer/ui/games_page.py:567
 msgid "Add Game"
 msgstr "Spiel hinzufügen"
 
-#: understeer/ui/games_page.py:612
+#: understeer/ui/games_page.py:569
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: understeer/ui/games_page.py:613
+#: understeer/ui/games_page.py:570
 msgid "Other Program…"
 msgstr "Anderes Programm …"
 
-#: understeer/ui/games_page.py:635
+#: understeer/ui/games_page.py:592
 msgid "Suggestions from SteamGridDB"
 msgstr "Vorschläge von SteamGridDB"
 
-#: understeer/ui/games_page.py:643
+#: understeer/ui/games_page.py:600
 msgid "Linked with SteamGridDB: its cover is found automatically"
 msgstr "Mit SteamGridDB verknüpft: Das Cover wird automatisch gefunden"
 
-#: understeer/ui/games_page.py:706
+#: understeer/ui/games_page.py:663
 msgid "Program"
 msgstr "Programm"
 
-#: understeer/ui/games_page.py:709
+#: understeer/ui/games_page.py:666
 msgid "Choose Program File…"
 msgstr "Programmdatei auswählen …"
 
-#: understeer/ui/games_page.py:715
+#: understeer/ui/games_page.py:672
 msgid "Is the game running? Then pick it here:"
 msgstr "Läuft das Spiel gerade? Dann wähle es hier aus:"
 
-#: understeer/ui/games_page.py:719
+#: understeer/ui/games_page.py:676
 msgid "Search programs"
 msgstr "Programme suchen"
 
-#: understeer/ui/games_page.py:722
+#: understeer/ui/games_page.py:679
 msgid "Update List"
 msgstr "Liste aktualisieren"
 
-#: understeer/ui/games_page.py:764
+#: understeer/ui/games_page.py:721
 msgid "Add Other Program"
 msgstr "Anderes Programm hinzufügen"
 
-#: understeer/ui/games_page.py:765
+#: understeer/ui/games_page.py:722
 msgid "For games not started by Steam. Understeer recognises them by their program file. For Windows games (Wine, Proton, Lutris, Heroic) that is the game's .exe, not the launcher."
 msgstr "Für Spiele, die nicht über Steam starten. Understeer erkennt sie an ihrer Programmdatei. Bei Windows-Spielen (Wine, Proton, Lutris, Heroic) ist das die .exe des Spiels, nicht die des Launchers."
 
-#: understeer/ui/games_page.py:770
+#: understeer/ui/games_page.py:727
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: understeer/ui/games_page.py:787
+#: understeer/ui/games_page.py:744
 msgid "Program File"
 msgstr "Programmdatei"
 
-#: understeer/ui/live_input.py:27
+#: understeer/ui/live_input.py:36
 msgid "Current Angle"
 msgstr "Aktueller Winkel"
 
-#: understeer/ui/live_input.py:55
+#: understeer/ui/live_input.py:64
 msgid "Reset Max"
 msgstr "Max zurücksetzen"
 
-#: understeer/ui/live_input.py:58
+#: understeer/ui/live_input.py:67
 msgid "Pedal Axes"
 msgstr "Pedalachsen"
 
-#: understeer/ui/live_input.py:59
+#: understeer/ui/live_input.py:68
 msgid "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
 msgstr "Tritt ein Pedal, um zu sehen, welcher Balken sich bewegt, und wähle aus, was es ist. Max zeigt den höchsten Wert seit dem letzten Zurücksetzen."
 
-#: understeer/ui/live_input.py:92
+#: understeer/ui/live_input.py:99
 msgid "No read access to the input device. Set up permissions in the preferences."
 msgstr "Kein Lesezugriff auf das Eingabegerät. Richte die Berechtigungen in den Einstellungen ein."
 
-#: understeer/ui/live_input.py:94
+#: understeer/ui/live_input.py:101
 msgid "No Fanatec input device found."
 msgstr "Kein Fanatec-Eingabegerät gefunden."
 
-#: understeer/ui/live_input.py:121
+#: understeer/ui/live_input.py:128
 msgid "Axis {name}"
 msgstr "Achse {name}"
 
-#: understeer/ui/live_input.py:136
+#: understeer/ui/live_input.py:139
 msgid "What this axis is"
 msgstr "Was diese Achse ist"
 
-#: understeer/ui/live_input.py:149
+#: understeer/ui/live_input.py:152
 msgid "Show hidden axes ({n})"
 msgstr "Ausgeblendete Achsen anzeigen ({n})"
 
-#: understeer/ui/live_input.py:167
+#: understeer/ui/live_input.py:170
 msgid "No pedals found"
 msgstr "Keine Pedale gefunden"
 
-#: understeer/ui/live_input.py:227
+#: understeer/ui/live_input.py:226
 msgid "Turn the wheel to see the angle"
 msgstr "Dreh das Lenkrad, um den Winkel zu sehen"
 
-#: understeer/ui/live_input.py:239
+#: understeer/ui/live_input.py:238
 msgid "Max {n} %"
 msgstr "Max {n} %"
 
@@ -1079,599 +1079,599 @@ msgstr "Presets: {presets} · Spiele: {games} · Bilder: {covers}\n\nGleichnamig
 msgid "Imported (presets: {presets}, games: {games})"
 msgstr "Importiert (Presets: {presets}, Spiele: {games})"
 
-#: understeer/ui/presets.py:27
+#: understeer/ui/presets.py:24
 msgid "Preset “{name}” applied."
 msgstr "Preset „{name}“ angewendet."
 
-#: understeer/ui/presets.py:29
+#: understeer/ui/presets.py:26
 msgid "Preset “{name}” loaded, but not written: open Understeer and click Apply."
 msgstr "Preset „{name}“ geladen, aber nicht geschrieben: Öffne Understeer und klicke auf Übernehmen."
 
-#: understeer/ui/presets.py:32
+#: understeer/ui/presets.py:29
 msgid "Preset “{name}” could not be written completely. Failed: {names}"
 msgstr "Preset „{name}“ konnte nicht vollständig geschrieben werden. Fehlgeschlagen: {names}"
 
-#: understeer/ui/presets.py:47
+#: understeer/ui/presets.py:44
 msgid "Add a preset shared as a file"
 msgstr "Ein als Datei geteiltes Preset hinzufügen"
 
-#: understeer/ui/presets.py:47
+#: understeer/ui/presets.py:44
 msgid "Import File…"
 msgstr "Datei importieren …"
 
-#: understeer/ui/presets.py:49
+#: understeer/ui/presets.py:46
 msgid "Add a preset shared as text or JSON"
 msgstr "Ein als Text oder JSON geteiltes Preset hinzufügen"
 
-#: understeer/ui/presets.py:49
+#: understeer/ui/presets.py:46
 msgid "Paste Text…"
 msgstr "Text einfügen …"
 
-#: understeer/ui/presets.py:60
+#: understeer/ui/presets.py:57
 msgid "Saved Presets"
 msgstr "Gespeicherte Presets"
 
-#: understeer/ui/presets.py:61
+#: understeer/ui/presets.py:58
 msgid "Saves all current settings under a name in ~/.config/Understeer/."
 msgstr "Speichert alle aktuellen Einstellungen unter einem Namen in ~/.config/Understeer/."
 
-#: understeer/ui/presets.py:83
+#: understeer/ui/presets.py:80
 msgid "Save as Preset…"
 msgstr "Als Preset speichern …"
 
-#: understeer/ui/presets.py:84
+#: understeer/ui/presets.py:81
 msgid "Saved presets appear here and in the Presets menu at the top."
 msgstr "Gespeicherte Presets erscheinen hier und oben im Presets-Menü."
 
-#: understeer/ui/presets.py:88
+#: understeer/ui/presets.py:85
 msgid "New Folder…"
 msgstr "Neuer Ordner …"
 
-#: understeer/ui/presets.py:89
+#: understeer/ui/presets.py:86
 msgid "Or drag a preset here"
 msgstr "Oder ein Preset hierher ziehen"
 
-#: understeer/ui/presets.py:139
+#: understeer/ui/presets.py:112
 msgid "Drag presets here"
 msgstr "Presets hierher ziehen"
 
-#: understeer/ui/presets.py:157
+#: understeer/ui/presets.py:130
 msgid "Without Folder"
 msgstr "Ohne Ordner"
 
-#: understeer/ui/presets.py:162
+#: understeer/ui/presets.py:135
 msgid "Presets: {n}"
 msgstr "Presets: {n}"
 
-#: understeer/ui/presets.py:169
+#: understeer/ui/presets.py:142
 msgid "Rename Folder"
 msgstr "Ordner umbenennen"
 
-#: understeer/ui/presets.py:174
+#: understeer/ui/presets.py:147
 msgid "Delete Folder"
 msgstr "Ordner löschen"
 
-#: understeer/ui/presets.py:246
+#: understeer/ui/presets.py:213
 msgid "Change the name of this preset"
 msgstr "Den Namen dieses Presets ändern"
 
-#: understeer/ui/presets.py:258
+#: understeer/ui/presets.py:225
 msgid "Active preset"
 msgstr "Aktives Preset"
 
-#: understeer/ui/presets.py:261
+#: understeer/ui/presets.py:228
 msgid "Apply"
 msgstr "Übernehmen"
 
-#: understeer/ui/presets.py:264
+#: understeer/ui/presets.py:231
 msgid "Save Here"
 msgstr "Hier speichern"
 
-#: understeer/ui/presets.py:265
+#: understeer/ui/presets.py:232
 msgid "Save current settings to this preset"
 msgstr "Aktuelle Einstellungen in diesem Preset speichern"
 
-#: understeer/ui/presets.py:270
+#: understeer/ui/presets.py:237
 msgid "Drag onto a folder to put it there"
 msgstr "Auf einen Ordner ziehen, um es dort abzulegen"
 
-#: understeer/ui/presets.py:278
+#: understeer/ui/presets.py:245
 msgid "Show Values"
 msgstr "Werte anzeigen"
 
-#: understeer/ui/presets.py:281
+#: understeer/ui/presets.py:248
 msgid "Share"
 msgstr "Teilen"
 
-#: understeer/ui/presets.py:289
+#: understeer/ui/presets.py:256
 msgid "Values, Share and More"
 msgstr "Werte, Teilen und mehr"
 
-#: understeer/ui/presets.py:296
+#: understeer/ui/presets.py:263
 msgid "Save as File…"
 msgstr "Als Datei speichern …"
 
-#: understeer/ui/presets.py:297
+#: understeer/ui/presets.py:264
 msgid "Copy as Text"
 msgstr "Als Text kopieren"
 
-#: understeer/ui/presets.py:298
+#: understeer/ui/presets.py:265
 msgid "Copy as JSON"
 msgstr "Als JSON kopieren"
 
-#: understeer/ui/presets.py:311
+#: understeer/ui/presets.py:276
 msgid "Sim Racing Defaults"
 msgstr "Sim-Racing-Standardwerte"
 
-#: understeer/ui/presets.py:313
-msgid "Built in · 900°, 70 % force feedback, no spring or damper"
-msgstr "Eingebaut · 900°, 70 % Force Feedback, keine Feder- oder Dämpfer-Effekte"
+#: understeer/ui/presets.py:278
+msgid "Built in · {angle}, {strength} force feedback, no spring or damper"
+msgstr "Eingebaut · {angle}, {strength} Force Feedback, keine Feder- oder Dämpfer-Effekte"
 
-#: understeer/ui/presets.py:321
+#: understeer/ui/presets.py:290
 msgid "Sim racing defaults applied"
 msgstr "Sim-Racing-Standardwerte angewendet"
 
-#: understeer/ui/presets.py:335
+#: understeer/ui/presets.py:304
 msgid "Save to “{name}”"
 msgstr "In „{name}“ speichern"
 
-#: understeer/ui/presets.py:356
+#: understeer/ui/presets.py:325
 msgid "Import Preset File…"
 msgstr "Preset-Datei importieren …"
 
-#: understeer/ui/presets.py:357
+#: understeer/ui/presets.py:326
 msgid "Paste Preset Text…"
 msgstr "Preset-Text einfügen …"
 
-#: understeer/ui/presets.py:358
+#: understeer/ui/presets.py:327
 msgid "Manage Presets"
 msgstr "Presets verwalten"
 
-#: understeer/ui/presets.py:396
+#: understeer/ui/presets.py:365
 msgid "Preset “{name}” has unsaved changes"
 msgstr "Preset „{name}“ hat ungespeicherte Änderungen"
 
-#: understeer/ui/presets.py:397
+#: understeer/ui/presets.py:366
 msgid "Apply or save a preset"
 msgstr "Preset anwenden oder speichern"
 
-#: understeer/ui/presets.py:425
+#: understeer/ui/presets.py:401
 msgid "Could not load preset"
 msgstr "Preset konnte nicht geladen werden"
 
-#: understeer/ui/presets.py:436
+#: understeer/ui/presets.py:412
 msgid "Wheelbase connected: preset “{name}” for {game} applied"
 msgstr "Wheelbase verbunden: Preset „{name}“ für {game} angewendet"
 
-#: understeer/ui/presets.py:438
+#: understeer/ui/presets.py:414
 msgid "Wheelbase connected: preset “{name}” for {game} loaded — click Apply to write it"
 msgstr "Wheelbase verbunden: Preset „{name}“ für {game} geladen – zum Schreiben auf Übernehmen klicken"
 
-#: understeer/ui/presets.py:446
+#: understeer/ui/presets.py:422
 msgid "{game} started: preset “{name}” applied"
 msgstr "{game} gestartet: Preset „{name}“ angewendet"
 
-#: understeer/ui/presets.py:448
+#: understeer/ui/presets.py:424
 msgid "{game} started: preset “{name}” is applied once the wheelbase is connected"
 msgstr "{game} gestartet: Preset „{name}“ wird angewendet, sobald die Wheelbase verbunden ist"
 
-#: understeer/ui/presets.py:450
+#: understeer/ui/presets.py:426
 msgid "{game} started: preset “{name}” loaded — click Apply to write it"
 msgstr "{game} gestartet: Preset „{name}“ geladen – zum Schreiben auf Übernehmen klicken"
 
-#: understeer/ui/presets.py:455
+#: understeer/ui/presets.py:431
 msgid "Preset “{name}” applied"
 msgstr "Preset „{name}“ angewendet"
 
-#: understeer/ui/presets.py:456
+#: understeer/ui/presets.py:432
 msgid "Preset “{name}” loaded — click Apply to write it"
 msgstr "Preset „{name}“ geladen – zum Schreiben auf Übernehmen klicken"
 
-#: understeer/ui/presets.py:475
+#: understeer/ui/presets.py:451
 msgid "No wheelbase is connected, so preset “{name}” was not written."
 msgstr "Es ist keine Wheelbase verbunden, deshalb wurde das Preset „{name}“ nicht geschrieben."
 
-#: understeer/ui/presets.py:502
+#: understeer/ui/presets.py:478
 msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
 msgstr "Einstellungen, die vom aktuellen Stand abweichen: {n}. Ihr aktueller Wert steht jeweils darunter."
 
-#: understeer/ui/presets.py:505
+#: understeer/ui/presets.py:481
 msgid "The current settings match this preset."
 msgstr "Die aktuellen Einstellungen entsprechen diesem Preset."
 
-#: understeer/ui/presets.py:519
+#: understeer/ui/presets.py:495
 msgid "Now: {value}"
 msgstr "Aktuell: {value}"
 
-#: understeer/ui/presets.py:554
+#: understeer/ui/presets.py:530
 msgid "Wheelbase connected, {game} runs"
 msgstr "Wheelbase verbunden, {game} läuft"
 
-#: understeer/ui/presets.py:555
+#: understeer/ui/presets.py:531
 msgid "{game} started"
 msgstr "{game} gestartet"
 
-#: understeer/ui/presets.py:560
+#: understeer/ui/presets.py:536
 msgid "Preset “{name}” chosen. It is applied as soon as the wheelbase is connected."
 msgstr "Preset „{name}“ ausgewählt. Es wird angewendet, sobald die Wheelbase verbunden ist."
 
-#: understeer/ui/presets.py:597
+#: understeer/ui/presets.py:579
 msgid "Save as Preset"
 msgstr "Als Preset speichern"
 
-#: understeer/ui/presets.py:597
+#: understeer/ui/presets.py:579
 msgid "Saves all current settings under this name."
 msgstr "Speichert alle aktuellen Einstellungen unter diesem Namen."
 
-#: understeer/ui/presets.py:598
+#: understeer/ui/presets.py:580
 msgid "Save"
 msgstr "Speichern"
 
-#: understeer/ui/presets.py:600
+#: understeer/ui/presets.py:582
 msgid "Enter a name for the preset."
 msgstr "Gib einen Namen für das Preset ein."
 
-#: understeer/ui/presets.py:601
+#: understeer/ui/presets.py:583
 msgid "Pick a Folder"
 msgstr "Ordner auswählen"
 
-#: understeer/ui/presets.py:615
+#: understeer/ui/presets.py:597
 msgid "Preset “{name}” saved"
 msgstr "Preset „{name}“ gespeichert"
 
-#: understeer/ui/presets.py:688
+#: understeer/ui/presets.py:670
 msgid "Folder (optional)"
 msgstr "Ordner (optional)"
 
-#: understeer/ui/presets.py:758
+#: understeer/ui/presets.py:735
 msgid "New Folder"
 msgstr "Neuer Ordner"
 
-#: understeer/ui/presets.py:759
+#: understeer/ui/presets.py:736
 msgid "“{name}” is put into it."
 msgstr "„{name}“ wird hineingelegt."
 
-#: understeer/ui/presets.py:760
+#: understeer/ui/presets.py:737
 msgid "A folder groups presets here and in the menus, e.g. several for one game. Drag presets onto it."
 msgstr "Ein Ordner fasst Presets hier und in den Menüs zusammen, z. B. mehrere für ein Spiel. Ziehe Presets darauf."
 
-#: understeer/ui/presets.py:762
+#: understeer/ui/presets.py:739
 msgid "Create"
 msgstr "Anlegen"
 
-#: understeer/ui/presets.py:764
+#: understeer/ui/presets.py:741
 msgid "Enter a name for the folder."
 msgstr "Gib einen Namen für den Ordner ein."
 
-#: understeer/ui/presets.py:765
+#: understeer/ui/presets.py:742
 msgid "From Your Games"
 msgstr "Aus deinen Spielen"
 
-#: understeer/ui/presets.py:779
+#: understeer/ui/presets.py:756
 msgid "Folder “{folder}” already exists"
 msgstr "Ordner „{folder}“ gibt es schon"
 
-#: understeer/ui/presets.py:780
+#: understeer/ui/presets.py:757
 msgid "Folder “{folder}” made"
 msgstr "Ordner „{folder}“ angelegt"
 
-#: understeer/ui/presets.py:790
+#: understeer/ui/presets.py:767
 msgid "Presets in it: {n}. Keep them, shown without a folder, or delete them too? Deleted presets go to the trash."
 msgstr "Presets darin: {n}. Sollen sie bleiben, ohne Ordner angezeigt, oder mitgelöscht werden? Gelöschte Presets kommen in den Papierkorb."
 
-#: understeer/ui/presets.py:794
+#: understeer/ui/presets.py:771
 msgid "Delete Folder “{folder}”?"
 msgstr "Ordner „{folder}“ löschen?"
 
-#: understeer/ui/presets.py:797
+#: understeer/ui/presets.py:774
 msgid "Keep Presets"
 msgstr "Presets behalten"
 
-#: understeer/ui/presets.py:798
+#: understeer/ui/presets.py:775
 msgid "Delete with Presets"
 msgstr "Mit Presets löschen"
 
-#: understeer/ui/presets.py:817
+#: understeer/ui/presets.py:794
 msgid "Folder “{folder}” deleted. Presets deleted: {n}"
 msgstr "Ordner „{folder}“ gelöscht. Gelöschte Presets: {n}"
 
-#: understeer/ui/presets.py:823
+#: understeer/ui/presets.py:800
 msgid "Could not delete folder"
 msgstr "Ordner konnte nicht gelöscht werden"
 
-#: understeer/ui/presets.py:835
+#: understeer/ui/presets.py:812
 msgid "Folder “{folder}” deleted"
 msgstr "Ordner „{folder}“ gelöscht"
 
-#: understeer/ui/presets.py:844
+#: understeer/ui/presets.py:821
 msgid "Could not move preset"
 msgstr "Preset konnte nicht verschoben werden"
 
-#: understeer/ui/presets.py:848
+#: understeer/ui/presets.py:825
 msgid "“{name}” moved to “{folder}”"
 msgstr "„{name}“ nach „{folder}“ verschoben"
 
-#: understeer/ui/presets.py:850
+#: understeer/ui/presets.py:827
 msgid "“{name}” is in no folder now"
 msgstr "„{name}“ ist jetzt in keinem Ordner"
 
-#: understeer/ui/presets.py:855
+#: understeer/ui/presets.py:832
 msgid "Rename Folder “{folder}”"
 msgstr "Ordner „{folder}“ umbenennen"
 
-#: understeer/ui/presets.py:856
+#: understeer/ui/presets.py:833
 msgid "With the name of another folder, both become one. Left empty, the presets are taken out of the folder."
 msgstr "Mit dem Namen eines anderen Ordners werden beide zu einem. Bleibt der Name leer, werden die Presets aus dem Ordner genommen."
 
-#: understeer/ui/presets.py:869
+#: understeer/ui/presets.py:846
 msgid "Could not rename folder"
 msgstr "Ordner konnte nicht umbenannt werden"
 
-#: understeer/ui/presets.py:874
+#: understeer/ui/presets.py:851
 msgid "Folder “{old}” renamed to “{new}”"
 msgstr "Ordner „{old}“ in „{new}“ umbenannt"
 
-#: understeer/ui/presets.py:876
+#: understeer/ui/presets.py:853
 msgid "Presets taken out of folder “{old}”"
 msgstr "Presets aus dem Ordner „{old}“ genommen"
 
-#: understeer/ui/presets.py:883
+#: understeer/ui/presets.py:860
 msgid "Could not save preset"
 msgstr "Preset konnte nicht gespeichert werden"
 
-#: understeer/ui/presets.py:899
+#: understeer/ui/presets.py:876
 msgid "Settings that change:"
 msgstr "Diese Einstellungen ändern sich:"
 
-#: understeer/ui/presets.py:900
+#: understeer/ui/presets.py:877
 msgid "The preset already matches the current settings."
 msgstr "Das Preset entspricht bereits den aktuellen Einstellungen."
 
-#: understeer/ui/presets.py:902
+#: understeer/ui/presets.py:879
 msgid "Overwrite “{name}”?"
 msgstr "„{name}“ überschreiben?"
 
-#: understeer/ui/presets.py:908
+#: understeer/ui/presets.py:883
 msgid "Overwrite"
 msgstr "Überschreiben"
 
-#: understeer/ui/presets.py:927
+#: understeer/ui/presets.py:902
 msgid "These settings differ from the preset. The wheelbase keeps them either way."
 msgstr "Diese Einstellungen weichen vom Preset ab. Die Wheelbase behält sie so oder so."
 
-#: understeer/ui/presets.py:940
+#: understeer/ui/presets.py:912
 msgid "These settings differ from the preset. Then “{name}” is applied."
 msgstr "Diese Einstellungen weichen vom Preset ab. Danach wird „{name}“ angewendet."
 
-#: understeer/ui/presets.py:954
+#: understeer/ui/presets.py:926
 msgid "Save Changes to “{name}”?"
 msgstr "Änderungen an „{name}“ speichern?"
 
-#: understeer/ui/presets.py:959
+#: understeer/ui/presets.py:929
 msgid "Don't Save"
 msgstr "Nicht speichern"
 
-#: understeer/ui/presets.py:1023
+#: understeer/ui/presets.py:993
 msgid "Preset “{name}” copied as JSON"
 msgstr "Preset „{name}“ als JSON kopiert"
 
-#: understeer/ui/presets.py:1026
+#: understeer/ui/presets.py:996
 msgid "Preset “{name}” copied as text"
 msgstr "Preset „{name}“ als Text kopiert"
 
-#: understeer/ui/presets.py:1034
+#: understeer/ui/presets.py:1004
 msgid "Presets (JSON or text)"
 msgstr "Presets (JSON oder Text)"
 
-#: understeer/ui/presets.py:1047
+#: understeer/ui/presets.py:1017
 msgid "Save Preset as File"
 msgstr "Preset als Datei speichern"
 
-#: understeer/ui/presets.py:1066
+#: understeer/ui/presets.py:1036
 msgid "Preset “{name}” saved as file"
 msgstr "Preset „{name}“ als Datei gespeichert"
 
-#: understeer/ui/presets.py:1075
+#: understeer/ui/presets.py:1045
 msgid "Import Presets"
 msgstr "Presets importieren"
 
-#: understeer/ui/presets.py:1092
+#: understeer/ui/presets.py:1062
 msgid "The file holds no text."
 msgstr "Die Datei enthält keinen Text."
 
-#: understeer/ui/presets.py:1121
+#: understeer/ui/presets.py:1083
 msgid "Paste Presets"
 msgstr "Presets einfügen"
 
-#: understeer/ui/presets.py:1124
+#: understeer/ui/presets.py:1086
 msgid "Add Preset"
 msgstr "Preset hinzufügen"
 
-#: understeer/ui/presets.py:1132
+#: understeer/ui/presets.py:1094
 msgid "Paste shared presets here, as text or JSON, also a whole forum thread. Understeer finds every preset in it and takes only their settings, nothing else."
 msgstr "Füge hier geteilte Presets ein, als Text oder JSON, auch einen ganzen Forenthread. Understeer findet jedes Preset darin und übernimmt nur ihre Einstellungen, sonst nichts."
 
-#: understeer/ui/presets.py:1170
+#: understeer/ui/presets.py:1132
 msgid "Add ({n})"
 msgstr "Hinzufügen ({n})"
 
-#: understeer/ui/presets.py:1249
+#: understeer/ui/presets.py:1211
 msgid "Presets found: {n}"
 msgstr "Gefundene Presets: {n}"
 
-#: understeer/ui/presets.py:1251
+#: understeer/ui/presets.py:1213
 msgid "skipped without known settings: {n}"
 msgstr "übersprungen ohne bekannte Einstellungen: {n}"
 
-#: understeer/ui/presets.py:1254
+#: understeer/ui/presets.py:1216
 msgid "only the first {max} are taken"
 msgstr "nur die ersten {max} werden übernommen"
 
-#: understeer/ui/presets.py:1260
+#: understeer/ui/presets.py:1222
 msgid "Settings: {n}"
 msgstr "Einstellungen: {n}"
 
-#: understeer/ui/presets.py:1262
+#: understeer/ui/presets.py:1224
 msgid "Version {n}"
 msgstr "Fassung {n}"
 
-#: understeer/ui/presets.py:1264
+#: understeer/ui/presets.py:1226
 msgid "Folder: {folder}"
 msgstr "Ordner: {folder}"
 
-#: understeer/ui/presets.py:1269
+#: understeer/ui/presets.py:1231
 msgid "Add this preset"
 msgstr "Dieses Preset hinzufügen"
 
-#: understeer/ui/presets.py:1282
+#: understeer/ui/presets.py:1244
 msgid "No Preset Found"
 msgstr "Kein Preset gefunden"
 
-#: understeer/ui/presets.py:1283
+#: understeer/ui/presets.py:1245
 msgid "OK"
 msgstr "OK"
 
-#: understeer/ui/presets.py:1322
+#: understeer/ui/presets.py:1288
 msgid "Your preset already has the same settings. Replace it anyway, or keep both?"
 msgstr "Dein Preset hat schon dieselben Einstellungen. Trotzdem ersetzen oder beide behalten?"
 
-#: understeer/ui/presets.py:1325
+#: understeer/ui/presets.py:1291
 msgid "Replace your preset, or keep both? The shared preset has these settings:"
 msgstr "Dein Preset ersetzen oder beide behalten? Das geteilte Preset hat diese Einstellungen:"
 
-#: understeer/ui/presets.py:1328
+#: understeer/ui/presets.py:1294
 msgid "Replace your preset, or keep both?"
 msgstr "Dein Preset ersetzen oder beide behalten?"
 
-#: understeer/ui/presets.py:1330
+#: understeer/ui/presets.py:1296
 msgid "“{name}” Already Exists"
 msgstr "„{name}“ gibt es schon"
 
-#: understeer/ui/presets.py:1336
+#: understeer/ui/presets.py:1300
 msgid "Keep Both"
 msgstr "Beide behalten"
 
-#: understeer/ui/presets.py:1337
+#: understeer/ui/presets.py:1301
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: understeer/ui/presets.py:1378
+#: understeer/ui/presets.py:1342
 msgid "Preset “{name}” imported"
 msgstr "Preset „{name}“ importiert"
 
-#: understeer/ui/presets.py:1381
+#: understeer/ui/presets.py:1345
 msgid "Presets imported: {n}"
 msgstr "Importierte Presets: {n}"
 
-#: understeer/ui/presets.py:1386
+#: understeer/ui/presets.py:1350
 msgid "Games that use this preset keep it."
 msgstr "Spiele, die dieses Preset nutzen, behalten es."
 
-#: understeer/ui/presets.py:1386
+#: understeer/ui/presets.py:1350
 msgid "Rename Preset"
 msgstr "Preset umbenennen"
 
-#: understeer/ui/presets.py:1400
+#: understeer/ui/presets.py:1364
 msgid "Name Already Used"
 msgstr "Name schon vergeben"
 
-#: understeer/ui/presets.py:1401
+#: understeer/ui/presets.py:1365
 msgid "Another preset is already called “{name}”."
 msgstr "Ein anderes Preset heißt bereits „{name}“."
 
-#: understeer/ui/presets.py:1405
+#: understeer/ui/presets.py:1369
 msgid "Could not rename preset"
 msgstr "Preset konnte nicht umbenannt werden"
 
-#: understeer/ui/presets.py:1412
+#: understeer/ui/presets.py:1376
 msgid "Preset renamed to “{name}”"
 msgstr "Preset in „{name}“ umbenannt"
 
-#: understeer/ui/presets.py:1421
+#: understeer/ui/presets.py:1389
 msgid "Used by: {games}. Without their preset, these games get none applied."
 msgstr "Benutzt von: {games}. Ohne ihr Preset wird bei diesen Spielen keins angewendet."
 
-#: understeer/ui/presets.py:1436
+#: understeer/ui/presets.py:1401
 msgid "Could not delete preset"
 msgstr "Preset konnte nicht gelöscht werden"
 
-#: understeer/ui/presets.py:1450
+#: understeer/ui/presets.py:1414
 msgid "Presets deleted: {n}"
 msgstr "Gelöschte Presets: {n}"
 
-#: understeer/ui/presets.py:1452
+#: understeer/ui/presets.py:1416
 msgid "Used by: {games}"
 msgstr "Benutzt von: {games}"
 
-#: understeer/ui/presets.py:1459
+#: understeer/ui/presets.py:1423
 msgid "Could not restore presets"
 msgstr "Presets konnten nicht wiederhergestellt werden"
 
-#: understeer/ui/report_dialog.py:48
+#: understeer/ui/report_dialog.py:47
 msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub, where you see everything before you send it."
 msgstr "Beschreibe kurz, was passiert ist. Understeer ergänzt die technischen Details und öffnet ein ausgefülltes Issue auf GitHub. Dort siehst du alles, bevor du es absendest."
 
-#: understeer/ui/report_dialog.py:52
+#: understeer/ui/report_dialog.py:51
 msgid "Title"
 msgstr "Titel"
 
-#: understeer/ui/report_dialog.py:57
+#: understeer/ui/report_dialog.py:56
 msgid "What happened?"
 msgstr "Was ist passiert?"
 
-#: understeer/ui/report_dialog.py:58
+#: understeer/ui/report_dialog.py:57
 msgid "What did you do, what did you expect, and what happened instead?"
 msgstr "Was hast du gemacht, was hast du erwartet und was ist stattdessen passiert?"
 
-#: understeer/ui/report_dialog.py:75
+#: understeer/ui/report_dialog.py:74
 msgid "Added to the Report"
 msgstr "Wird mitgeschickt"
 
-#: understeer/ui/report_dialog.py:76
+#: understeer/ui/report_dialog.py:75
 msgid "Your user name and home folder are left out."
 msgstr "Dein Benutzername und dein Home-Ordner werden entfernt."
 
-#: understeer/ui/report_dialog.py:77
+#: understeer/ui/report_dialog.py:76
 msgid "System Details"
 msgstr "Systemdetails"
 
-#: understeer/ui/report_dialog.py:78
+#: understeer/ui/report_dialog.py:77
 msgid "Versions, wheelbase and access rights"
 msgstr "Versionen, Wheelbase und Zugriffsrechte"
 
-#: understeer/ui/report_dialog.py:84
+#: understeer/ui/report_dialog.py:83
 msgid "Log Excerpt"
 msgstr "Auszug aus der Logdatei"
 
-#: understeer/ui/report_dialog.py:85
+#: understeer/ui/report_dialog.py:84
 msgid "The last entries of this session"
 msgstr "Die letzten Einträge dieser Sitzung"
 
-#: understeer/ui/report_dialog.py:92
+#: understeer/ui/report_dialog.py:91
 msgid "Show the whole log file, e.g. to drag it into the issue"
 msgstr "Die ganze Logdatei zeigen, z. B. um sie in das Issue zu ziehen"
 
-#: understeer/ui/report_dialog.py:104
+#: understeer/ui/report_dialog.py:102
 msgid "Copy Only"
 msgstr "Nur kopieren"
 
-#: understeer/ui/report_dialog.py:106
+#: understeer/ui/report_dialog.py:104
 msgid "Copy the filled-in report, e.g. for a comment on an existing issue, an e-mail or a forum post"
 msgstr "Den ausgefüllten Bericht kopieren, z. B. für einen Kommentar zu einem bestehenden Issue, eine E-Mail oder einen Forenbeitrag"
 
-#: understeer/ui/report_dialog.py:108
+#: understeer/ui/report_dialog.py:106
 msgid "Report copied"
 msgstr "Bericht kopiert"
 
-#: understeer/ui/report_dialog.py:109
+#: understeer/ui/report_dialog.py:107
 msgid "Open on GitHub"
 msgstr "Auf GitHub öffnen"
 
-#: understeer/ui/report_dialog.py:112
+#: understeer/ui/report_dialog.py:110
 msgid "Needs a GitHub account"
 msgstr "Braucht ein GitHub-Konto"
 
-#: understeer/ui/report_dialog.py:155
+#: understeer/ui/report_dialog.py:150
 msgid "GitHub opened in the browser. The report is also on the clipboard."
 msgstr "GitHub wurde im Browser geöffnet. Der Bericht liegt auch in der Zwischenablage."
 
@@ -1707,7 +1707,7 @@ msgstr "Änderung dieser Einstellung rückgängig machen"
 msgid "About this setting"
 msgstr "Über diese Einstellung"
 
-#: understeer/ui/setting_tile.py:207
+#: understeer/ui/setting_tile.py:205
 msgid "Not supported by your hardware"
 msgstr "Von deiner Hardware nicht unterstützt"
 
@@ -1787,262 +1787,262 @@ msgstr "Nicht suchen"
 msgid "Look"
 msgstr "Suchen"
 
-#: understeer/ui/update_check.py:146
+#: understeer/ui/update_check.py:139
 msgid "Understeer {version} is installed. Restart to use it."
 msgstr "Understeer {version} ist installiert. Starte neu, um es zu verwenden."
 
-#: understeer/ui/update_check.py:148
+#: understeer/ui/update_check.py:141
 msgid "Restart"
 msgstr "Neu starten"
 
-#: understeer/ui/update_check.py:150
+#: understeer/ui/update_check.py:143
 msgid "Updating to Understeer {version}…"
 msgstr "Aktualisiere auf Understeer {version} …"
 
-#: understeer/ui/update_check.py:154
+#: understeer/ui/update_check.py:147
 msgid "Understeer {version} is available"
 msgstr "Understeer {version} ist verfügbar"
 
-#: understeer/ui/update_check.py:156
+#: understeer/ui/update_check.py:149
 msgid "Update Now"
 msgstr "Jetzt aktualisieren"
 
-#: understeer/ui/update_check.py:158
+#: understeer/ui/update_check.py:151
 msgid "Download"
 msgstr "Herunterladen"
 
-#: understeer/ui/update_check.py:198
+#: understeer/ui/update_check.py:185
 msgid "Update Failed"
 msgstr "Aktualisieren fehlgeschlagen"
 
-#: understeer/ui/update_check.py:199
+#: understeer/ui/update_check.py:186
 msgid "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 msgstr "Understeer konnte sich nicht aktualisieren: {reason}. Deine Version bleibt, wie sie ist. Du kannst die neue stattdessen von GitHub herunterladen."
 
-#: understeer/ui/update_check.py:202
+#: understeer/ui/update_check.py:189
 msgid "Close"
 msgstr "Schließen"
 
-#: understeer/ui/window.py:203
+#: understeer/ui/window.py:204
 msgid "Understeer runs in the background"
 msgstr "Understeer läuft im Hintergrund weiter"
 
-#: understeer/ui/window.py:204
+#: understeer/ui/window.py:205
 msgid "It applies the presets of your games when they start. Open or quit it with its icon in the system tray."
 msgstr "Es wendet die Presets deiner Spiele an, wenn sie starten. Öffnen oder beenden kannst du es über sein Symbol in der Systemleiste."
 
-#: understeer/ui/window.py:255
+#: understeer/ui/window.py:256
 msgid "Slot {n}"
 msgstr "Slot {n}"
 
-#: understeer/ui/window.py:260
+#: understeer/ui/window.py:261
 msgid "Tuning slot on the wheelbase that is being edited"
 msgstr "Tuning-Slot der Wheelbase, der gerade bearbeitet wird"
 
-#: understeer/ui/window.py:274
+#: understeer/ui/window.py:275
 msgid "Main Menu"
 msgstr "Hauptmenü"
 
-#: understeer/ui/window.py:277
+#: understeer/ui/window.py:278
 msgid "Reload from Device"
 msgstr "Vom Gerät neu laden"
 
-#: understeer/ui/window.py:282
+#: understeer/ui/window.py:283
 msgid "Report a Problem…"
 msgstr "Problem melden …"
 
-#: understeer/ui/window.py:283
+#: understeer/ui/window.py:284
 msgid "What's New"
 msgstr "Neuigkeiten"
 
-#: understeer/ui/window.py:284
+#: understeer/ui/window.py:285
 msgid "About Understeer"
 msgstr "Über Understeer"
 
-#: understeer/ui/window.py:294
+#: understeer/ui/window.py:295
 msgid "Undo all changes since the values were loaded"
 msgstr "Alle Änderungen seit dem Laden rückgängig machen"
 
-#: understeer/ui/window.py:319
+#: understeer/ui/window.py:320
 msgid "Discard"
 msgstr "Verwerfen"
 
-#: understeer/ui/window.py:475
+#: understeer/ui/window.py:433
 msgid "{group} (advanced)"
 msgstr "{group} (erweitert)"
 
-#: understeer/ui/window.py:510
+#: understeer/ui/window.py:468
 msgid "Quick Select"
 msgstr "Schnellauswahl"
 
-#: understeer/ui/window.py:517
+#: understeer/ui/window.py:475
 msgid "Use the maximum range of the wheelbase"
 msgstr "Maximalen Bereich der Wheelbase verwenden"
 
-#: understeer/ui/window.py:539
+#: understeer/ui/window.py:497
 msgid "All Versions on GitHub"
 msgstr "Alle Versionen auf GitHub"
 
-#: understeer/ui/window.py:552
+#: understeer/ui/window.py:510
 msgid "{name} by {author}"
 msgstr "{name} von {author}"
 
-#: understeer/ui/window.py:553
+#: understeer/ui/window.py:511
 msgid "Started as a fork of"
 msgstr "Entstanden als Fork von"
 
-#: understeer/ui/window.py:556
+#: understeer/ui/window.py:514
 msgid "Kernel driver"
 msgstr "Kerneltreiber"
 
-#: understeer/ui/window.py:618
+#: understeer/ui/window.py:576
 msgid "New"
 msgstr "Neu"
 
-#: understeer/ui/window.py:834
+#: understeer/ui/window.py:792
 msgid "No Fanatec wheelbase found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr "Keine Fanatec-Wheelbase gefunden. Prüfe, ob sie eingeschaltet und der hid-fanatecff-Treiber geladen ist."
 
-#: understeer/ui/window.py:836
+#: understeer/ui/window.py:794
 msgid "Retry"
 msgstr "Erneut suchen"
 
-#: understeer/ui/window.py:841
+#: understeer/ui/window.py:799
 msgid "Changes need a password each time. Join the “{group}” group to tune live."
 msgstr "Änderungen brauchen jedes Mal ein Passwort. Tritt der Gruppe „{group}“ bei, um live zu tunen."
 
-#: understeer/ui/window.py:844
+#: understeer/ui/window.py:802
 msgid "Join Group"
 msgstr "Gruppe beitreten"
 
-#: understeer/ui/window.py:846
+#: understeer/ui/window.py:804
 msgid "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 msgstr "Melde dich ab und wieder an, um den Beitritt zur Gruppe „{group}“ abzuschließen. Bis dahin brauchen Änderungen ein Passwort."
 
-#: understeer/ui/window.py:853
+#: understeer/ui/window.py:811
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr "Änderungen brauchen jedes Mal ein Passwort. Richte Schreibrechte ein, um live zu tunen."
 
-#: understeer/ui/window.py:876
+#: understeer/ui/window.py:834
 msgid "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 msgstr "Dein Benutzer ist nicht in der Gruppe „{group}“, die der hid-fanatecff-Treiber für die Tuning-Einstellungen verwendet."
 
-#: understeer/ui/window.py:882
+#: understeer/ui/window.py:840
 msgid "Log out and back in to finish joining the “{group}” group."
 msgstr "Melde dich ab und wieder an, um den Beitritt zur Gruppe „{group}“ abzuschließen."
 
-#: understeer/ui/window.py:886
+#: understeer/ui/window.py:844
 msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr "Installiert eine udev-Regel, damit Einstellungen ohne Passwortabfrage geändert werden können und die Live-Eingabe angezeigt werden kann."
 
-#: understeer/ui/window.py:901
+#: understeer/ui/window.py:859
 msgid "Setting up permissions failed"
 msgstr "Einrichten der Berechtigungen fehlgeschlagen"
 
-#: understeer/ui/window.py:904
+#: understeer/ui/window.py:862
 msgid "Added to “{group}”. Log out and back in to tune live."
 msgstr "Zu „{group}“ hinzugefügt. Melde dich ab und wieder an, um live zu tunen."
 
-#: understeer/ui/window.py:948
+#: understeer/ui/window.py:906
 msgid "Wheelbase connected"
 msgstr "Wheelbase verbunden"
 
-#: understeer/ui/window.py:950
+#: understeer/ui/window.py:908
 msgid "Wheelbase disconnected"
 msgstr "Wheelbase getrennt"
 
-#: understeer/ui/window.py:962
+#: understeer/ui/window.py:920
 msgid "No device"
 msgstr "Kein Gerät"
 
-#: understeer/ui/window.py:979
+#: understeer/ui/window.py:937
 msgid "In sync with device"
 msgstr "Mit Gerät synchron"
 
-#: understeer/ui/window.py:991
+#: understeer/ui/window.py:949
 msgid "Writing…"
 msgstr "Schreibe …"
 
-#: understeer/ui/window.py:1017
+#: understeer/ui/window.py:975
 msgid "Write failed: {names}"
 msgstr "Schreiben fehlgeschlagen: {names}"
 
-#: understeer/ui/window.py:1019
+#: understeer/ui/window.py:977
 msgid "Could not write: {names}"
 msgstr "Konnte nicht schreiben: {names}"
 
-#: understeer/ui/window.py:1037
+#: understeer/ui/window.py:995
 msgid "Pending changes: {n}"
 msgstr "Ausstehende Änderungen: {n}"
 
-#: understeer/ui/window.py:1039
+#: understeer/ui/window.py:997
 msgid "Changes not applied yet"
 msgstr "Änderungen noch nicht übernommen"
 
-#: understeer/ui/window.py:1086
+#: understeer/ui/window.py:1044
 msgid "Changes undone"
 msgstr "Änderungen rückgängig gemacht"
 
-#: understeer/ui/window.py:1174
+#: understeer/ui/window.py:1132
 msgid "Slot changed on the wheelbase: {name}. Unapplied changes were discarded."
 msgstr "Slot an der Wheelbase gewechselt: {name}. Nicht übernommene Änderungen wurden verworfen."
 
-#: understeer/ui/window.py:1176
+#: understeer/ui/window.py:1134
 msgid "Slot changed on the wheelbase: {name}"
 msgstr "Slot an der Wheelbase gewechselt: {name}"
 
-#: understeer/ui/window.py:1198
+#: understeer/ui/window.py:1156
 msgid "Unknown wheel (ID {id})"
 msgstr "Unbekanntes Lenkrad (ID {id})"
 
-#: understeer/ui/window.py:1219
+#: understeer/ui/window.py:1177
 msgid "Steering wheel changed: {name}"
 msgstr "Lenkrad gewechselt: {name}"
 
-#: understeer/ui/window.py:1230
+#: understeer/ui/window.py:1188
 msgid "Firmware {version}"
 msgstr "Firmware {version}"
 
-#: understeer/ui/window.py:1238
+#: understeer/ui/window.py:1196
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: understeer/ui/window.py:1253
+#: understeer/ui/window.py:1211
 msgid "The driver can only switch to slots 1–{n}. Choose this slot on the wheelbase."
 msgstr "Der Treiber kann nur auf die Slots 1–{n} umschalten. Wähle diesen Slot an der Wheelbase."
 
-#: understeer/ui/window.py:1255
+#: understeer/ui/window.py:1213
 msgid "Could not switch slot"
 msgstr "Slot konnte nicht gewechselt werden"
 
-#: understeer/ui/window.py:1269
+#: understeer/ui/window.py:1227
 msgid "Could not send rumble"
 msgstr "Vibration konnte nicht gesendet werden"
 
-#: understeer/ui/window.py:1282
+#: understeer/ui/window.py:1240
 msgid "Permissions set up — changes now apply live"
 msgstr "Berechtigungen eingerichtet – Änderungen werden jetzt live übernommen"
 
-#: understeer/ui/window.py:1327
+#: understeer/ui/window.py:1285
 msgid "Reset All Tuning Slots?"
 msgstr "Alle Tuning-Slots zurücksetzen?"
 
-#: understeer/ui/window.py:1328
+#: understeer/ui/window.py:1286
 msgid "All tuning slots stored on the wheelbase will be cleared. This cannot be undone."
 msgstr "Alle auf der Wheelbase gespeicherten Tuning-Slots werden gelöscht. Das kann nicht rückgängig gemacht werden."
 
-#: understeer/ui/window.py:1331
+#: understeer/ui/window.py:1289
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: understeer/ui/window.py:1341
+#: understeer/ui/window.py:1299
 msgid "Not Available"
 msgstr "Nicht verfügbar"
 
-#: understeer/ui/window.py:1342
+#: understeer/ui/window.py:1300
 msgid "This wheelbase does not support resetting."
 msgstr "Diese Wheelbase unterstützt kein Zurücksetzen."
 
-#: understeer/ui/window.py:1344
+#: understeer/ui/window.py:1302
 msgid "Could not reset the tuning slots"
 msgstr "Die Tuning-Slots konnten nicht zurückgesetzt werden"

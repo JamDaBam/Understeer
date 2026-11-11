@@ -13,6 +13,8 @@ import os
 import pathlib
 import re
 
+from .names import one_line
+
 CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
 # Used by SimPower and by Understeer up to v1.0.4, when it still had that name
 OLD_CONFIG_DIR = pathlib.Path.home() / ".config" / "SimPower"
@@ -232,8 +234,7 @@ def clean_folder(folder):
     for no folder."""
     if not isinstance(folder, str):
         return None
-    folder = "".join(c for c in " ".join(folder.split()) if c.isprintable())
-    return folder[:MAX_FOLDER].strip() or None
+    return one_line(folder, MAX_FOLDER) or None
 
 
 def _scan():
