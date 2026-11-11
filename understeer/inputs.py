@@ -75,13 +75,16 @@ class Axis:
 
 
 class InputMonitor:
-    """Watches Fanatec evdev nodes and reports absolute axis changes."""
+    """Watches Fanatec evdev nodes and reports absolute axis changes;
+    on_gone() is called when a device was unplugged and its axes are gone."""
 
-    def __init__(self, on_change):
+    def __init__(self, on_change, on_gone=None):
         self.on_change = on_change
+        self.on_gone = on_gone
         self.axes = {}          # key -> Axis
         self.denied = []        # devnodes without read permission
         self._open = []         # (fd, watch id)
+        self._keys = {}         # fd -> keys of its axes
 
     def start(self):
         self.stop()
@@ -108,7 +111,7 @@ class InputMonitor:
         for fd, watch in self._open:
             GLib.source_remove(watch)
             os.close(fd)
-        self._open, self.axes, self.denied = [], {}, []
+        self._open, self.axes, self.denied, self._keys = [], {}, [], {}
 
     def _read_axes(self, fd, name):
         bits = bytearray(8)
@@ -123,6 +126,7 @@ class InputMonitor:
             if hi > lo:
                 axis = Axis(name, code, lo, hi, value)
                 self.axes[axis.key] = axis
+                self._keys.setdefault(fd, []).append(axis.key)
 
     def _on_readable(self, fd, condition, name):
         try:
@@ -134,6 +138,10 @@ class InputMonitor:
         if not data:            # device unplugged
             self._open = [(f, w) for f, w in self._open if f != fd]
             os.close(fd)
+            for key in self._keys.pop(fd, []):
+                self.axes.pop(key, None)
+            if self.on_gone:
+                self.on_gone()
             return GLib.SOURCE_REMOVE
         changed = False
         for _s, _us, etype, code, value in EVENT.iter_unpack(

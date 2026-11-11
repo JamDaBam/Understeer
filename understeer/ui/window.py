@@ -82,7 +82,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.active_values = {}     # values stored in that preset
         self._preset_names = {}     # preset path -> name, see _rebuild_preset_menu
 
-        self.inputs = InputMonitor(self._on_input)
+        self.inputs = InputMonitor(self._on_input, self._on_input_gone)
         self.axis_roles = config.load_axis_roles()
         self.show_hidden_axes = False
         self.axis_widgets = {}   # axis key -> (level bar, value label, max label)

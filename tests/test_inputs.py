@@ -43,3 +43,19 @@ def test_names():
     assert Axis("Pedals", 2, 0, 1, 0).name == "Z"
     assert Axis("Pedals", 40, 0, 1, 0).name == "40"
     assert Axis("Pedals", 2, 0, 1, 0).key == "Pedals:2"
+
+
+def test_unplugged_device_loses_its_axes():
+    """A device that is gone takes its bars with it, not frozen ones."""
+    import os
+    from understeer.inputs import InputMonitor
+    gone = []
+    monitor = InputMonitor(lambda: None, lambda: gone.append(True))
+    read, write = os.pipe()
+    os.close(write)                     # reading gives nothing: unplugged
+    pedals = Axis("Pedals", 2, 0, 1000, 0)
+    wheel = Axis("Wheel", 0, 0, 1000, 500)
+    monitor.axes = {pedals.key: pedals, wheel.key: wheel}
+    monitor._keys = {read: [pedals.key]}
+    monitor._on_readable(read, None, "Pedals")
+    assert list(monitor.axes) == [wheel.key] and gone == [True]
