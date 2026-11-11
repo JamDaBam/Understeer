@@ -139,6 +139,34 @@ def steps(win):
     yield "change followed", lambda: check(win.rows["SHO"].get() == 60,
                                            "control follows the wheel base")
 
+    def steering_auto():
+        (dev / "SEN").write_text("2530\n")     # how a CSL DD reports Auto
+        win._load_from_device()
+        sen = win.rows["SEN"]
+        check(sen.get() == 0 and sen.value_label.get_label() == "Auto",
+              f"Auto shown: {sen.get()} {sen.value_label.get_label()!r}")
+        check(win.angle_max == 2520 and sen.adj.get_upper() == 2520,
+              f"slider up to 2520°: {sen.adj.get_upper()}")
+        (dev / "SEN").write_text("2520\n")     # set on the wheelbase
+    yield "steering angle Auto", steering_auto
+    yield "angle above 1080", lambda: check(
+        win.rows["SEN"].get() == 2520
+        and win.rows["SEN"].value_label.get_label() == "2520°",
+        f"2520° shown: {win.rows['SEN'].value_label.get_label()!r}")
+
+    def auto_written():
+        win._set_setting("SEN", 0)             # the Auto button
+        win.flush_live()
+        check((dev / "SEN").read_text().strip() == "0", "Auto written as 0")
+        win._apply_values({"SEN": 1440})
+        check((dev / "SEN").read_text().strip() == "1440", "1440° written")
+        win._apply_values({"SEN": 0})          # a preset with Auto
+        check((dev / "SEN").read_text().strip() == "0" and win.rows["SEN"].get() == 0,
+              "Auto of a preset written as 0, not as 90°")
+        (dev / "SEN").write_text("900\n")
+        win._load_from_device()
+    yield "Auto written", auto_written
+
     def save_preset():
         path = config.preset_path("Test GT3")
         check(win._write_preset(path, "Test GT3"), "preset saved")
@@ -763,6 +791,9 @@ def steps(win):
             shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
             check(shown == {"SEN": 540, "SHO": 35},
                   f"values kept without a wheel base: {shown}")
+            win._set_setting("SEN", 0)                  # the Auto button
+            check(win.rows["SEN"].value_label.get_label() == "Auto",
+                  "Auto also without a wheelbase, e.g. for a preset")
         finally:
             win.device_path = path
             win.relocalize()

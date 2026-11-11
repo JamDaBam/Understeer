@@ -45,9 +45,12 @@ def _fmt_brake_led(v):
 
 SETTINGS = [
     # --- Steering --------------------------------------------------------
+    # hi: the largest angle of any wheelbase (direct drive); the slider
+    # goes as far as the connected one allows (device.steering_range).
+    # auto: 0 stands for Auto, the wheelbase's whole range.
     dict(id="SEN", icon="understeer-steering-symbolic",
          page="steering", group=N_("Rotation"),
-         label=N_("Steering Angle"), lo=90, hi=1080, unit="°",
+         label=N_("Steering Angle"), lo=90, hi=2520, unit="°", auto=True,
          desc=N_("Total wheel rotation in degrees. Auto uses the maximum "
                  "range of the wheel base."),
          quick=[540, 720, 900, 1080]),
@@ -151,7 +154,7 @@ def format_value(setting, v):
     fmt = setting.get("fmt")
     if fmt:
         return fmt(v)
-    if setting["id"] == "SEN" and v == 0:
+    if setting.get("auto") and v == 0:
         return _("Auto")
     unit = setting.get("unit", "")
     return f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()

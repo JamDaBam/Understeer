@@ -12,12 +12,13 @@ from .. import DATA_DIR, config, games, releases, report
 from .. import log as session_log
 from ..device import (RIMS, can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
-                      permission_hint, read_int, wheel_info, write_values)
+                      permission_hint, read_int, steering_range, wheel_info,
+                      write_values)
 from .. import i18n
 from ..i18n import _
 from ..inputs import InputMonitor
-from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SLOTS, TABS,
-                        VIEWS)
+from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SETTINGS_BY_ID,
+                        SLOTS, TABS, VIEWS)
 from .games_page import GamesPage
 from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PreferencesMixin
@@ -56,6 +57,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self.wheel = {}          # see device.wheel_info()
+        # Steering angle of the wheelbase: largest angle, value for Auto
+        self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
         self._in_background = False     # window hidden, still watching games
         self._shut_down = False
         self._news = []                 # versions still to show after an update
@@ -511,7 +514,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             box.append(b)
         auto = Gtk.Button(label=_("Auto"))
         auto.set_tooltip_text(_("Use the maximum range of the wheel base"))
-        auto.connect("clicked", lambda b: self._set_angle_auto())
+        auto.connect("clicked", lambda b: self._set_setting(setting["id"], 0))
         box.append(auto)
         return box
 
@@ -721,12 +724,32 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.wheel = wheel_info(self.device_path) if self.device_path else {}
         if self.wheel.get("base_firmware") is not None or self.wheel.get("rim_id"):
             log.info("Wheel: %s", self._wheel_text())
+        self._apply_steering_range()
         self._show_wheel_info()
         self._update_banner()
         self.slot_dropdown.set_sensitive(bool(self.device_path))
         self.rumble_group.set_sensitive(bool(self.rumble_path))
         self._load_slot_names()
         self._load_from_device()
+
+    def _apply_steering_range(self):
+        """Let the steering angle go as far as the wheelbase allows."""
+        if self.device_path:
+            self.angle_max, self.angle_auto = steering_range(self.device_path)
+            log.info("Steering angle up to %d°, Auto reported as %s",
+                     self.angle_max, self.angle_auto)
+        else:
+            self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
+        if "SEN" in self.rows:
+            self.rows["SEN"].set_upper(self.angle_max)
+
+    def _read_value(self, attr_id):
+        """A setting from the wheelbase as the app shows it: Auto of the
+        steering angle as 0, the value the app writes for it."""
+        value = read_int(self._attr_file(attr_id))
+        if attr_id == "SEN" and value is not None and value == self.angle_auto:
+            return 0
+        return value
 
     def _load_slot_names(self):
         self.model = model_id(self.device_path) if self.device_path else None
@@ -937,7 +960,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             return
         self.device_values = {}
         for attr_id, row in self.rows.items():
-            value = read_int(self._attr_file(attr_id))
+            value = self._read_value(attr_id)
             self.device_values[attr_id] = value
             row.set_supported(value is not None)
             if value is not None:
@@ -984,7 +1007,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         failed = write_values(writes)
         # What the device holds now; it may round, e.g. vibration to tens.
         for attr_id in written:
-            self.device_values[attr_id] = read_int(self._attr_file(attr_id))
+            self.device_values[attr_id] = self._read_value(attr_id)
         self._update_pending_bar()
         if failed:
             names = ", ".join(os.path.basename(p) for p in failed)
@@ -1058,19 +1081,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                    if r.baseline is not None and r.get() != r.baseline}
         if changed:
             self._apply_values(changed, _("Changes undone"))
-
-    def _set_angle_auto(self):
-        if not self.device_path:
-            return
-        if not write_values({self._attr_file("SEN"): 0}):
-            GLib.timeout_add(150, self._reload_value, "SEN")
-
-    def _reload_value(self, attr_id):
-        value = read_int(self._attr_file(attr_id))
-        self.device_values[attr_id] = value
-        if value is not None:
-            self.rows[attr_id].set(value)
-        return GLib.SOURCE_REMOVE
 
     def _notify(self, text, button=None, action=None):
         """Show a message right away.
@@ -1166,7 +1176,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             return GLib.SOURCE_CONTINUE
         changed = False
         for attr_id, row in self.rows.items():
-            value = read_int(self._attr_file(attr_id))
+            value = self._read_value(attr_id)
             if value is None or value == self.device_values.get(attr_id):
                 continue
             log.info("Changed on the wheel base: %s %s -> %s", attr_id,

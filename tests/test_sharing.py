@@ -70,6 +70,8 @@ def test_plain_preset_file_is_understood():
     ({"FF": 101}, {}),                          # above the range
     ({"SEN": 0}, {"SEN": 0}),                   # Auto
     ({"SEN": 45}, {}),
+    ({"SEN": 2520}, {"SEN": 2520}),             # direct drive wheelbases
+    ({"SEN": 2530}, {}),                        # that is how Auto reads
     ({"FFS": 1}, {"FFS": 1}),                   # a choice
     ({"FFS": 7}, {}),
     ({"FF": "70"}, {}),

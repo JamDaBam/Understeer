@@ -61,7 +61,7 @@ def _valid(attr_id, value):
         return False
     if setting.get("kind") == "choice":
         return value in dict(setting["choices"])
-    if attr_id == "SEN" and value == 0:
+    if setting.get("auto") and value == 0:
         return True                         # Auto
     return setting["lo"] <= value <= setting["hi"]
 
