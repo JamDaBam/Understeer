@@ -539,8 +539,7 @@ def steps(win):
             # A preset dropped on New Folder: asked for the name, then in it
             win._ask_new_folder(drift)
             d = win.get_visible_dialog()
-            body = [g.get_description() for g in walk(d)
-                    if isinstance(g, Adw.PreferencesGroup) and g.get_description()]
+            body = [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)]
             check("“Drift F” is put into it." in body, f"body: {body}")
             [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0].set_text("Stage")
             d.ok_button.emit("clicked")

@@ -607,15 +607,26 @@ class PresetsMixin:
         dialog.ok_button = ok                   # for the tests
         dialog.set_default_widget(ok)
 
-        group = Adw.PreferencesGroup(description=body)
+        # The fields stay in place; only a long list of suggestions scrolls
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                         margin_top=12, margin_bottom=18, margin_start=18,
+                         margin_end=18)
+        about = Gtk.Label(label=body, wrap=True, xalign=0)
+        about.add_css_class("dim-label")
+        column.append(about)
+        fields = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        fields.add_css_class("boxed-list")
         for row in rows:
-            group.add(row)
+            fields.append(row)
+        near = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        near.append(fields)
+        column.append(near)
         if name_row is not None:
             hint = Gtk.Label(label=message, wrap=True, xalign=0, visible=False,
-                             margin_top=6, margin_start=12)
+                             margin_start=12)
             hint.add_css_class("error")
             hint.add_css_class("caption")
-            group.add(hint)
+            near.append(hint)
 
             def changed(*_args):
                 empty = not name_row.get_text().strip()
@@ -628,17 +639,15 @@ class PresetsMixin:
 
             ok.set_sensitive(bool(name_row.get_text().strip()))
             name_row.connect("changed", changed)
-        page = Adw.PreferencesPage()
-        page.add(group)
         if suggestions is not None:
-            page.add(suggestions)
+            column.append(suggestions)
 
         def on_ok(_button):
             dialog.close()
             done()
 
         ok.connect("clicked", on_ok)
-        view = Adw.ToolbarView(content=page)
+        view = Adw.ToolbarView(content=column)
         view.add_top_bar(header)
         dialog.set_child(view)
         dialog.present(self)
@@ -669,7 +678,10 @@ class PresetsMixin:
         found = self._folder_suggestions(games_only)
         if not found:
             return None
-        group = Adw.PreferencesGroup(title=title)
+        heading = Gtk.Label(label=title, xalign=0, margin_top=6)
+        heading.add_css_class("heading")
+        rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        rows.add_css_class("boxed-list")
         checks = []
         for name, kind in found:
             row = Adw.ActionRow(title=name, activatable=True, use_markup=False)
@@ -681,7 +693,7 @@ class PresetsMixin:
             checks.append((name, check))
             row.connect("activated", lambda r, n=name: (
                 entry.set_text(n), entry.grab_focus(), entry.set_position(-1)))
-            group.add(row)
+            rows.append(row)
 
         def mark(*_args):
             text = entry.get_text().strip().casefold()
@@ -690,7 +702,17 @@ class PresetsMixin:
 
         entry.connect("changed", mark)
         mark()
-        return group
+        # Up to four rows as they are; more scroll in here, with half a
+        # row showing that there are more
+        scroll = Gtk.ScrolledWindow(child=rows, propagate_natural_height=True,
+                                    max_content_height=4 * 56 + 36,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_overflow(Gtk.Overflow.HIDDEN)    # keep the round corners
+        scroll.add_css_class("suggestions")
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.append(heading)
+        box.append(scroll)
+        return box
 
     def _ask_new_folder(self, path=None):
         """Make a folder; path: a preset dropped on "New Folder", put in it."""

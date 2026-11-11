@@ -333,3 +333,8 @@ button.theme-choice:checked {
 .preset-tile.dragged {
   opacity: 0.4;
 }
+
+/* Name suggestions in a dialog: the list scrolls, with its round corners */
+scrolledwindow.suggestions {
+  border-radius: 12px;
+}
