@@ -103,8 +103,8 @@ class ReportDialog:
             getattr(bar, f"set_margin_{side}")(12)
         copy = Gtk.Button(label=_("Copy Only"))
         copy.add_css_class("pill")
-        copy.set_tooltip_text(_("Without a GitHub account: copy the filled-in "
-                                "report, e.g. for an e-mail or a forum post"))
+        copy.set_tooltip_text(_("Copy the filled-in report, e.g. for a comment "
+                                "on an existing issue, an e-mail or a forum post"))
         copy.connect("clicked", lambda b: self._copy(_("Report copied")))
         send = Gtk.Button(label=_("Open on GitHub"))
         send.add_css_class("pill")
