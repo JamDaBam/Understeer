@@ -1,6 +1,5 @@
 """Presets: the Presets view, the Presets menu, and saving, applying,
 renaming and deleting presets."""
-import json
 import logging
 import pathlib
 
@@ -222,7 +221,7 @@ class PresetsMixin:
         """A preset dropped into folder (None: out of any)."""
         try:
             name, _values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name = pathlib.Path(path).stem
         self._set_preset_folder(path, name, folder)
 
@@ -403,9 +402,11 @@ class PresetsMixin:
                 if r.row.get_sensitive()}
 
     def _read_preset(self, path):
-        """Return (name, values) of a preset file; raises on bad files."""
+        """Return (name, values) of a preset file: the settings shown here,
+        with valid values. Raises OSError or ValueError."""
         name, values = config.read_preset(path)
-        return name, {k: v for k, v in values.items() if k in self.rows}
+        return name, {k: v for k, v in sharing.clean_values(values).items()
+                      if k in self.rows}
 
     def _set_active_preset(self, path, values):
         self.active_preset = pathlib.Path(path) if path else None
@@ -418,7 +419,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             if self._in_background:
                 self.show_again()           # from the tray: show the error
             self._error(_("Could not load preset"), str(e))
@@ -480,7 +481,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             self._error(_("Could not load preset"), str(e))
             return
         current = self._collect_values()
@@ -746,7 +747,7 @@ class PresetsMixin:
         if path is not None:
             try:
                 name, _values = self._read_preset(path)
-            except (OSError, json.JSONDecodeError):
+            except (OSError, ValueError):
                 name = pathlib.Path(path).stem
         entry = self._folder_entry(None)
         entry.set_title(_("Name"))
@@ -887,7 +888,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, stored = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name, stored = path.stem, {}
         name = new_name or name
         diff = self._preset_diff(stored)
@@ -928,7 +929,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, _values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name = path.stem
         self._ask_save_changes(
             lambda: self._apply_preset(path), f"apply {path.name}",
@@ -982,7 +983,7 @@ class PresetsMixin:
         try:
             old_text = path.read_text()
             _n, old_values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             old_text, old_values = None, {}
         if not self._write_preset(path, name):
             return
@@ -1004,7 +1005,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             return (*self._read_preset(path), config.preset_folder(path))
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             self._error(_("Could not load preset"), str(e))
             return None
 
@@ -1309,7 +1310,7 @@ class PresetsMixin:
             return
         try:
             _n, stored = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             stored = {}
         same = stored == values
         diff = changes(stored, values)
@@ -1423,7 +1424,7 @@ class PresetsMixin:
         for path in paths:
             try:
                 name, _values = self._read_preset(path)
-            except (OSError, json.JSONDecodeError):
+            except (OSError, ValueError):
                 name = pathlib.Path(path).stem
             try:
                 items.append(trash.put_preset(path))

@@ -342,9 +342,14 @@ def preset_path(name):
 
 
 def read_preset(path):
-    """Return (name, values) of a preset file; raises on bad files."""
-    data = json.loads(pathlib.Path(path).read_text())
-    return data.get("name", pathlib.Path(path).stem), data.get("values", {})
+    """Return (name, values) of a preset file. Raises OSError, or
+    ValueError for a file that holds no preset."""
+    path = pathlib.Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("values", {}), dict):
+        raise ValueError(f"{path.name} holds no preset")
+    name = data.get("name")
+    return (name if isinstance(name, str) else path.stem), data.get("values", {})
 
 
 def write_preset(path, name, values, folder=KEEP):

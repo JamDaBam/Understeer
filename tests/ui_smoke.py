@@ -63,7 +63,8 @@ finished = []           # set once every step ran
 STEP_MS = 300
 
 
-EXPECTED_ERRORS = {"Could not save: Disk full"}     # shown on purpose below
+EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
+                   "Could not load preset: Broken.json holds no preset"}
 
 
 class Collect(logging.Handler):
@@ -776,6 +777,29 @@ def steps(win):
             win._set_active_preset(*before)
             win._select_page("presets")
     yield "long names", long_names
+
+    def damaged_presets():
+        broken = config.CONFIG_DIR / "Broken.json"
+        broken.write_text("[1, 2]")
+        bad = config.preset_path("Bad Values")
+        bad.write_text('{"name": "Bad Values", "values": {"FF": "x", "SHO": 30}}')
+        before = (win.active_preset, win.active_values)
+        values = win._collect_values()
+        try:
+            win._presets_changed()
+            win._apply_preset(bad)
+            check(win.rows["SHO"].get() == 30, "the valid values of a damaged preset applied")
+            win._apply_preset(broken)
+            d = win.get_visible_dialog()
+            check(d is not None and d.get_heading() == "Could not load preset",
+                  "error shown for a file without a preset")
+        finally:
+            close_dialogs(win)
+            broken.unlink()
+            bad.unlink()
+            win._apply_values(values)
+            win._set_active_preset(*before)
+    yield "damaged presets", damaged_presets
 
 
     def rename():
