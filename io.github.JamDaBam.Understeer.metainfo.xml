@@ -40,8 +40,6 @@
         <release version="1.9.1" date="2026-11-11">
             <description>
                 <ul>
-                    <li>After an update, what is new opens by itself in a big window, also for versions you skipped; if Understeer started in the background, it opens with the window. It is also in the main menu</li>
-                    <li xml:lang="de">Nach einem Update öffnen sich die Neuigkeiten von selbst in einem großen Fenster, auch für übersprungene Versionen; startete Understeer im Hintergrund, öffnen sie sich mit dem Fenster. Sie stehen auch im Hauptmenü</li>
                     <li>Pasting presets and looking at the values of a preset use big windows that grow with the main window</li>
                     <li xml:lang="de">Das Einfügen von Presets und die Werte eines Presets erscheinen in großen Fenstern, die mit dem Hauptfenster mitwachsen</li>
                 </ul>
