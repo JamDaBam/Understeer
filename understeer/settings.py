@@ -52,12 +52,12 @@ SETTINGS = [
          page="steering", group=N_("Rotation"),
          label=N_("Steering Angle"), lo=90, hi=2520, unit="°", auto=True,
          desc=N_("Total wheel rotation in degrees. Auto uses the maximum "
-                 "range of the wheel base."),
+                 "range of the wheelbase."),
          quick=[540, 720, 900, 1080]),
     dict(id="FF", icon="power-profile-performance-symbolic",
          page="steering", group=N_("Force Feedback"),
          label=N_("Force Feedback Strength"), lo=0, hi=100, unit="%",
-         desc=N_("Master force feedback output of the wheel base.")),
+         desc=N_("Master force feedback output of the wheelbase.")),
     dict(id="FOR", icon="weather-windy-symbolic",
          page="steering", group=N_("Force Feedback"),
          label=N_("Force Effects"), lo=0, hi=120, unit="%",
@@ -90,17 +90,17 @@ SETTINGS = [
     dict(id="NDP", icon="weather-overcast-symbolic",
          page="feel", group=N_("Natural Feel"),
          label=N_("Natural Damper"), lo=0, hi=100, unit="%",
-         desc=N_("Mechanical damping added by the wheel base itself, "
+         desc=N_("Mechanical damping added by the wheelbase itself, "
                  "independent of the game.")),
     dict(id="NFR", icon="list-drag-handle-symbolic",
          page="feel", group=N_("Natural Feel"),
          label=N_("Natural Friction"), lo=0, hi=100, unit="%",
-         desc=N_("Mechanical friction added by the wheel base itself, "
+         desc=N_("Mechanical friction added by the wheelbase itself, "
                  "independent of the game.")),
     dict(id="NIN", icon="media-playlist-repeat-symbolic",
          page="feel", group=N_("Natural Feel"),
          label=N_("Natural Inertia"), lo=0, hi=100, unit="%",
-         desc=N_("Mechanical inertia added by the wheel base itself, "
+         desc=N_("Mechanical inertia added by the wheelbase itself, "
                  "independent of the game.")),
     dict(id="SHO", icon="audio-volume-high-symbolic",
          page="feel", group=N_("Effects"),

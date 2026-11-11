@@ -4,21 +4,33 @@
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0</project_license>
     <name>Understeer</name>
-    <summary>Tune Fanatec wheel bases and pedals</summary>
+    <summary>Tune Fanatec wheelbases and pedals</summary>
+    <summary xml:lang="de">Fanatec-Wheelbases und Pedale einstellen</summary>
 
     <description>
         <p>
-            Understeer adjusts the tuning settings of Fanatec wheel bases and
+            Understeer adjusts the tuning settings of Fanatec wheelbases and
             pedals on Linux through the hid-fanatecff kernel driver.
         </p>
+        <p xml:lang="de">
+            Understeer stellt die Tuning-Einstellungen von Fanatec-Wheelbases
+            und Pedalen unter Linux über den Kerneltreiber hid-fanatecff ein.
+        </p>
         <ul>
-            <li>Live tuning: changes reach the wheel base while you move a control</li>
+            <li>Live tuning: changes reach the wheelbase while you move a control</li>
+            <li xml:lang="de">Live-Tuning: Änderungen erreichen die Wheelbase, während du einen Regler bewegst</li>
             <li>Live display of the steering angle and pedal travel</li>
+            <li xml:lang="de">Live-Anzeige von Lenkwinkel und Pedalweg</li>
             <li>Tuning slots and named presets</li>
+            <li xml:lang="de">Tuning-Slots und benannte Presets</li>
             <li>Translations through standard gettext files</li>
+            <li xml:lang="de">Übersetzungen über gewöhnliche gettext-Dateien</li>
         </ul>
         <p>
             Understeer started as a fork of SimPower (FanatecLinux) by BenryBoi.
+        </p>
+        <p xml:lang="de">
+            Understeer ist als Fork von SimPower (FanatecLinux) von BenryBoi entstanden.
         </p>
     </description>
 
@@ -62,6 +74,8 @@
                     <li xml:lang="de">Speichert man ein Preset unter dem Namen eines vorhandenen, kommt es in den im Dialog gewählten Ordner</li>
                     <li>Unplugged pedals leave the live display instead of staying there frozen; a failed reset of the tuning slots and a damaged preset file are reported</li>
                     <li xml:lang="de">Ausgesteckte Pedale verschwinden aus der Live-Anzeige, statt dort eingefroren stehen zu bleiben; ein fehlgeschlagenes Zurücksetzen der Tuning-Slots und eine beschädigte Preset-Datei werden gemeldet</li>
+                    <li>The texts say wheelbase everywhere, the German translation uses the same word for the same thing throughout, and dates look the same in the trash and in What's New</li>
+                    <li xml:lang="de">Die Texte sagen überall „Wheelbase“, die deutsche Übersetzung nutzt durchgehend dasselbe Wort für dieselbe Sache, und Datumsangaben sehen im Papierkorb und in den Neuigkeiten gleich aus</li>
                 </ul>
             </description>
         </release>

@@ -433,9 +433,9 @@ class PresetsMixin:
         if game and connected:
             outcome, failed = self._apply_values(
                 values,
-                _("Wheel base connected: preset “{name}” for {game} applied")
+                _("Wheelbase connected: preset “{name}” for {game} applied")
                 .format(game=short(game), name=short(name)),
-                _("Wheel base connected: preset “{name}” for {game} loaded — "
+                _("Wheelbase connected: preset “{name}” for {game} loaded — "
                   "click Apply to write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed, connected)
         elif game:
@@ -445,8 +445,8 @@ class PresetsMixin:
                 values,
                 _("{game} started: preset “{name}” applied").format(
                     game=short(game), name=short(name)) if self.device_path else
-                _("{game} started: preset “{name}” is applied once the wheel "
-                  "base is connected").format(game=short(game), name=short(name)),
+                _("{game} started: preset “{name}” is applied once the "
+                  "wheelbase is connected").format(game=short(game), name=short(name)),
                 _("{game} started: preset “{name}” loaded — click Apply to "
                   "write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed)
@@ -472,7 +472,7 @@ class PresetsMixin:
         log.info("Notification for the tray: preset %s %s", name, outcome)
         self._desktop_notify("tray-preset", "Understeer", _outcome_text(
             name, outcome, failed,
-            _("No wheel base is connected, so preset “{name}” was not "
+            _("No wheelbase is connected, so preset “{name}” was not "
               "written.")))
 
     def _show_preset(self, path):
@@ -551,14 +551,14 @@ class PresetsMixin:
         if not self._in_background or not config.get_setting(
                 "game_notifications", True):
             return
-        title = (_("Wheel base connected, {game} runs") if connected
+        title = (_("Wheelbase connected, {game} runs") if connected
                  else _("{game} started")).format(game=short(game))
         log.info("Notification for %s: preset %s %s%s", game, name, outcome,
                  " after connecting" if connected else "")
         self._desktop_notify("game-preset", title, _outcome_text(
             name, outcome, failed,
-            _("Preset “{name}” chosen. It is applied as soon as the wheel "
-              "base is connected.")))
+            _("Preset “{name}” chosen. It is applied as soon as the "
+              "wheelbase is connected.")))
 
     def _changes_list(self, diff):
         """Setting, before → after in aligned columns; scrolls when long."""
@@ -924,7 +924,7 @@ class PresetsMixin:
             self.show_again()               # also reads the wheel base again
         self._ask_save_changes(
             quit_now, "quit",
-            _("These settings differ from the preset. The wheel base "
+            _("These settings differ from the preset. The wheelbase "
               "keeps them either way."))
 
     def _ask_apply_preset(self, path):

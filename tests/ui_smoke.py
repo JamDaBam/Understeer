@@ -1213,7 +1213,7 @@ def steps(win):
             win._apply_preset(bg_preset, game="BeamNG")
         finally:
             win.device_path = path
-        check(notes and "as soon as the wheel base is connected" in notes[0][2],
+        check(notes and "as soon as the wheelbase is connected" in notes[0][2],
               f"applied once connected: {notes}")
         notes.clear()
         config.set_setting("game_notifications", False)
@@ -1237,7 +1237,7 @@ def steps(win):
             check(win.device_path == path, "wheel base found again")
             check((dev / "FF").read_text().strip() == "64",
                   "preset of the running game written once connected")
-            check(notes == [("game-preset", "Wheel base connected, BeamNG runs",
+            check(notes == [("game-preset", "Wheelbase connected, BeamNG runs",
                              "Preset “Background Test” applied.")], f"told: {notes}")
         finally:
             win.device_path = win.device_path or path

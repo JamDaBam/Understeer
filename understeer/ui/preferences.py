@@ -78,9 +78,9 @@ class PreferencesMixin:
         general.add(self._updates_group())
 
         # -- Wheel base -----------------------------------------------------
-        wheel = self._prefs_page("wheelbase", _("Wheel Base"), "understeer-steering-symbolic")
+        wheel = self._prefs_page("wheelbase", _("Wheelbase"), "understeer-steering-symbolic")
         hardware = Adw.PreferencesGroup(title=_("Hardware"))
-        self.base_row = Adw.ActionRow(title=_("Wheel Base"), subtitle_selectable=True)
+        self.base_row = Adw.ActionRow(title=_("Wheelbase"), subtitle_selectable=True)
         self.rim_row = Adw.ActionRow(title=_("Steering Wheel"), subtitle_selectable=True)
         hardware.add(self.base_row)
         hardware.add(self.rim_row)
@@ -89,15 +89,16 @@ class PreferencesMixin:
 
         self.slot_names_group = Adw.PreferencesGroup(
             title=_("Slot Names"),
-            description=_("Name the slots like on the display of your wheel "
-                          "base, e.g. “A” or “Set 1”. The names are saved for "
-                          "this wheel base model."))
+            description=_("Name the slots like on the display of your "
+                          "wheelbase, e.g. “A” or “Set 1”. The names are saved for "
+                          "this wheelbase model."))
         self.slot_name_rows = {}
         self._show_slot_name_rows()
         wheel.add(self.slot_names_group)
 
         system = Adw.PreferencesGroup(title=_("System"))
-        self.perm_row = Adw.ActionRow(title=_("Write Permissions"), subtitle="")
+        # Writing the settings and reading the live input
+        self.perm_row = Adw.ActionRow(title=_("Permissions"), subtitle="")
         self.perm_btn = Gtk.Button(label=_("Set Up"))
         self.perm_btn.set_valign(Gtk.Align.CENTER)
         self.perm_btn.connect("clicked", lambda b: self._fix_permissions())
@@ -105,7 +106,7 @@ class PreferencesMixin:
         system.add(self.perm_row)
         reset = Adw.ActionRow(
             title=_("Reset All Tuning Slots"),
-            subtitle=_("Clears all tuning slots stored on the wheel base."))
+            subtitle=_("Clears all tuning slots stored on the wheelbase."))
         reset_btn = Gtk.Button(label=_("Reset…"))
         reset_btn.add_css_class("destructive-action")
         reset_btn.set_valign(Gtk.Align.CENTER)

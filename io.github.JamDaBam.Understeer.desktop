@@ -1,7 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=Understeer
-Comment=Tune Fanatec wheel bases and pedals using the hid-fanatecff driver
+Comment=Tune Fanatec wheelbases and pedals using the hid-fanatecff driver
+Comment[de]=Fanatec-Wheelbases und Pedale mit dem hid-fanatecff-Treiber einstellen
 Exec=understeer
 Icon=io.github.JamDaBam.Understeer
 Terminal=false

@@ -75,7 +75,7 @@ class ReportDialog:
             title=_("Added to the Report"),
             description=_("Your user name and home folder are left out."))
         system_row = Adw.ExpanderRow(title=_("System Details"),
-                                     subtitle=_("Versions, wheel base and "
+                                     subtitle=_("Versions, wheelbase and "
                                                 "access rights"))
         system_row.add_row(self._text_row(self.system))
         sent.add(system_row)
