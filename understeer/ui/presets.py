@@ -443,7 +443,7 @@ class PresetsMixin:
             outcome, failed = self._apply_values(
                 values,
                 _("{game} started: preset “{name}” applied").format(
-                    game=game, name=name) if self.device_path else
+                    game=short(game), name=short(name)) if self.device_path else
                 _("{game} started: preset “{name}” is applied once the wheel "
                   "base is connected").format(game=short(game), name=short(name)),
                 _("{game} started: preset “{name}” loaded — click Apply to "
@@ -453,7 +453,7 @@ class PresetsMixin:
             outcome, failed = self._apply_values(
                 values, _("Preset “{name}” applied").format(name=short(name)),
                 _("Preset “{name}” loaded — click Apply to write it").format(
-                    name=name))
+                    name=short(name)))
             if self._in_background:         # chosen in the tray menu
                 self._notify_tray_preset(name, outcome, failed)
 
@@ -812,7 +812,7 @@ class PresetsMixin:
         log.info("Folder %r deleted with %d presets", folder, len(paths))
         self._delete_presets(paths, _(
             "Folder “{folder}” deleted. Presets deleted: {n}").format(
-                folder=folder, n=len(paths)))
+                folder=short(folder), n=len(paths)))
         try:
             config.delete_folder(folder)
         except OSError as e:
@@ -842,7 +842,7 @@ class PresetsMixin:
         log.info("Preset %s moved to folder %r", pathlib.Path(path).name, folder)
         self._presets_changed()
         self._notify(_("“{name}” moved to “{folder}”").format(
-            name=name, folder=folder) if folder else
+            name=short(name), folder=short(folder)) if folder else
             _("“{name}” is in no folder now").format(name=short(name)))
 
     def _ask_rename_folder(self, folder):
@@ -867,9 +867,9 @@ class PresetsMixin:
             return
         log.info("Folder %r renamed to %r (%d presets)", old, new, moved)
         self._presets_changed()
-        self._notify(_("Folder “{old}” renamed to “{new}”").format(old=old, new=new)
-                     if new else
-                     _("Presets taken out of folder “{old}”").format(old=old))
+        self._notify(_("Folder “{old}” renamed to “{new}”").format(
+                         old=short(old), new=short(new)) if new else
+                     _("Presets taken out of folder “{old}”").format(old=short(old)))
 
     def _write_preset(self, path, name, folder=config.KEEP):
         values = self._collect_values()

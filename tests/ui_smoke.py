@@ -751,6 +751,9 @@ def steps(win):
                     labels.append(section.get_item_attribute_value(j, "label").unpack())
             check(max(map(len, labels)) <= 60 and any(n.endswith("…") for n in labels),
                   f"menu entries cut: {max(map(len, labels))}")
+            win._set_preset_folder(long_path, name, folder)
+            moved = win._toast_text.get_label()
+            check(len(moved) <= 100 and moved.endswith("”"), f"names cut in message: {moved!r}")
             win._delete_presets([long_path])
             check(width(win._toast_text)[0] < 600, f"message short: {width(win._toast_text)}")
             win._on_toast_button(win._toast)            # undo

@@ -26,7 +26,7 @@ from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
-from .names import label_factory, name_label
+from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
 
 LIVE_DELAY_MS = 120
@@ -1166,7 +1166,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                      self.device_values.get("SLOT"), slot,
                      ", unapplied changes discarded" if discarded else "")
             self._load_from_device()
-            name = self._slot_label(slot)
+            name = short(self._slot_label(slot))
             self._notify(
                 _("Slot changed on the wheel base: {name}. Unapplied changes "
                   "were discarded.").format(name=name) if discarded else
