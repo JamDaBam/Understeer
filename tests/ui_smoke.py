@@ -653,24 +653,27 @@ def steps(win):
             page.selection.delete_button.emit("clicked")
             check(not any(g["game"].startswith("dummy:") for g in page.games)
                   and len(config.load_games()) == len(before), "games removed")
-            check(win._toast.get_title() == "Games removed: 2", win._toast.get_title())
-            # The trash in the preferences: put one back from there
-            win._show_preferences("data")
-            rows = [r.get_title() for r in win._trash_rows]
-            check({"Dummy First", "Dummy Two"} <= set(rows), f"in the trash: {rows}")
+            check(win._toast.get_title() == "Games deleted: 2", win._toast.get_title())
+            # The trash of the Games page: only games, put one back from there
+            sel.start()
+            sel.toggle(str(a))
+            sel.delete_button.emit("clicked")
+            shown = win._show_trash("game")
+
+            def titles():
+                return [r.get_title() for r in walk(shown.rows)
+                        if isinstance(r, Adw.ActionRow)]
+            check({"Dummy First", "Dummy Two"} == set(titles()),
+                  f"games in their trash: {titles()}")
             item = [i for i in trash.items() if i["name"] == "Dummy Two"][0]
             win._restore_from_trash(item)
             check(any(g["game"] == "dummy:2" for g in page.games)
-                  and "Dummy Two" not in [r.get_title() for r in win._trash_rows],
-                  "restored from the preferences")
-            win._ask_empty_trash()
-            d = win.prefs.get_visible_dialog() if hasattr(win.prefs, "get_visible_dialog") \
-                else None
-            d = d or win.get_visible_dialog()
-            d.emit("response", "empty")
-            check(trash.items() == [] and win._trash_rows[0].get_title()
-                  == "The trash is empty", "trash emptied")
-            win.prefs.close()
+                  and titles() == ["Dummy First"], "restored from the trash")
+            win._ask_empty_trash("game").emit("response", "empty")
+            check(titles() == ["The trash is empty"]
+                  and [i["name"] for i in trash.items()] == ["Pick A"],
+                  "games emptied, the preset still there")
+            shown.force_close()
             page.games = [g for g in page.games if not g["game"].startswith("dummy:")]
             page._save()
             page.refresh()

@@ -25,6 +25,7 @@ from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
+from .trash_dialog import TrashMixin
 
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheel base
@@ -40,8 +41,8 @@ TOAST_BUTTON_MS = 10000  # ... with a button such as Undo, to have time to click
 log = logging.getLogger("understeer.window")
 
 
-class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMixin,
-                  Adw.ApplicationWindow):
+class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
+                  UpdateCheckMixin, Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")

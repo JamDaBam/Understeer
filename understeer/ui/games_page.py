@@ -46,14 +46,17 @@ class GamesPage:
         for side in ("top", "bottom", "start", "end"):
             getattr(column, f"set_margin_{side}")(12)
         self.selection = Selection(
-            _("Remove"), lambda: self.refresh(),
+            _("Delete"), lambda: self.refresh(),
             lambda ids: self._remove_games(
                 [g for g in self.games if g["game"] in set(ids)]))
         label = Gtk.Label(label=_("Games"), xalign=0, hexpand=True)
         label.add_css_class("section-title")
         title = Gtk.Box(spacing=12)
         title.append(label)
-        self.selection.button.set_valign(Gtk.Align.END)
+        trash_button = self.window._trash_button("game")
+        for button in (trash_button, self.selection.button):
+            button.set_valign(Gtk.Align.END)
+        title.append(trash_button)
         title.append(self.selection.button)
         desc = Gtk.Label(
             label=_("Give each game a preset. While Understeer is open, it "
@@ -236,7 +239,7 @@ class GamesPage:
             pictures.append(_("Download Cover"), "game.find-cover")
         pictures.append(_("Search SteamGridDB…"), "game.steamgriddb")
         menu.append_section(None, pictures)
-        menu.append(_("Remove Game"), "game.remove")
+        menu.append(_("Delete Game"), "game.remove")
 
         button = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=menu,
                                 halign=Gtk.Align.END, valign=Gtk.Align.START)
@@ -313,13 +316,13 @@ class GamesPage:
 
     def _remove_games(self, removed):
         """Put games in the bin, with their preset and picture; the message
-        offers Undo, and they stay in the bin under Preferences → Data."""
+        offers Undo, and they stay in the bin (the Trash button)."""
         items = []
         for game in removed:
             try:
                 items.append(trash.put_game(game))
             except OSError as e:
-                self.window._error(_("Could not remove game"), str(e))
+                self.window._error(_("Could not delete game"), str(e))
                 break
             log.info("Removed game %s (%s)", game["name"], game["game"])
         gone = set(id(g) for g in removed[:len(items)])
@@ -329,9 +332,9 @@ class GamesPage:
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
         self.window._trash_changed()
-        text = (_("“{name}” removed").format(name=removed[0]["name"])
+        text = (_("“{name}” deleted").format(name=removed[0]["name"])
                 if len(items) == 1 else
-                _("Games removed: {n}").format(n=len(items)))
+                _("Games deleted: {n}").format(n=len(items)))
 
         def undo():
             for item in items:

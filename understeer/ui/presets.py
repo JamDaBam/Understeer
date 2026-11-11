@@ -54,6 +54,7 @@ class PresetsMixin:
         self.preset_selection = Selection(
             _("Delete"), lambda: self._rebuild_presets_list(),
             lambda keys: self._delete_presets([pathlib.Path(k) for k in keys]))
+        bring.append(self._trash_button("preset"))
         bring.append(self.preset_selection.button)
         self._section(column, _("Saved Presets"),
                       _("Saves all current settings under a name in "
@@ -776,8 +777,7 @@ class PresetsMixin:
         files = {p.name for name, p in dict(config.list_presets_by_folder(
             empty=True)).get(folder, [])}
         body = _("Presets in it: {n}. Keep them, shown without a folder, or "
-                 "delete them too? Deleted presets go to the trash in Preferences "
-                 "→ Data.").format(n=count)
+                 "delete them too? Deleted presets go to the trash.").format(n=count)
         body += self._games_note(files)
         dialog = Adw.AlertDialog(
             heading=_("Delete Folder “{folder}”?").format(folder=folder),
@@ -1411,7 +1411,7 @@ class PresetsMixin:
 
     def _delete_presets(self, paths, text=None):
         """Put presets in the bin; the message offers Undo, and they stay
-        in the bin under Preferences → Data for trash.KEEP_DAYS days."""
+        in the bin (the Trash button) for trash.KEEP_DAYS days."""
         items, names, files = [], [], set()
         for path in paths:
             try:
@@ -1449,9 +1449,3 @@ class PresetsMixin:
             self._trash_changed()
 
         self._notify(text, _("Undo"), undo)
-
-    def _trash_changed(self):
-        """The bin changed: show it anew in the preferences."""
-        refresh = getattr(self, "_refresh_trash", None)
-        if refresh is not None:
-            refresh()

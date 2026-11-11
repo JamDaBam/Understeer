@@ -1,7 +1,8 @@
 """Understeer's own bin for deleted presets and games, without GTK.
 
 Deleting moves a preset or game here instead of removing it, so it can be
-put back: right away with Undo, or later from Preferences → Data. After
+put back: right away with Undo, or later from the Trash button on
+the Presets or Games page. After
 KEEP_DAYS days it is gone for good (expire(), at start).
 
 Each item is a JSON file in CONFIG_DIR/trash: the preset file's text, or
@@ -78,17 +79,18 @@ def put_game(game):
     return item_id
 
 
-def items():
-    """The items in the bin, newest first: dicts with "id", "kind"
-    ("preset" or "game"), "name", "deleted" (a time.time()) and, for a
-    preset, "folder"."""
+def items(kind=None):
+    """The items in the bin, newest first, only those of kind if given:
+    dicts with "id", "kind" ("preset" or "game"), "name", "deleted" (a
+    time.time()) and, for a preset, "folder"."""
     found = []
     for path in _folder().glob("*.json") if _folder().is_dir() else []:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             continue
-        if not isinstance(data, dict) or data.get("kind") not in ("preset", "game"):
+        if not isinstance(data, dict) or data.get("kind") not in ("preset", "game") \
+                or kind not in (None, data["kind"]):
             continue
         deleted = data.get("deleted")
         found.append({"id": path.stem, "kind": data["kind"],
@@ -175,9 +177,9 @@ def remove(item_id):
                 log.warning("Could not delete %s: %s", path, e)
 
 
-def empty():
-    """Delete everything in the bin for good."""
-    for item in items():
+def empty(kind=None):
+    """Delete everything in the bin for good, or only what is of kind."""
+    for item in items(kind):
         remove(item["id"])
 
 
