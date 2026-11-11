@@ -1,9 +1,11 @@
-"""Telling about a newer Understeer: a banner that stays until updated.
+"""Telling about a newer Understeer: a banner that stays until updated,
+and updating the AppImage from there.
 
 Only the AppImage looks, at start and then every hour (at most once an
 hour, also when started often), and only after the user agreed once.
 """
 import logging
+import os
 import threading
 import time
 
@@ -25,9 +27,9 @@ class UpdateCheckMixin:
     answered then, so the banner shows right away at the next start)."""
 
     def _build_update_banner(self, content_view):
-        self.update_banner = Adw.Banner(button_label=_("Download"))
+        self.update_banner = Adw.Banner()
         self.update_banner.connect("button-clicked",
-                                   lambda b: self._open_update_page())
+                                   lambda b: self._on_update_button())
         content_view.add_top_bar(self.update_banner)
         self._show_update_banner()
 
@@ -113,7 +115,7 @@ class UpdateCheckMixin:
         self._show_update_banner()
 
     def _available_update(self):
-        """{"version", "url"} of a newer version known, or None."""
+        """{"version", "url", "asset"} of a newer version known, or None."""
         latest = config.get_setting("update_latest")
         if (not config.get_setting("update_check") or not isinstance(latest, dict)
                 or not updates.can_check(self._current_version())):
@@ -124,15 +126,95 @@ class UpdateCheckMixin:
             return None
         return latest
 
+    @staticmethod
+    def _appimage():
+        return os.environ.get("APPIMAGE")
+
+    def _can_update_itself(self, latest):
+        return bool(latest.get("asset")) and updates.can_install(self._appimage())
+
     def _show_update_banner(self):
+        """The banner for the state of updating: available, being updated
+        (self._update_state "updating"), or installed and waiting for a
+        restart ("installed")."""
         if not hasattr(self, "update_banner"):
             return
+        state = getattr(self, "_update_state", None)
         latest = self._available_update()
-        if latest:
-            self.update_banner.set_title(
-                _("Understeer {version} is available").format(
-                    version=latest["version"]))
-        self.update_banner.set_revealed(bool(latest))
+        banner = self.update_banner
+        if state == "installed":
+            banner.set_title(_("Understeer {version} is installed. Restart to "
+                               "use it.").format(version=self._update_version))
+            banner.set_button_label(_("Restart"))
+        elif state == "updating":
+            banner.set_title(_("Updating to Understeer {version}…").format(
+                version=self._update_version))
+            banner.set_button_label(None)
+        elif latest:
+            banner.set_title(_("Understeer {version} is available").format(
+                version=latest["version"]))
+            banner.set_button_label(_("Update Now")
+                                    if self._can_update_itself(latest)
+                                    else _("Download"))
+        banner.set_revealed(bool(state or latest))
+
+    def _on_update_button(self):
+        state = getattr(self, "_update_state", None)
+        latest = self._available_update()
+        if state == "installed":
+            self._restart_for_update()
+        elif state is None and latest and self._can_update_itself(latest):
+            self._update_itself(latest)
+        elif state is None:
+            self._open_update_page()
+
+    def _update_itself(self, latest):
+        """Download, check and put the new AppImage in place, in a thread."""
+        appimage = self._appimage()
+        self._update_state, self._update_version = "updating", latest["version"]
+        self._show_update_banner()
+        log.info("Updating %s to %s", appimage, latest["version"])
+
+        def work():
+            try:
+                updates.install(updates.download(latest["asset"], appimage),
+                                appimage)
+                error = None
+            except updates.Error as e:
+                error = e
+            GLib.idle_add(lambda: self._updated(error) and False)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _updated(self, error):
+        if error is None:
+            self._update_state = "installed"
+            self._show_update_banner()
+            return
+        log.warning("Update failed: %s", error)
+        self._update_state = None
+        self._show_update_banner()
+        dialog = Adw.AlertDialog(
+            heading=_("Update Failed"),
+            body=_("Understeer could not update itself: {reason}. Your "
+                   "version stays as it is. You can download the new one "
+                   "from GitHub instead.").format(reason=error))
+        dialog.add_response("close", _("Close"))
+        dialog.add_response("download", _("Download"))
+        dialog.set_default_response("download")
+        dialog.set_close_response("close")
+        dialog.set_response_appearance("download",
+                                       Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", lambda d, r: r == "download"
+                       and self._open_update_page())
+        dialog.present(self)
+
+    def _restart_for_update(self):
+        """Quit (asking about unsaved preset changes as always) and start
+        the new AppImage."""
+        app = self.get_application()
+        if app is not None:
+            app.quit_all(restart=self._appimage())
 
     def _open_update_page(self):
         latest = self._available_update() or {}

@@ -1507,29 +1507,57 @@ msgstr "Über diese Einstellung"
 msgid "Not supported by your hardware"
 msgstr "Von deiner Hardware nicht unterstützt"
 
-#: understeer/ui/update_check.py:28
-msgid "Download"
-msgstr "Herunterladen"
-
-#: understeer/ui/update_check.py:59
+#: understeer/ui/update_check.py:61
 msgid "Look for New Versions?"
 msgstr "Nach neuen Versionen suchen?"
 
-#: understeer/ui/update_check.py:60
+#: understeer/ui/update_check.py:62
 msgid "Understeer can ask GitHub at start and every hour whether there is a newer version and then show a note at the top. Only the version number is fetched; nothing about you is sent. You can change this in the preferences."
 msgstr "Understeer kann beim Start und dann stündlich bei GitHub nachfragen, ob es eine neuere Version gibt, und dann oben einen Hinweis zeigen. Abgerufen wird nur die Versionsnummer, über dich wird nichts gesendet. Du kannst das in den Einstellungen ändern."
 
-#: understeer/ui/update_check.py:64
+#: understeer/ui/update_check.py:66
 msgid "Don't Look"
 msgstr "Nicht suchen"
 
-#: understeer/ui/update_check.py:65
+#: understeer/ui/update_check.py:67
 msgid "Look"
 msgstr "Suchen"
 
-#: understeer/ui/update_check.py:133
+#: understeer/ui/update_check.py:146
+msgid "Understeer {version} is installed. Restart to use it."
+msgstr "Understeer {version} ist installiert. Starte neu, um es zu verwenden."
+
+#: understeer/ui/update_check.py:148
+msgid "Restart"
+msgstr "Neu starten"
+
+#: understeer/ui/update_check.py:150
+msgid "Updating to Understeer {version}…"
+msgstr "Aktualisiere auf Understeer {version} …"
+
+#: understeer/ui/update_check.py:154
 msgid "Understeer {version} is available"
 msgstr "Understeer {version} ist verfügbar"
+
+#: understeer/ui/update_check.py:156
+msgid "Update Now"
+msgstr "Jetzt aktualisieren"
+
+#: understeer/ui/update_check.py:158
+msgid "Download"
+msgstr "Herunterladen"
+
+#: understeer/ui/update_check.py:198
+msgid "Update Failed"
+msgstr "Aktualisieren fehlgeschlagen"
+
+#: understeer/ui/update_check.py:199
+msgid "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
+msgstr "Understeer konnte sich nicht aktualisieren: {reason}. Deine Version bleibt, wie sie ist. Du kannst die neue stattdessen von GitHub herunterladen."
+
+#: understeer/ui/update_check.py:202
+msgid "Close"
+msgstr "Schließen"
 
 #: understeer/ui/window.py:196
 msgid "Understeer runs in the background"
