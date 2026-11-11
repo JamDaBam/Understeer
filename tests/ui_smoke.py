@@ -53,7 +53,7 @@ steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
-from understeer.ui import cover_search  # noqa: E402
+from understeer.ui import cover_search, theme  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
@@ -1258,9 +1258,22 @@ def steps(win):
     # -- export, import, layout ---------------------------------------------
     def export_import():
         dest = scratch / "export.zip"
+        config.set_setting("theme", "carbon")
+        config.set_setting("background", True)
         counts = backup.export(dest)
+        config.set_setting("theme", None)
+        config.set_setting("background", None)
+        theme.apply()
+        application.update_tray()
         check(counts["presets"] == 1, f"export counts {counts}")
         win._import(backup.read(dest))
+        check(Adw.StyleManager.get_default().get_color_scheme()
+              == Adw.ColorScheme.FORCE_DARK, "imported theme shown right away")
+        check(application.tray.running, "tray icon of the import shown right away")
+        config.set_setting("theme", None)
+        config.set_setting("background", None)
+        theme.apply()
+        application.update_tray()
     yield "export/import", export_import
     yield "after import", lambda: check(config.preset_path("Renamed").is_file(),
                                         "preset still there after import")

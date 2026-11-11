@@ -7,6 +7,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from .. import background, backup, config, i18n, updates
 from .. import log as session_log
 from ..i18n import _
+from . import theme
 from .look_prefs import LookGroups
 from .report_dialog import ReportDialog
 
@@ -371,8 +372,13 @@ class PreferencesMixin:
         except OSError as e:
             self._error(_("Could not import"), str(e))
             return
-        # Show what was imported: language, layout, presets, games, names.
+        # Show what was imported: language, look, layout, the tray icon,
+        # presets, games, names.
         i18n.set_language(config.get_setting("language"))
+        theme.apply()
+        app = self.get_application()
+        if app is not None:
+            app.update_tray()
         layout = config.get_setting("layout")
         self.layout = layout if layout in LAYOUTS else "full"
         self._apply_layout()
