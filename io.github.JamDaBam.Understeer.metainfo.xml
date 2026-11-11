@@ -48,6 +48,8 @@
                     <li xml:lang="de">Gelöschte Presets und Spiele kommen in einen Papierkorb und bleiben dort 30 Tage, zu öffnen mit „Papierkorb“ neben „Auswählen“ auf ihrer Seite; die Meldung nach dem Löschen bietet 10 Sekunden lang „Rückgängig“</li>
                     <li>The dialogs for names are wider and list your folders and games to pick from; a missing name is marked red in the dialog</li>
                     <li xml:lang="de">Die Dialoge für Namen sind breiter und listen deine Ordner und Spiele zur Auswahl; ein fehlender Name wird im Dialog rot markiert</li>
+                    <li>In a big window, e.g. maximized on a 4K screen, the theme previews in the preferences no longer stretch down the whole page</li>
+                    <li xml:lang="de">In einem großen Fenster, z. B. maximiert auf einem 4K-Bildschirm, ziehen sich die Theme-Vorschauen in den Einstellungen nicht mehr über die ganze Seite</li>
                 </ul>
             </description>
         </release>
