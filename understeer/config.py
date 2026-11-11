@@ -12,7 +12,6 @@ import logging
 import os
 import pathlib
 import re
-import shutil
 
 CONFIG_DIR  = pathlib.Path.home() / ".config" / "Understeer"
 # Used by SimPower and by Understeer up to v1.0.4, when it still had that name
@@ -52,6 +51,21 @@ def write_file(path, data):
         raise
 
 
+def load_json(path, default=None):
+    """What the JSON file at path holds (read as UTF-8, as written), or
+    default if it is missing or damaged."""
+    try:
+        return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):       # also JSONDecodeError, UnicodeDecodeError
+        return default
+
+
+def _read_json(path):
+    """The dict in the JSON file at path, or {}."""
+    data = load_json(path)
+    return data if isinstance(data, dict) else {}
+
+
 def _save_json(path, data, sort_keys=False):
     """Store data as JSON; a failure is logged, the app goes on."""
     try:
@@ -70,22 +84,11 @@ def migrate_config():
 
 
 def load_axis_roles():
-    try:
-        return json.loads(AXES_FILE.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
+    return _read_json(AXES_FILE)
 
 
 def save_axis_roles(roles):
     _save_json(AXES_FILE, roles)
-
-
-def _read_json(path):
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def load_slot_names(model):
@@ -158,10 +161,7 @@ def load_games():
     "cover" (optional) is the file name of a picture the user chose, in
     CUSTOM_COVER_DIR; "steamgriddb" (optional) the game's SteamGridDB id.
     """
-    try:
-        data = json.loads(GAMES_FILE.read_text())
-    except (OSError, json.JSONDecodeError):
-        return []
+    data = load_json(GAMES_FILE)
     if not isinstance(data, list):
         return []
     games = []
@@ -195,11 +195,9 @@ def set_game_cover(game, source):
     """Copy the picture at source for game; returns its path. Raises OSError."""
     suffix = pathlib.Path(source).suffix.lower() or ".img"
     name = hashlib.sha1(game["game"].encode()).hexdigest()[:16] + suffix
-    CUSTOM_COVER_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = CUSTOM_COVER_DIR / (name + ".part")
-    shutil.copyfile(source, tmp)
+    data = pathlib.Path(source).read_bytes()
     remove_game_cover(game)
-    tmp.replace(CUSTOM_COVER_DIR / name)
+    write_file(CUSTOM_COVER_DIR / name, data)
     game["cover"] = name
     return CUSTOM_COVER_DIR / name
 
@@ -244,12 +242,7 @@ def _scan():
         return []
     result = []
     for f in sorted(CONFIG_DIR.glob("*.json")):
-        try:
-            data = json.loads(f.read_text())
-            if not isinstance(data, dict):
-                data = {}
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            data = {}
+        data = _read_json(f)
         name = data.get("name") if isinstance(data.get("name"), str) else f.stem
         result.append((name, f, clean_folder(data.get("folder"))))
     return result
@@ -329,11 +322,7 @@ def existing_folder(folder, besides=None):
 
 def preset_folder(path):
     """The folder of the preset at path, or None."""
-    try:
-        data = json.loads(pathlib.Path(path).read_text())
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    return clean_folder(data.get("folder")) if isinstance(data, dict) else None
+    return clean_folder(_read_json(path).get("folder"))
 
 
 def preset_path(name):

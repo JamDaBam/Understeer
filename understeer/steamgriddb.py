@@ -16,6 +16,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import config
+
 API = "https://www.steamgriddb.com/api/v2"
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
 USER_AGENT = "Understeer"
@@ -148,10 +150,7 @@ def download(url, dest):
     data = fetch(url)
     dest = pathlib.Path(dest)
     try:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(dest.name + ".part")
-        tmp.write_bytes(data)
-        tmp.replace(dest)
+        config.write_file(dest, data)
     except OSError as e:
         raise Error("save", str(e)) from e
     return dest

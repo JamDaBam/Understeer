@@ -12,6 +12,8 @@ import struct
 import time
 import urllib.request
 
+from . import config
+
 HOME = pathlib.Path.home()
 STEAM_ROOTS = [
     HOME / ".local" / "share" / "Steam",            # most distributions
@@ -218,10 +220,7 @@ def download_cover(appid, cache_dir, timeout=10):
                 log.debug("Cover %s for app %s: %s", file, appid, e)
                 continue
             try:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                tmp = dest.with_suffix(".part")
-                tmp.write_bytes(data)
-                tmp.replace(dest)
+                config.write_file(dest, data)
             except OSError as e:
                 log.warning("Could not save cover of app %s: %s", appid, e)
                 return None
