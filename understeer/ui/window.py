@@ -520,12 +520,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         about.add_link(_("All Versions on GitHub"),
                        report.REPO_URL + "/releases")
 
-        def on_link(dialog, uri):
+        def on_link(_dialog, uri):
             # "Report an Issue" opens our report window, which fills in the
-            # details, instead of GitHub
+            # details, instead of GitHub; on top, so closing it goes back
+            # to About
             if uri != props["issue_url"]:
                 return False
-            dialog.close()
             ReportDialog(self)
             return True
 

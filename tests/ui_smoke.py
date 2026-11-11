@@ -691,6 +691,10 @@ def steps(win):
         check(win.get_visible_dialog() is not None and
               win.get_visible_dialog().get_title() == "Report a Problem",
               "report window instead of GitHub"),
+        win.get_visible_dialog().close())
+    yield "back in About", lambda: (
+        check(isinstance(win.get_visible_dialog(), Adw.AboutDialog),
+              "closing the report window goes back to About"),
         close_dialogs(win))
 
     # -- wheel base and steering wheel ---------------------------------------
