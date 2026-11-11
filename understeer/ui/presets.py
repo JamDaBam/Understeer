@@ -106,7 +106,7 @@ class PresetsMixin:
         inner.append(image)
         inner.append(Gtk.Label(label=title, css_classes=["heading"]))
         if hint:
-            label = Gtk.Label(label=hint, wrap=True,
+            label = Gtk.Label(label=hint, wrap=True, max_width_chars=30,
                               justify=Gtk.Justification.CENTER)
             label.add_css_class("dim-label")
             inner.append(label)
@@ -289,7 +289,8 @@ class PresetsMixin:
         title.add_css_class("preset-name")
         sub = Gtk.Label(label=_("Built in · 900°, 70 % force feedback, no "
                                 "spring or damper"),
-                        xalign=0, wrap=True, vexpand=True, valign=Gtk.Align.START)
+                        xalign=0, wrap=True, vexpand=True, valign=Gtk.Align.START,
+                        max_width_chars=30)     # else the tiles get too wide
         sub.add_css_class("dim-label")
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
@@ -574,11 +575,13 @@ class PresetsMixin:
         dialog = Adw.AlertDialog(
             heading=_("Save as Preset"),
             body=_("Saves all current settings under this name."))
-        dialog.set_extra_child(self._with_suggestions(fields, folder))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("save", _("Save"))
         dialog.set_default_response("save")
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_extra_child(self._need_name(
+            dialog, "save", entry, self._with_suggestions(fields, folder),
+            _("Enter a name for the preset.")))
 
         def on_response(d, response):
             if response == "save":
@@ -591,8 +594,7 @@ class PresetsMixin:
     def _save_preset(self, name, folder=None):
         """folder: for a new preset; one saved again stays in its folder."""
         if not name:
-            self._error(_("No Name"), _("Enter a name for the preset."))
-            return
+            return                          # the dialog asks for one
         path = config.preset_path(name)
         if path.exists():
             self._confirm_overwrite(path, new_name=name)
@@ -601,6 +603,32 @@ class PresetsMixin:
             self._notify(_("Preset “{name}” saved").format(name=name))
 
     # -- folders ---------------------------------------------------------------
+    @staticmethod
+    def _need_name(dialog, response, entry, content, message):
+        """A name must be entered in entry: until then the response is off,
+        and once the entry was emptied it turns red with message below, as
+        the SteamGridDB key does. Returns content with the message."""
+        hint = Gtk.Label(label=message, wrap=True, xalign=0, visible=False,
+                         margin_start=6)
+        hint.add_css_class("error")
+        hint.add_css_class("caption")
+
+        def changed(*_args):
+            empty = not entry.get_text().strip()
+            dialog.set_response_enabled(response, not empty)
+            hint.set_visible(empty)
+            if empty:
+                entry.add_css_class("error")
+            else:
+                entry.remove_css_class("error")
+
+        dialog.set_response_enabled(response, bool(entry.get_text().strip()))
+        entry.connect("changed", changed)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.append(content)
+        box.append(hint)
+        return box
+
     @staticmethod
     def _folder_entry(folder):
         return Adw.EntryRow(title=_("Folder (optional)"), text=folder or "",
@@ -668,12 +696,15 @@ class PresetsMixin:
             body=_("“{name}” is put into it.").format(name=name) if name else
             _("A folder groups presets here and in the menus, e.g. several "
               "for one game. Drag presets onto it."))
-        dialog.set_extra_child(self._with_suggestions(fields, entry, games_only=True))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("create", _("Create"))
         dialog.set_default_response("create")
         dialog.set_close_response("cancel")
         dialog.set_response_appearance("create", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_extra_child(self._need_name(
+            dialog, "create", entry,
+            self._with_suggestions(fields, entry, games_only=True),
+            _("Enter a name for the folder.")))
 
         def on_response(d, response):
             if response == "create":
@@ -686,8 +717,7 @@ class PresetsMixin:
     def _new_folder(self, folder, path=None, name=None):
         folder = config.clean_folder(folder)
         if folder is None:
-            self._error(_("No Name"), _("Enter a name for the folder."))
-            return
+            return                          # the dialog asks for one
         if path is not None:
             config.add_folder(folder)
             self._set_preset_folder(path, name, folder)
@@ -707,14 +737,9 @@ class PresetsMixin:
             return
         files = {p.name for name, p in dict(config.list_presets_by_folder(
             empty=True)).get(folder, [])}
-        games = [g["name"] for g in getattr(self.games_page, "games", [])
-                 if g.get("preset") in files]
         body = _("Presets in it: {n}. Keep them, shown without a folder, or "
                  "delete them too? Deleting can be undone right after.").format(n=count)
-        if games:
-            body += "\n\n" + _("Used by: {games}. Without their preset, these "
-                                "games get none applied.").format(
-                                    games=", ".join(games))
+        body += self._games_note(files)
         dialog = Adw.AlertDialog(
             heading=_("Delete Folder “{folder}”?").format(folder=folder),
             body=body)
@@ -1331,13 +1356,12 @@ class PresetsMixin:
         dialog = Adw.AlertDialog(
             heading=_("Rename Preset"),
             body=_("Games that use this preset keep it."))
-        dialog.set_extra_child(entry)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("rename", _("Rename"))
         dialog.set_default_response("rename")
         dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
-        entry.connect("changed", lambda e: dialog.set_response_enabled(
-            "rename", bool(e.get_text().strip())))
+        dialog.set_extra_child(self._need_name(
+            dialog, "rename", entry, entry, _("Enter a name for the preset.")))
 
         def on_response(d, response):
             if response == "rename":
@@ -1369,10 +1393,21 @@ class PresetsMixin:
         self._presets_changed()
         self._notify(_("Preset renamed to “{name}”").format(name=new_name))
 
+    def _games_note(self, files):
+        """For a delete dialog: which games use one of these preset files,
+        or ""."""
+        games = [g["name"] for g in getattr(self.games_page, "games", [])
+                 if g.get("preset") in files]
+        if not games:
+            return ""
+        return "\n\n" + _("Used by: {games}. Without their preset, these games "
+                           "get none applied.").format(games=", ".join(games))
+
     def _confirm_delete_preset(self, path, name):
         dialog = Adw.AlertDialog(
             heading=_("Delete “{name}”?").format(name=name),
-            body=_("The preset file will be removed. This cannot be undone."))
+            body=_("The preset file will be removed. This cannot be undone.")
+            + self._games_note({pathlib.Path(path).name}))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("delete", _("Delete"))
         dialog.set_response_appearance("delete",

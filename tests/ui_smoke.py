@@ -512,6 +512,16 @@ def steps(win):
             d = win.get_visible_dialog()
             check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "New Folder",
                   "new folder asked")
+            entry = [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0]
+            hint = [w for w in walk(d) if isinstance(w, Gtk.Label)
+                    and "error" in w.get_css_classes()][0]
+            check(not d.get_response_enabled("create") and not hint.get_visible(),
+                  "no name yet: Create off, no red hint")
+            entry.set_text("x")
+            check(d.get_response_enabled("create"), "Create on with a name")
+            entry.set_text("  ")
+            check(not d.get_response_enabled("create") and hint.get_visible()
+                  and "error" in entry.get_css_classes(), "emptied: red hint")
             d.force_close()
             win._new_folder(" Rally ")
             check(list(win.folder_flows) == ["BeamNG", "Rally"]
@@ -539,8 +549,17 @@ def steps(win):
             config.write_preset(config.preset_path("Gone F"), "Gone F", {"FF": 30}, "Trash")
             win._presets_changed()
             win._set_active_preset(config.preset_path("Gone F"), {"FF": 30})
+            games_before = win.games_page.games
+            win.games_page.games = [dict(game="g", name="BeamNG.drive", auto=True,
+                                         preset="Gone F.json")]
+            win._confirm_delete_preset(config.preset_path("Gone F"), "Gone F")
+            d = win.get_visible_dialog()
+            check("Used by: BeamNG.drive" in d.get_body(), f"game named: {d.get_body()}")
+            d.force_close()
             win._ask_delete_folder("Trash", 1)
             d = win.get_visible_dialog()
+            check("Used by: BeamNG.drive" in d.get_body(), "game named for the folder")
+            win.games_page.games = games_before
             check(d.get_response_label("all") == "Delete with Presets",
                   "delete with presets offered")
             answer("all")
