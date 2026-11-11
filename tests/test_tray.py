@@ -302,3 +302,32 @@ def test_folders_are_submenus(panel, with_presets):
     click(conn, t, beamng[0])               # the folder itself: nothing
     spin(lambda: False, 0.2)
     assert state["applied"] == ["c"]
+
+
+def test_submenus_are_read_again(panel, with_presets):
+    """KDE reads only the level named in LayoutUpdated and asks AboutToShow
+    before a submenu opens; both must lead to fresh check marks."""
+    conn, _items = panel
+    t, state = with_presets
+    state["presets"] = [("BeamNG", [("Drift", "b", True), ("Climb", "c", False)])]
+    t.start()
+    spin(lambda: t.registered)
+    _revision, (_root, _props, children) = layout(conn, t)
+    folder = children[2][0]
+    menu = "com.canonical.dbusmenu"
+    assert call(conn, t.name, tray.MENU_PATH, menu, "AboutToShow",
+                GLib.Variant("(i)", (folder,))) == (True,)
+    assert call(conn, t.name, tray.MENU_PATH, menu, "AboutToShowGroup",
+                GLib.Variant("(ai)", ([0, folder],))) == ([0, folder], [])
+    updates = []
+    conn.signal_subscribe(None, menu, "LayoutUpdated", tray.MENU_PATH, None,
+                          Gio.DBusSignalFlags.NONE,
+                          lambda *args: updates.append(args[5].unpack()[1]))
+    state["presets"] = [("BeamNG", [("Drift", "b", False), ("Climb", "c", True)])]
+    t.update_menu()
+    assert spin(lambda: sorted(updates) == [0, folder])
+    _revision, (_id, _props, kids) = call(
+        conn, t.name, tray.MENU_PATH, menu, "GetLayout",
+        GLib.Variant("(iias)", (folder, 1, [])))
+    assert [(k[1]["label"], k[1]["toggle-state"]) for k in kids] == \
+        [("Drift", 0), ("Climb", 1)]

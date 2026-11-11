@@ -165,6 +165,7 @@ class Tray:
         self._token = None
         self._revision = 1
         self._preset_keys = {}  # menu id -> key, of the menu last given out
+        self._folder_ids = []   # submenus in it
         self._ids = []          # registration ids to undo in stop()
         self._owner = self._watch = 0
         self.name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -242,12 +243,14 @@ class Tray:
 
     def update_menu(self):
         """The presets or the active one changed: the panel reads the menu
-        again."""
+        again. KDE reads only the level a signal names, so each submenu
+        gets one too, or its check marks stay as they were."""
         if not self._owner:
             return
         self._revision += 1
-        self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
-                   GLib.Variant("(ui)", (self._revision, 0)))
+        for parent in [0, *self._folder_ids]:
+            self._emit(MENU_PATH, "com.canonical.dbusmenu", "LayoutUpdated",
+                       GLib.Variant("(ui)", (self._revision, parent)))
 
     def _emit(self, path, interface, signal, params):
         try:
@@ -351,6 +354,7 @@ class Tray:
 
     def _layout(self, parent=0, depth=-1):
         items, children, self._preset_keys = self._items()  # what a click means
+        self._folder_ids = [i for i in children if i]
         if parent not in items:
             parent = 0
 
@@ -394,10 +398,12 @@ class Tray:
             for item_id, event_id, _data, _time in args[0]:
                 self._event(item_id, event_id)
             invocation.return_value(GLib.Variant("(ai)", ([],)))
+        # Always read a (sub)menu again before it opens: the active preset
+        # may have changed, also from the window
         elif method == "AboutToShow":
-            invocation.return_value(GLib.Variant("(b)", (False,)))
+            invocation.return_value(GLib.Variant("(b)", (True,)))
         elif method == "AboutToShowGroup":
-            invocation.return_value(GLib.Variant("(aiai)", ([], [])))
+            invocation.return_value(GLib.Variant("(aiai)", (list(args[0]), [])))
         else:
             invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod",
                                          method)
