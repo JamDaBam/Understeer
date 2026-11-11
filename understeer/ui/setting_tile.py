@@ -2,7 +2,7 @@
 from gi.repository import Gtk, Pango
 
 from ..i18n import _
-from ..settings import format_value
+from ..settings import fit_step, format_value
 from .layout import margins
 
 
@@ -100,12 +100,15 @@ class SettingTile:
                 self.combo.connect("notify::selected", lambda *a: self._changed())
                 control = self.combo
         else:
-            lo, hi = setting["lo"], setting["hi"]
+            lo, hi, step = setting["lo"], setting["hi"], setting.get("step", 1)
             self.adj = Gtk.Adjustment(value=max(lo, 0), lower=lo, upper=hi,
-                                      step_increment=1, page_increment=10)
+                                      step_increment=step,
+                                      page_increment=max(10, 5 * step))
             control = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL,
                                 adjustment=self.adj, hexpand=True)
             control.set_draw_value(False)
+            if step > 1:
+                control.connect("change-value", self._snap)
             if lo < 0 < hi:
                 # No fill from the left: 0 ("off") sits in the middle.
                 control.set_has_origin(False)
@@ -174,7 +177,8 @@ class SettingTile:
                     self.combo.set_selected(self.values.index(value))
             else:
                 self._auto = bool(self.setting.get("auto")) and value == 0
-                self.adj.set_value(self.adj.get_upper() if self._auto else value)
+                self.adj.set_value(self.adj.get_upper() if self._auto
+                                   else fit_step(self.setting, value))
         finally:
             self._silent = self._placing = False
         self._update_label()
@@ -206,6 +210,14 @@ class SettingTile:
         self._update_id_line()
 
     # -- internals ---------------------------------------------------------
+    def _snap(self, _scale, _scroll, value):
+        """Moved by the user: only to the steps the wheelbase takes, so
+        the value shown is the one it keeps."""
+        step = self.setting["step"]
+        lo, hi = self.adj.get_lower(), self.adj.get_upper()
+        self.adj.set_value(min(max(step * round(value / step), lo), hi))
+        return True
+
     def _slid(self):
         if not self._placing:
             self._auto = False          # moved by the user: a number again

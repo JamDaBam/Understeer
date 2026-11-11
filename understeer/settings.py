@@ -6,8 +6,9 @@ from .i18n import _, N_
 #
 # Each entry describes one sysfs attribute. "kind" is "slider" or "choice";
 # "icon" is a symbolic icon name shown on its tile.
-# Sliders may have a "unit" and a "fmt" function for special values;
-# choices list (value, label) pairs.
+# Sliders may have a "unit", a "fmt" function for special values and a
+# "step": hid-fanatecff keeps some values in steps of 10 only, rounding
+# down what is written; choices list (value, label) pairs.
 # ---------------------------------------------------------------------------
 # Views in the header bar.
 VIEWS = [
@@ -50,7 +51,7 @@ SETTINGS = [
     # auto: 0 stands for Auto, the wheelbase's whole range.
     dict(id="SEN", icon="understeer-steering-symbolic",
          page="steering", group=N_("Rotation"),
-         label=N_("Steering Angle"), lo=90, hi=2520, unit="°", auto=True,
+         label=N_("Steering Angle"), lo=90, hi=2520, unit="°", auto=True, step=10,
          desc=N_("Total wheel rotation in degrees. Auto uses the maximum "
                  "range of the wheelbase."),
          quick=[540, 720, 900, 1080]),
@@ -60,16 +61,16 @@ SETTINGS = [
          desc=N_("Master force feedback output of the wheelbase.")),
     dict(id="FOR", icon="weather-windy-symbolic",
          page="steering", group=N_("Force Feedback"),
-         label=N_("Force Effects"), lo=0, hi=120, unit="%",
+         label=N_("Force Effects"), lo=0, hi=120, unit="%", step=10,
          desc=N_("Strength of constant-force effects, the core of the game's "
                  "force feedback.")),
     dict(id="SPR", icon="object-rotate-left-symbolic",
          page="steering", group=N_("Force Feedback"),
-         label=N_("Spring Effects"), lo=0, hi=120, unit="%",
+         label=N_("Spring Effects"), lo=0, hi=120, unit="%", step=10,
          desc=N_("Strength of centering spring effects sent by the game.")),
     dict(id="DPR", icon="weather-fog-symbolic",
          page="steering", group=N_("Force Feedback"),
-         label=N_("Damper Effects"), lo=0, hi=120, unit="%",
+         label=N_("Damper Effects"), lo=0, hi=120, unit="%", step=10,
          desc=N_("Strength of damper effects sent by the game.")),
     dict(id="FFS", icon="view-sort-ascending-symbolic",
          page="steering", group=N_("Signal"),
@@ -79,7 +80,7 @@ SETTINGS = [
                  "force (default).")),
     dict(id="FEI", icon="display-brightness-symbolic",
          page="steering", group=N_("Signal"),
-         label=N_("Force Effect Intensity"), lo=0, hi=100, unit="%",
+         label=N_("Force Effect Intensity"), lo=0, hi=100, unit="%", step=10,
          desc=N_("Filters the force feedback signal. Higher values give "
                  "sharper details.")),
     dict(id="INT", icon="view-continuous-symbolic",
@@ -104,7 +105,7 @@ SETTINGS = [
                  "independent of the game.")),
     dict(id="SHO", icon="audio-volume-high-symbolic",
          page="feel", group=N_("Effects"),
-         label=N_("Wheel Vibration"), lo=0, hi=100, unit="%",
+         label=N_("Wheel Vibration"), lo=0, hi=100, unit="%", step=10,
          desc=N_("Strength of the rumble on curbs and impacts.")),
     dict(id="DRI", icon="object-flip-horizontal-symbolic",
          page="feel", group=N_("Effects"),
@@ -114,7 +115,7 @@ SETTINGS = [
     # --- Pedals ----------------------------------------------------------
     dict(id="brF", icon="understeer-pedals-symbolic",
          page="pedals", group=N_("Load Cell Brake"),
-         label=N_("Brake Force"), lo=0, hi=100, unit="%",
+         label=N_("Brake Force"), lo=0, hi=100, unit="%", step=10,
          desc=N_("Pedal stiffness. Higher values need more force for full "
                  "braking. Requires a load cell brake.")),
     dict(id="BLI", icon="weather-clear-symbolic",
@@ -144,6 +145,13 @@ SIM_DEFAULTS = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0,
 
 SLOTS = 5       # slots the driver can switch to
 MAX_SLOT = 15   # the device reports the slot in 4 bits; a CSL DD has 6 slots
+
+
+def fit_step(setting, value):
+    """value as the wheelbase keeps it: in the steps of the setting,
+    rounded down as hid-fanatecff does, e.g. 2356° as 2350°."""
+    step = setting.get("step", 1)
+    return value - value % step
 
 
 def format_value(setting, v):

@@ -156,6 +156,18 @@ def steps(win):
         and win.rows["SEN"].value_label.get_label() == "2520°",
         f"2520° shown: {win.rows['SEN'].value_label.get_label()!r}")
 
+    def ten_steps():
+        """The wheelbase keeps the angle, vibration and more in steps of
+        ten only: the controls take no other values."""
+        sen, sho = win.rows["SEN"], win.rows["SHO"]
+        scale = [w for w in walk(sen.row) if isinstance(w, Gtk.Scale)][0]
+        scale.emit("change-value", Gtk.ScrollType.JUMP, 2356.0)
+        check(sen.get() == 2360, f"slider moves in steps of ten: {sen.get()}")
+        sho.set(35)                             # e.g. from an older preset
+        check(sho.get() == 30, f"shown as the wheelbase keeps it: {sho.get()}")
+        win._load_from_device()
+    yield "steps of ten", ten_steps
+
     def auto_written():
         win._set_setting("SEN", 0)             # the Auto button
         win.flush_live()
@@ -316,19 +328,19 @@ def steps(win):
     yield "apply preset", apply_preset
 
     def preset_values():
-        win._apply_values({"SHO": 55})
+        win._apply_values({"SHO": 60})
         win._show_preset(gt3)
         d = win.get_visible_dialog()
         rows = {r.get_title(): (r_suffix(r), r.get_subtitle())
                 for r in walk(d) if isinstance(r, Adw.ActionRow)}
-        check(rows.get("Wheel Vibration") == ("40 %", "Now: 55 %"),
+        check(rows.get("Wheel Vibration") == ("40 %", "Now: 60 %"),
               f"preset value and the current one: {rows.get('Wheel Vibration')}")
         check(rows.get("Force Feedback Strength", ("", "x"))[1] in ("", None),
               "equal values not marked")
         titles = [g.get_title() for g in walk(d) if isinstance(g, Adw.PreferencesGroup)]
         check("Pedals &amp; Paddles" in titles or "Wheel Feel" in titles,
               f"groups by tab: {titles}")
-        check((dev / "SHO").read_text().strip() == "55", "nothing applied by looking")
+        check((dev / "SHO").read_text().strip() == "60", "nothing applied by looking")
         apply_btn = next(w for w in walk(d) if isinstance(w, Gtk.Button)
                          and w.get_label() == "Apply")
         apply_btn.emit("clicked")
@@ -830,10 +842,10 @@ def steps(win):
         # Nothing to read the values from again after the window is rebuilt
         path, win.device_path = win.device_path, None
         try:
-            win._apply_values({"SEN": 540, "SHO": 35})
+            win._apply_values({"SEN": 540, "SHO": 30})
             win.relocalize()
             shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
-            check(shown == {"SEN": 540, "SHO": 35},
+            check(shown == {"SEN": 540, "SHO": 30},
                   f"values kept without a wheel base: {shown}")
             win._set_setting("SEN", 0)                  # the Auto button
             check(win.rows["SEN"].value_label.get_label() == "Auto",
