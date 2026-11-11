@@ -3,12 +3,13 @@ import logging
 import pathlib
 import threading
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import config, games, steamgriddb, trash
 from ..i18n import _
 from . import cover_search
 from .live import CoverView
+from .names import cap_row, full_name_tip, label_factory, name_label, short
 from .selection import Selection
 
 log = logging.getLogger("understeer.games")
@@ -17,28 +18,6 @@ log = logging.getLogger("understeer.games")
 def _steam_appid(game):
     kind, _sep, appid = game["game"].partition(":")
     return appid if kind == "steam" else None
-
-
-def _label_factory(texts=None):
-    """Rows of a Gtk.DropDown of strings, as labels; with texts (one per
-    row) short and ending in "…" if long, for the button."""
-    factory = Gtk.SignalListItemFactory()
-
-    def setup(_f, item):
-        label = Gtk.Label(xalign=0)
-        if texts is not None:
-            label.set_ellipsize(Pango.EllipsizeMode.END)
-            label.set_width_chars(4)
-            label.set_max_width_chars(12)
-        item.set_child(label)
-
-    def bind(_f, item):
-        item.get_child().set_label(item.get_item().get_string() if texts is None
-                                   else texts[item.get_position()])
-
-    factory.connect("setup", setup)
-    factory.connect("bind", bind)
-    return factory
 
 
 class GamesPage:
@@ -164,9 +143,11 @@ class GamesPage:
         add = self._add_tile()
         add.set_sensitive(not self.selection.active)
         self.flow.append(add)
-        # In the order of the menus, a preset in a folder as "Folder – Name"
-        presets = [(_("{folder} – {name}").format(folder=folder, name=name)
-                    if folder else name, path, name)
+        # In the order of the menus, a preset in a folder as "Folder – Name";
+        # both cut on their own, so a long folder can't hide the name
+        presets = [(_("{folder} – {name}").format(folder=short(folder, 20),
+                                                  name=short(name, 28))
+                    if folder else short(name, 48), path, name)
                    for folder, group in config.list_presets_by_folder()
                    for name, path in group]
         for game in self.games:
@@ -293,10 +274,9 @@ class GamesPage:
             overlay.add_overlay(badge)
         tile.append(overlay)
 
-        name = Gtk.Label(label=game["name"], xalign=0, wrap=True, lines=2,
-                         hexpand=True)
-        name.set_ellipsize(Pango.EllipsizeMode.END)
-        name.set_max_width_chars(8)
+        name = name_label(Gtk.Label(label=game["name"], xalign=0, hexpand=True),
+                          lines=2, chars=8)
+        full_name_tip(name, game["name"], 16)
         name.add_css_class("heading")
         # A pencil next to the name, as at presets and folders
         rename = Gtk.Button(icon_name="document-edit-symbolic",
@@ -315,9 +295,9 @@ class GamesPage:
             [_("No Preset")] + [label for label, _p, _n in presets])
         # The list shows "Folder – Name", the tile only the name, ending in
         # "…" if long: else the longest would make every tile as wide
-        choose.set_factory(_label_factory(
-            [_("No Preset")] + [name for _l, _p, name in presets]))
-        choose.set_list_factory(_label_factory())
+        choose.set_factory(label_factory(
+            [_("No Preset")] + [name for _l, _p, name in presets], chars=12))
+        choose.set_list_factory(label_factory(in_list=True))
         choose.set_tooltip_text(_("Preset for this game"))
         if game["preset"] in files:
             choose.set_selected(files.index(game["preset"]) + 1)
@@ -359,7 +339,7 @@ class GamesPage:
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
         self.window._trash_changed()
-        text = (_("“{name}” deleted").format(name=removed[0]["name"])
+        text = (_("“{name}” deleted").format(name=short(removed[0]["name"]))
                 if len(items) == 1 else
                 _("Games deleted: {n}").format(n=len(items)))
 
@@ -422,7 +402,7 @@ class GamesPage:
         images.add_pixbuf_formats()
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(images)
-        dialog = Gtk.FileDialog(title=_("Picture for {game}").format(game=game["name"]),
+        dialog = Gtk.FileDialog(title=_("Picture for {game}").format(game=short(game["name"])),
                                 filters=filters, default_filter=images)
         dialog.open(self.window, None,
                     lambda d, result: self._cover_chosen(game, d, result))
@@ -606,8 +586,8 @@ class GamesPage:
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
         for appid, name in installed:
-            row = Adw.ActionRow(title=name, subtitle=f"Steam · {appid}",
-                                activatable=True)
+            row = cap_row(Adw.ActionRow(title=name, subtitle=f"Steam · {appid}",
+                                        activatable=True))
             row.game = (games.steam_id(appid), name)
             listbox.append(row)
         if not installed:
@@ -693,8 +673,9 @@ class GamesPage:
                     return
                 listbox.remove_all()
                 for g in found[:5]:
-                    row = Adw.ActionRow(title=g["name"], activatable=True,
-                                        subtitle=str(g["year"]) if g["year"] else "")
+                    row = cap_row(Adw.ActionRow(
+                        title=g["name"], activatable=True,
+                        subtitle=str(g["year"]) if g["year"] else ""))
                     row.set_use_markup(False)
                     row.found = g
                     listbox.append(row)

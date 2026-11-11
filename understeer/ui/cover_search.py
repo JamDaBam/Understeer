@@ -8,6 +8,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 from .. import config, steamgriddb
 from ..i18n import _
 from .live import CoverView
+from .names import cap_row, short
 
 log = logging.getLogger("understeer.steamgriddb")
 
@@ -161,7 +162,7 @@ class CoverSearch:
         """Subtitle: the game, and where we are when going through several."""
         if len(self.queue) < 2:
             return self.game["name"]
-        return _("{game} · {i} of {n}").format(game=self.game["name"],
+        return _("{game} · {i} of {n}").format(game=short(self.game["name"]),
                                                i=self.index + 1, n=len(self.queue))
 
     def _page(self, title, content, tag=None, subtitle=None):
@@ -284,8 +285,9 @@ class CoverSearch:
                 return
             self.results.remove_all()
             for g in found:
-                row = Adw.ActionRow(title=g["name"], activatable=True,
-                                    subtitle=str(g["year"]) if g["year"] else "")
+                row = cap_row(Adw.ActionRow(
+                    title=g["name"], activatable=True,
+                    subtitle=str(g["year"]) if g["year"] else ""))
                 row.set_use_markup(False)
                 row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
                 row.found = g
