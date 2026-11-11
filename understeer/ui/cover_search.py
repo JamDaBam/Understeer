@@ -7,6 +7,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 
 from .. import config, steamgriddb
 from ..i18n import _
+from . import tasks
 from .live import CoverView
 from .names import cap_row, short
 
@@ -18,20 +19,15 @@ THUMB_THREADS = 4
 
 
 def in_thread(work, done):
-    """Run work() in a thread; done(result, error) on the main loop."""
-    def run():
-        try:
-            result, error = work(), None
-        except steamgriddb.Error as e:
-            result, error = None, e
-        GLib.idle_add(lambda: done(result, error) and False)
-    threading.Thread(target=run, daemon=True).start()
+    """Run a SteamGridDB request in a thread, see tasks.in_thread()."""
+    tasks.in_thread(work, done, steamgriddb.Error)
 
 
 def error_text(error):
-    if error.kind == "key":
+    kind = getattr(error, "kind", "network")   # an unexpected error: like network
+    if kind == "key":
         return _("SteamGridDB did not accept the API key.")
-    if error.kind == "save":
+    if kind == "save":
         return _("Could not save the picture")
     return _("SteamGridDB could not be reached. Check your internet connection.")
 
@@ -119,7 +115,7 @@ class KeyRow:
                     self.accepted()
                 return
             log.warning("SteamGridDB API key check failed: %s", error)
-            if error.kind == "key":
+            if getattr(error, "kind", None) == "key":
                 self.row.add_css_class("error")
             self.notify(error_text(error))
         check_key(key, done)
@@ -280,7 +276,7 @@ class CoverSearch:
                 log.warning("SteamGridDB search failed: %s", error)
                 self._show_status(self.search_stack, self.search_status,
                                   _("Search failed"), error_text(error))
-                if error.kind == "key":
+                if getattr(error, "kind", None) == "key":
                     self.nav.replace([self._key_page()])
                 return
             self.results.remove_all()

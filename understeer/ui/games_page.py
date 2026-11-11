@@ -1,13 +1,12 @@
 """The Games page: one tile per game with its cover and preset."""
 import logging
 import pathlib
-import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import config, games, steamgriddb, trash
 from ..i18n import _
-from . import cover_search
+from . import cover_search, tasks
 from .live import CoverView
 from .names import cap_row, full_name_tip, label_factory, name_label, short
 from .selection import Selection
@@ -488,25 +487,23 @@ class GamesPage:
         key = config.get_setting(cover_search.KEY_SETTING)
 
         def work():
+            """(where from, path) of the cover, or None"""
             if appid:
                 path = games.download_cover(appid, config.COVER_DIR)
                 if path is not None:
-                    return "steam", path, None
+                    return "steam", path
             if not key:
-                return None, None, None
-            try:
-                url = steamgriddb.find_cover(game["name"], key, steam_appid=appid,
-                                             game_id=game.get("steamgriddb"))
-                if url is None:
-                    return None, None, None
-                suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
-                tmp = config.COVER_DIR / f"steamgriddb-{abs(hash(game_id))}{suffix}"
-                return "steamgriddb", steamgriddb.download(url, tmp), None
-            except steamgriddb.Error as e:
-                return None, None, e
+                return None
+            url = steamgriddb.find_cover(game["name"], key, steam_appid=appid,
+                                         game_id=game.get("steamgriddb"))
+            if url is None:
+                return None
+            suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
+            tmp = config.COVER_DIR / f"steamgriddb-{abs(hash(game_id))}{suffix}"
+            return "steamgriddb", steamgriddb.download(url, tmp)
 
-        def done(result):
-            source, path, error = result
+        def done(result, error):
+            source, path = result or (None, None)
             self._downloading.discard(game_id)
             if error is not None:
                 log.warning("SteamGridDB cover for %s: %s", game["name"], error)
@@ -525,10 +522,8 @@ class GamesPage:
                 self._failed.add(game_id)
             self._report_search(game_id, found, error)
             self.refresh()
-            return False
 
-        threading.Thread(target=lambda: GLib.idle_add(done, work()),
-                         daemon=True).start()
+        tasks.in_thread(work, done, steamgriddb.Error)
 
     def _report_search(self, game_id, found, error=None):
         search = self._search
@@ -538,7 +533,7 @@ class GamesPage:
             search["found"] += 1
         else:
             search["missed"].append(game_id)
-        if error is not None and error.kind == "key":
+        if getattr(error, "kind", None) == "key":
             search["key_error"] = True
         if search["asked"] & self._downloading:
             return                              # still waiting for others
