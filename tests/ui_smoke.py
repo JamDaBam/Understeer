@@ -863,6 +863,50 @@ def steps(win):
             win._game_watch.running.discard("test-game")
             notes.clear()
     yield "connected while a game runs", connected_while_game_runs
+
+    def preset_from_tray():
+        tray_preset = config.preset_path("Tray Test")
+        config.write_preset(tray_preset, "Tray Test", {"FF": 30})
+        try:
+            listed = {name: (key, on) for name, key, on in application._tray_presets()}
+            check(listed.get("Background Test") == (str(bg_preset), True)
+                  and listed.get("Tray Test") == (str(tray_preset), False),
+                  f"presets in the tray menu, the active one checked: {listed}")
+            notes.clear()
+            application._tray_apply_preset(str(tray_preset))
+            check((dev / "FF").read_text().strip() == "30", "applied from the tray")
+            check(win._in_background and not win.get_visible(), "window stays closed")
+            check(win.active_preset == tray_preset, "now the active preset")
+            check(notes == [("tray-preset", "Understeer",
+                             "Preset “Tray Test” applied.")], f"told: {notes}")
+            check(dict((n, on) for n, _k, on in application._tray_presets())
+                  .get("Tray Test") is True, "checked in the tray menu now")
+            notes.clear()
+            path, win.device_path = win.device_path, None
+            try:
+                application._tray_apply_preset(str(bg_preset))
+            finally:
+                win.device_path = path
+            check(notes and "was not written" in notes[0][2],
+                  f"told it was not written without a wheel base: {notes}")
+            # Unsaved changes: the window opens and asks before they are lost
+            application._tray_apply_preset(str(tray_preset))
+            win._set_setting("FF", 55)           # written, as by the user
+            win.flush_live()
+            check((dev / "FF").read_text().strip() == "55", "change written")
+            notes.clear()
+            application._tray_apply_preset(str(bg_preset))
+            check(win.get_visible() and win._save_dialog is not None,
+                  "window shown to ask about unsaved changes")
+            check(win.active_preset == tray_preset and not notes,
+                  "nothing applied before the answer")
+            win._save_dialog.force_close()
+            win._save_dialog = None
+        finally:
+            tray_preset.unlink()
+            win._rebuild_preset_menu()
+            notes.clear()
+    yield "preset from the tray menu", preset_from_tray
     yield "started again", lambda: application.activate()
     def window_back():
         check(win.get_visible() and not win._in_background, "window shown again")

@@ -195,3 +195,72 @@ def test_stop_releases_the_name(panel, item):
                         "org.freedesktop.DBus", "NameHasOwner",
                         GLib.Variant("(s)", (t.name,)))[0]
     assert spin(gone)
+
+
+@pytest.fixture
+def with_presets(bus):
+    state = {"presets": [("Daily", "a", False), ("GT3_Race", "b", True)],
+             "applied": []}
+
+    def texts():
+        return {"title": "Understeer", "tooltip": "", "open": "Open", "quit": "Quit"}
+    t = tray.Tray(ICON, texts, lambda token: None, lambda: None,
+                  presets=lambda: state["presets"],
+                  apply_preset=state["applied"].append, connection=connect(bus))
+    yield t, state
+    t.stop()
+
+
+def layout(conn, t):
+    return call(conn, t.name, tray.MENU_PATH, "com.canonical.dbusmenu",
+                "GetLayout", GLib.Variant("(iias)", (0, -1, [])))
+
+
+def click(conn, t, item_id):
+    call(conn, t.name, tray.MENU_PATH, "com.canonical.dbusmenu", "Event",
+         GLib.Variant("(isvu)", (item_id, "clicked", GLib.Variant("i", 0), 0)))
+
+
+def test_menu_lists_the_presets(panel, with_presets):
+    conn, _items = panel
+    t, state = with_presets
+    t.start()
+    spin(lambda: t.registered)
+    _revision, (_root, _props, children) = layout(conn, t)
+    labels = [c[1].get("label") for c in children]
+    assert labels == ["Open", None, "Daily", "GT3__Race", None, "Quit"]
+    presets = [c for c in children if c[1].get("toggle-type") == "radio"]
+    assert [c[1]["toggle-state"] for c in presets] == [0, 1]
+    click(conn, t, presets[0][0])
+    assert spin(lambda: state["applied"] == ["a"])
+
+
+def test_menu_changes_with_the_presets(panel, with_presets):
+    conn, _items = panel
+    t, state = with_presets
+    t.start()
+    spin(lambda: t.registered)
+    revision, (_root, _props, children) = layout(conn, t)
+    first = [c[0] for c in children if c[1].get("toggle-type") == "radio"][0]
+    updates = []
+    conn.signal_subscribe(None, "com.canonical.dbusmenu", "LayoutUpdated",
+                          tray.MENU_PATH, None, Gio.DBusSignalFlags.NONE,
+                          lambda *args: updates.append(args[5].unpack()))
+    # The list changes while the menu is open: a click still means the
+    # preset that was shown
+    state["presets"] = [("New", "c", False)] + state["presets"]
+    t.update_menu()
+    assert spin(lambda: updates) and updates[0][0] > revision
+    click(conn, t, first)
+    assert spin(lambda: state["applied"] == ["a"])
+    _revision, (_root, _props, children) = layout(conn, t)
+    assert [c[1].get("label") for c in children][2:5] == ["New", "Daily", "GT3__Race"]
+
+
+def test_menu_without_presets(panel, item):
+    conn, _items = panel
+    t, _calls = item
+    t.start()
+    spin(lambda: t.registered)
+    _revision, (_root, _props, children) = layout(conn, t)
+    assert [c[1].get("label") for c in children] == ["Open Understeer", None, "Quit"]

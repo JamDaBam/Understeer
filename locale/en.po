@@ -3,15 +3,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: en\n"
 
-#: understeer/app.py:94
+#: understeer/app.py:95
 msgid "Applies the presets of your games"
 msgstr "Applies the presets of your games"
 
-#: understeer/app.py:95
+#: understeer/app.py:96
 msgid "Open Understeer"
 msgstr "Open Understeer"
 
-#: understeer/app.py:95
+#: understeer/app.py:96
 msgid "Quit"
 msgstr "Quit"
 
@@ -1031,399 +1031,403 @@ msgstr "Presets: {presets} · Games: {games} · Pictures: {covers}\n\nPresets an
 msgid "Imported (presets: {presets}, games: {games})"
 msgstr "Imported (presets: {presets}, games: {games})"
 
-#: understeer/ui/presets.py:29
-msgid "Add a preset shared as a file"
-msgstr "Add a preset shared as a file"
-
-#: understeer/ui/presets.py:29
-msgid "Import File…"
-msgstr "Import File…"
-
-#: understeer/ui/presets.py:31
-msgid "Add a preset shared as text or JSON"
-msgstr "Add a preset shared as text or JSON"
-
-#: understeer/ui/presets.py:31
-msgid "Paste Text…"
-msgstr "Paste Text…"
-
-#: understeer/ui/presets.py:37
-msgid "Saved Presets"
-msgstr "Saved Presets"
-
-#: understeer/ui/presets.py:38
-msgid "Saves all current settings under a name in ~/.config/Understeer/."
-msgstr "Saves all current settings under a name in ~/.config/Understeer/."
-
-#: understeer/ui/presets.py:60
-msgid "Save as Preset…"
-msgstr "Save as Preset…"
-
-#: understeer/ui/presets.py:62
-msgid "Saved presets appear here and in the Presets menu at the top."
-msgstr "Saved presets appear here and in the Presets menu at the top."
-
-#: understeer/ui/presets.py:80
-msgid "Active preset"
-msgstr "Active preset"
-
-#: understeer/ui/presets.py:85
-msgid "Apply"
-msgstr "Apply"
-
-#: understeer/ui/presets.py:88
-msgid "Save Here"
-msgstr "Save Here"
-
-#: understeer/ui/presets.py:89
-msgid "Save current settings to this preset"
-msgstr "Save current settings to this preset"
-
-#: understeer/ui/presets.py:92
-msgid "Rename"
-msgstr "Rename"
-
-#: understeer/ui/presets.py:93
-msgid "Change the name of this preset"
-msgstr "Change the name of this preset"
-
-#: understeer/ui/presets.py:97
-msgid "Show Values"
-msgstr "Show Values"
-
-#: understeer/ui/presets.py:102
-msgid "Share"
-msgstr "Share"
-
-#: understeer/ui/presets.py:105
-msgid "Delete"
-msgstr "Delete"
-
-#: understeer/ui/presets.py:123
-msgid "Save as File…"
-msgstr "Save as File…"
-
-#: understeer/ui/presets.py:124
-msgid "Copy as Text"
-msgstr "Copy as Text"
-
-#: understeer/ui/presets.py:125
-msgid "Copy as JSON"
-msgstr "Copy as JSON"
-
-#: understeer/ui/presets.py:138
-msgid "Sim Racing Defaults"
-msgstr "Sim Racing Defaults"
-
-#: understeer/ui/presets.py:140
-msgid "Built in · 900°, 70 % force feedback, no spring or damper"
-msgstr "Built in · 900°, 70 % force feedback, no spring or damper"
-
-#: understeer/ui/presets.py:147
-msgid "Sim racing defaults applied"
-msgstr "Sim racing defaults applied"
-
-#: understeer/ui/presets.py:160
-msgid "Save to “{name}”"
-msgstr "Save to “{name}”"
-
-#: understeer/ui/presets.py:173
-msgid "Import Preset File…"
-msgstr "Import Preset File…"
-
-#: understeer/ui/presets.py:174
-msgid "Paste Preset Text…"
-msgstr "Paste Preset Text…"
-
-#: understeer/ui/presets.py:175
-msgid "Manage Presets"
-msgstr "Manage Presets"
-
-#: understeer/ui/presets.py:213
-msgid "Preset “{name}” has unsaved changes"
-msgstr "Preset “{name}” has unsaved changes"
-
-#: understeer/ui/presets.py:214
-msgid "Apply or save a preset"
-msgstr "Apply or save a preset"
-
-#: understeer/ui/presets.py:238
-msgid "Could not load preset"
-msgstr "Could not load preset"
-
-#: understeer/ui/presets.py:249
-msgid "Wheel base connected: preset “{name}” for {game} applied"
-msgstr "Wheel base connected: preset “{name}” for {game} applied"
-
-#: understeer/ui/presets.py:251
-msgid "Wheel base connected: preset “{name}” for {game} loaded — click Apply to write it"
-msgstr "Wheel base connected: preset “{name}” for {game} loaded — click Apply to write it"
-
-#: understeer/ui/presets.py:259
-msgid "{game} started: preset “{name}” applied"
-msgstr "{game} started: preset “{name}” applied"
-
-#: understeer/ui/presets.py:261
-msgid "{game} started: preset “{name}” is applied once the wheel base is connected"
-msgstr "{game} started: preset “{name}” is applied once the wheel base is connected"
-
-#: understeer/ui/presets.py:263
-msgid "{game} started: preset “{name}” loaded — click Apply to write it"
-msgstr "{game} started: preset “{name}” loaded — click Apply to write it"
-
-#: understeer/ui/presets.py:268
-msgid "Preset “{name}” applied"
-msgstr "Preset “{name}” applied"
-
-#: understeer/ui/presets.py:269
-msgid "Preset “{name}” loaded — click Apply to write it"
-msgstr "Preset “{name}” loaded — click Apply to write it"
-
-#: understeer/ui/presets.py:296
-msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
-msgstr "Settings that differ from the current ones: {n}. Their current value is shown below them."
-
-#: understeer/ui/presets.py:299
-msgid "The current settings match this preset."
-msgstr "The current settings match this preset."
-
-#: understeer/ui/presets.py:313
-msgid "Now: {value}"
-msgstr "Now: {value}"
-
-#: understeer/ui/presets.py:349
+#: understeer/ui/presets.py:25
 msgid "Preset “{name}” applied."
 msgstr "Preset “{name}” applied."
 
-#: understeer/ui/presets.py:350
+#: understeer/ui/presets.py:27
 msgid "Preset “{name}” loaded, but not written: open Understeer and click Apply."
 msgstr "Preset “{name}” loaded, but not written: open Understeer and click Apply."
 
-#: understeer/ui/presets.py:352
+#: understeer/ui/presets.py:30
 msgid "Preset “{name}” could not be written completely. Failed: {names}"
 msgstr "Preset “{name}” could not be written completely. Failed: {names}"
 
-#: understeer/ui/presets.py:354
-msgid "Preset “{name}” chosen. It is applied as soon as the wheel base is connected."
-msgstr "Preset “{name}” chosen. It is applied as soon as the wheel base is connected."
+#: understeer/ui/presets.py:45
+msgid "Add a preset shared as a file"
+msgstr "Add a preset shared as a file"
 
-#: understeer/ui/presets.py:357
+#: understeer/ui/presets.py:45
+msgid "Import File…"
+msgstr "Import File…"
+
+#: understeer/ui/presets.py:47
+msgid "Add a preset shared as text or JSON"
+msgstr "Add a preset shared as text or JSON"
+
+#: understeer/ui/presets.py:47
+msgid "Paste Text…"
+msgstr "Paste Text…"
+
+#: understeer/ui/presets.py:53
+msgid "Saved Presets"
+msgstr "Saved Presets"
+
+#: understeer/ui/presets.py:54
+msgid "Saves all current settings under a name in ~/.config/Understeer/."
+msgstr "Saves all current settings under a name in ~/.config/Understeer/."
+
+#: understeer/ui/presets.py:76
+msgid "Save as Preset…"
+msgstr "Save as Preset…"
+
+#: understeer/ui/presets.py:78
+msgid "Saved presets appear here and in the Presets menu at the top."
+msgstr "Saved presets appear here and in the Presets menu at the top."
+
+#: understeer/ui/presets.py:96
+msgid "Active preset"
+msgstr "Active preset"
+
+#: understeer/ui/presets.py:101
+msgid "Apply"
+msgstr "Apply"
+
+#: understeer/ui/presets.py:104
+msgid "Save Here"
+msgstr "Save Here"
+
+#: understeer/ui/presets.py:105
+msgid "Save current settings to this preset"
+msgstr "Save current settings to this preset"
+
+#: understeer/ui/presets.py:108
+msgid "Rename"
+msgstr "Rename"
+
+#: understeer/ui/presets.py:109
+msgid "Change the name of this preset"
+msgstr "Change the name of this preset"
+
+#: understeer/ui/presets.py:113
+msgid "Show Values"
+msgstr "Show Values"
+
+#: understeer/ui/presets.py:118
+msgid "Share"
+msgstr "Share"
+
+#: understeer/ui/presets.py:121
+msgid "Delete"
+msgstr "Delete"
+
+#: understeer/ui/presets.py:139
+msgid "Save as File…"
+msgstr "Save as File…"
+
+#: understeer/ui/presets.py:140
+msgid "Copy as Text"
+msgstr "Copy as Text"
+
+#: understeer/ui/presets.py:141
+msgid "Copy as JSON"
+msgstr "Copy as JSON"
+
+#: understeer/ui/presets.py:154
+msgid "Sim Racing Defaults"
+msgstr "Sim Racing Defaults"
+
+#: understeer/ui/presets.py:156
+msgid "Built in · 900°, 70 % force feedback, no spring or damper"
+msgstr "Built in · 900°, 70 % force feedback, no spring or damper"
+
+#: understeer/ui/presets.py:163
+msgid "Sim racing defaults applied"
+msgstr "Sim racing defaults applied"
+
+#: understeer/ui/presets.py:176
+msgid "Save to “{name}”"
+msgstr "Save to “{name}”"
+
+#: understeer/ui/presets.py:192
+msgid "Import Preset File…"
+msgstr "Import Preset File…"
+
+#: understeer/ui/presets.py:193
+msgid "Paste Preset Text…"
+msgstr "Paste Preset Text…"
+
+#: understeer/ui/presets.py:194
+msgid "Manage Presets"
+msgstr "Manage Presets"
+
+#: understeer/ui/presets.py:232
+msgid "Preset “{name}” has unsaved changes"
+msgstr "Preset “{name}” has unsaved changes"
+
+#: understeer/ui/presets.py:233
+msgid "Apply or save a preset"
+msgstr "Apply or save a preset"
+
+#: understeer/ui/presets.py:259
+msgid "Could not load preset"
+msgstr "Could not load preset"
+
+#: understeer/ui/presets.py:270
+msgid "Wheel base connected: preset “{name}” for {game} applied"
+msgstr "Wheel base connected: preset “{name}” for {game} applied"
+
+#: understeer/ui/presets.py:272
+msgid "Wheel base connected: preset “{name}” for {game} loaded — click Apply to write it"
+msgstr "Wheel base connected: preset “{name}” for {game} loaded — click Apply to write it"
+
+#: understeer/ui/presets.py:280
+msgid "{game} started: preset “{name}” applied"
+msgstr "{game} started: preset “{name}” applied"
+
+#: understeer/ui/presets.py:282
+msgid "{game} started: preset “{name}” is applied once the wheel base is connected"
+msgstr "{game} started: preset “{name}” is applied once the wheel base is connected"
+
+#: understeer/ui/presets.py:284
+msgid "{game} started: preset “{name}” loaded — click Apply to write it"
+msgstr "{game} started: preset “{name}” loaded — click Apply to write it"
+
+#: understeer/ui/presets.py:289
+msgid "Preset “{name}” applied"
+msgstr "Preset “{name}” applied"
+
+#: understeer/ui/presets.py:290
+msgid "Preset “{name}” loaded — click Apply to write it"
+msgstr "Preset “{name}” loaded — click Apply to write it"
+
+#: understeer/ui/presets.py:309
+msgid "No wheel base is connected, so preset “{name}” was not written."
+msgstr "No wheel base is connected, so preset “{name}” was not written."
+
+#: understeer/ui/presets.py:336
+msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
+msgstr "Settings that differ from the current ones: {n}. Their current value is shown below them."
+
+#: understeer/ui/presets.py:339
+msgid "The current settings match this preset."
+msgstr "The current settings match this preset."
+
+#: understeer/ui/presets.py:353
+msgid "Now: {value}"
+msgstr "Now: {value}"
+
+#: understeer/ui/presets.py:388
 msgid "Wheel base connected, {game} runs"
 msgstr "Wheel base connected, {game} runs"
 
-#: understeer/ui/presets.py:358
+#: understeer/ui/presets.py:389
 msgid "{game} started"
 msgstr "{game} started"
 
-#: understeer/ui/presets.py:392
+#: understeer/ui/presets.py:394
+msgid "Preset “{name}” chosen. It is applied as soon as the wheel base is connected."
+msgstr "Preset “{name}” chosen. It is applied as soon as the wheel base is connected."
+
+#: understeer/ui/presets.py:424
 msgid "e.g. BeamNG Drift"
 msgstr "e.g. BeamNG Drift"
 
-#: understeer/ui/presets.py:395
+#: understeer/ui/presets.py:427
 msgid "Save as Preset"
 msgstr "Save as Preset"
 
-#: understeer/ui/presets.py:396
+#: understeer/ui/presets.py:428
 msgid "Saves all current settings under this name."
 msgstr "Saves all current settings under this name."
 
-#: understeer/ui/presets.py:399
+#: understeer/ui/presets.py:431
 msgid "Save"
 msgstr "Save"
 
-#: understeer/ui/presets.py:412
+#: understeer/ui/presets.py:444
 msgid "Enter a name for the preset."
 msgstr "Enter a name for the preset."
 
-#: understeer/ui/presets.py:412
+#: understeer/ui/presets.py:444
 msgid "No Name"
 msgstr "No Name"
 
-#: understeer/ui/presets.py:419
+#: understeer/ui/presets.py:451
 msgid "Preset “{name}” saved"
 msgstr "Preset “{name}” saved"
 
-#: understeer/ui/presets.py:426
+#: understeer/ui/presets.py:458
 msgid "Could not save preset"
 msgstr "Could not save preset"
 
-#: understeer/ui/presets.py:441
+#: understeer/ui/presets.py:473
 msgid "Settings that change:"
 msgstr "Settings that change:"
 
-#: understeer/ui/presets.py:442
+#: understeer/ui/presets.py:474
 msgid "The preset already matches the current settings."
 msgstr "The preset already matches the current settings."
 
-#: understeer/ui/presets.py:444
+#: understeer/ui/presets.py:476
 msgid "Overwrite “{name}”?"
 msgstr "Overwrite “{name}”?"
 
-#: understeer/ui/presets.py:450
+#: understeer/ui/presets.py:482
 msgid "Overwrite"
 msgstr "Overwrite"
 
-#: understeer/ui/presets.py:469
+#: understeer/ui/presets.py:501
 msgid "These settings differ from the preset. The wheel base keeps them either way."
 msgstr "These settings differ from the preset. The wheel base keeps them either way."
 
-#: understeer/ui/presets.py:482
+#: understeer/ui/presets.py:514
 msgid "These settings differ from the preset. Then “{name}” is applied."
 msgstr "These settings differ from the preset. Then “{name}” is applied."
 
-#: understeer/ui/presets.py:496
+#: understeer/ui/presets.py:528
 msgid "Save Changes to “{name}”?"
 msgstr "Save Changes to “{name}”?"
 
-#: understeer/ui/presets.py:501
+#: understeer/ui/presets.py:533
 msgid "Don't Save"
 msgstr "Don't Save"
 
-#: understeer/ui/presets.py:545
+#: understeer/ui/presets.py:577
 msgid "Undo"
 msgstr "Undo"
 
-#: understeer/ui/presets.py:564
+#: understeer/ui/presets.py:596
 msgid "Preset “{name}” copied as JSON"
 msgstr "Preset “{name}” copied as JSON"
 
-#: understeer/ui/presets.py:567
+#: understeer/ui/presets.py:599
 msgid "Preset “{name}” copied as text"
 msgstr "Preset “{name}” copied as text"
 
-#: understeer/ui/presets.py:575
+#: understeer/ui/presets.py:607
 msgid "Presets (JSON or text)"
 msgstr "Presets (JSON or text)"
 
-#: understeer/ui/presets.py:588
+#: understeer/ui/presets.py:620
 msgid "Save Preset as File"
 msgstr "Save Preset as File"
 
-#: understeer/ui/presets.py:607
+#: understeer/ui/presets.py:639
 msgid "Preset “{name}” saved as file"
 msgstr "Preset “{name}” saved as file"
 
-#: understeer/ui/presets.py:616
+#: understeer/ui/presets.py:648
 msgid "Import Presets"
 msgstr "Import Presets"
 
-#: understeer/ui/presets.py:633
+#: understeer/ui/presets.py:665
 msgid "The file holds no text."
 msgstr "The file holds no text."
 
-#: understeer/ui/presets.py:662
+#: understeer/ui/presets.py:694
 msgid "Paste Presets"
 msgstr "Paste Presets"
 
-#: understeer/ui/presets.py:665
+#: understeer/ui/presets.py:697
 msgid "Add Preset"
 msgstr "Add Preset"
 
-#: understeer/ui/presets.py:673
+#: understeer/ui/presets.py:705
 msgid "Paste shared presets here, as text or JSON, also a whole forum thread. Understeer finds every preset in it and takes only their settings, nothing else."
 msgstr "Paste shared presets here, as text or JSON, also a whole forum thread. Understeer finds every preset in it and takes only their settings, nothing else."
 
-#: understeer/ui/presets.py:711
+#: understeer/ui/presets.py:743
 msgid "Add ({n})"
 msgstr "Add ({n})"
 
-#: understeer/ui/presets.py:790
+#: understeer/ui/presets.py:822
 msgid "Presets found: {n}"
 msgstr "Presets found: {n}"
 
-#: understeer/ui/presets.py:792
+#: understeer/ui/presets.py:824
 msgid "skipped without known settings: {n}"
 msgstr "skipped without known settings: {n}"
 
-#: understeer/ui/presets.py:795
+#: understeer/ui/presets.py:827
 msgid "only the first {max} are taken"
 msgstr "only the first {max} are taken"
 
-#: understeer/ui/presets.py:801
+#: understeer/ui/presets.py:833
 msgid "Settings: {n}"
 msgstr "Settings: {n}"
 
-#: understeer/ui/presets.py:803
+#: understeer/ui/presets.py:835
 msgid "Version {n}"
 msgstr "Version {n}"
 
-#: understeer/ui/presets.py:807
+#: understeer/ui/presets.py:839
 msgid "Add this preset"
 msgstr "Add this preset"
 
-#: understeer/ui/presets.py:820
+#: understeer/ui/presets.py:852
 msgid "No Preset Found"
 msgstr "No Preset Found"
 
-#: understeer/ui/presets.py:821
+#: understeer/ui/presets.py:853
 msgid "OK"
 msgstr "OK"
 
-#: understeer/ui/presets.py:860
+#: understeer/ui/presets.py:892
 msgid "Your preset already has the same settings. Replace it anyway, or keep both?"
 msgstr "Your preset already has the same settings. Replace it anyway, or keep both?"
 
-#: understeer/ui/presets.py:863
+#: understeer/ui/presets.py:895
 msgid "Replace your preset, or keep both? The shared preset has these settings:"
 msgstr "Replace your preset, or keep both? The shared preset has these settings:"
 
-#: understeer/ui/presets.py:866
+#: understeer/ui/presets.py:898
 msgid "Replace your preset, or keep both?"
 msgstr "Replace your preset, or keep both?"
 
-#: understeer/ui/presets.py:868
+#: understeer/ui/presets.py:900
 msgid "“{name}” Already Exists"
 msgstr "“{name}” Already Exists"
 
-#: understeer/ui/presets.py:874
+#: understeer/ui/presets.py:906
 msgid "Keep Both"
 msgstr "Keep Both"
 
-#: understeer/ui/presets.py:875
+#: understeer/ui/presets.py:907
 msgid "Replace"
 msgstr "Replace"
 
-#: understeer/ui/presets.py:911
+#: understeer/ui/presets.py:943
 msgid "Preset “{name}” imported"
 msgstr "Preset “{name}” imported"
 
-#: understeer/ui/presets.py:914
+#: understeer/ui/presets.py:946
 msgid "Presets imported: {n}"
 msgstr "Presets imported: {n}"
 
-#: understeer/ui/presets.py:919
+#: understeer/ui/presets.py:951
 msgid "Rename Preset"
 msgstr "Rename Preset"
 
-#: understeer/ui/presets.py:920
+#: understeer/ui/presets.py:952
 msgid "Games that use this preset keep it."
 msgstr "Games that use this preset keep it."
 
-#: understeer/ui/presets.py:945
+#: understeer/ui/presets.py:977
 msgid "Name Already Used"
 msgstr "Name Already Used"
 
-#: understeer/ui/presets.py:946
+#: understeer/ui/presets.py:978
 msgid "Another preset is already called “{name}”."
 msgstr "Another preset is already called “{name}”."
 
-#: understeer/ui/presets.py:950
+#: understeer/ui/presets.py:982
 msgid "Could not rename preset"
 msgstr "Could not rename preset"
 
-#: understeer/ui/presets.py:957
+#: understeer/ui/presets.py:989
 msgid "Preset renamed to “{name}”"
 msgstr "Preset renamed to “{name}”"
 
-#: understeer/ui/presets.py:961
+#: understeer/ui/presets.py:993
 msgid "Delete “{name}”?"
 msgstr "Delete “{name}”?"
 
-#: understeer/ui/presets.py:962
+#: understeer/ui/presets.py:994
 msgid "The preset file will be removed. This cannot be undone."
 msgstr "The preset file will be removed. This cannot be undone."
 
-#: understeer/ui/presets.py:973
+#: understeer/ui/presets.py:1005
 msgid "Could not delete preset"
 msgstr "Could not delete preset"
 

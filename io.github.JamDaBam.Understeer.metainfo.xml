@@ -37,6 +37,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="1.11.0" date="2026-11-11">
+            <description>
+                <ul>
+                    <li>The tray menu lists your presets, the active one checked; a click applies it without opening the window, and a notification tells how it went. With unsaved changes, the window opens and asks first</li>
+                    <li xml:lang="de">Das Tray-Menü zeigt deine Presets, das aktive mit Haken; ein Klick wendet es an, ohne das Fenster zu öffnen, und eine Benachrichtigung sagt, wie es lief. Bei ungespeicherten Änderungen öffnet sich das Fenster und fragt vorher</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.10.0" date="2026-11-11">
             <description>
                 <ul>

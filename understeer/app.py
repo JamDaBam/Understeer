@@ -30,7 +30,8 @@ class TunerApplication(Adw.Application):
         self.used_before = releases.was_used(config.CONFIG_DIR)
         self.start_hidden = False   # --background: no window, only the tray
         self.tray = Tray(APP_ICON, self._tray_texts, self._tray_open,
-                         self.quit_all)
+                         self.quit_all, presets=self._tray_presets,
+                         apply_preset=self._tray_apply_preset)
         self.add_main_option(
             "background", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
             "Start without a window, in the background (used at login)", None)
@@ -100,6 +101,22 @@ class TunerApplication(Adw.Application):
             windows[0].show_again(token)
         else:
             self.activate()
+
+    def _main_window(self):
+        windows = [w for w in self.get_windows() if hasattr(w, "apply_from_tray")]
+        return windows[0] if windows else None
+
+    def _tray_presets(self):
+        """[(name, key, active)] for the tray menu."""
+        win = self._main_window()
+        active = win.active_preset if win is not None else None
+        return [(name, str(path), active is not None and path == active)
+                for name, path in config.list_presets()]
+
+    def _tray_apply_preset(self, key):
+        win = self._main_window()
+        if win is not None:
+            win.apply_from_tray(pathlib.Path(key))
 
     def quit_all(self, restart=None):
         """Quit for real, also when running in the background; first
