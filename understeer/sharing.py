@@ -12,7 +12,7 @@ from collections import namedtuple
 from .config import clean_folder
 from .i18n import _
 from .names import one_line
-from .settings import SETTINGS, SETTINGS_BY_ID, format_value
+from .settings import SETTINGS, SETTINGS_BY_ID, fit_step, format_value
 
 FORMAT = 1                  # "understeer_preset" in shared presets
 MAX_NAME = 80               # longer names are cut
@@ -68,8 +68,9 @@ def _valid(attr_id, value):
 
 
 def clean_values(values):
-    """The known settings with valid values; the rest is left out."""
-    return {a: v for a, v in values.items() if _valid(a, v)}
+    """The known settings with valid values, as the wheelbase keeps them
+    (e.g. in steps of ten); the rest is left out."""
+    return {a: fit_step(_BY_ID[a], v) for a, v in values.items() if _valid(a, v)}
 
 
 # folder: the folder it was in when shared, or None
@@ -159,4 +160,3 @@ def find_presets(text, fallback_name=""):
         raise Error(_("No preset found. Copy the whole text of a shared "
                       "preset, or its JSON."))
     return Result(presets, skipped, cut)
-

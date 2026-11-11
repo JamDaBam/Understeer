@@ -72,6 +72,8 @@ def test_plain_preset_file_is_understood():
     ({"SEN": 45}, {}),
     ({"SEN": 2520}, {"SEN": 2520}),             # direct drive wheelbases
     ({"SEN": 2530}, {}),                        # that is how Auto reads
+    ({"SEN": 2356}, {"SEN": 2350}),             # as the wheelbase keeps it
+    ({"SHO": 35, "FF": 35}, {"SHO": 30, "FF": 35}),
     ({"FFS": 1}, {"FFS": 1}),                   # a choice
     ({"FFS": 7}, {}),
     ({"FF": "70"}, {}),
