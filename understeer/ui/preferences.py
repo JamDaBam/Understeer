@@ -4,7 +4,7 @@ import time
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import background, backup, config, i18n, updates
+from .. import background, backup, config, i18n, trash, updates
 from .. import log as session_log
 from ..i18n import _
 from .look_prefs import LookGroups
@@ -159,6 +159,7 @@ class PreferencesMixin:
             row.add_suffix(button)
             transfer.add(row)
         data.add(transfer)
+        data.add(self._trash_group())
 
         problems = Adw.PreferencesGroup(title=_("Reporting Problems"))
         report_row = Adw.ActionRow(
@@ -261,6 +262,99 @@ class PreferencesMixin:
         group.add(login)
         group.add(notify)
         return group
+
+    # -- the bin ----------------------------------------------------------------
+    def _trash_group(self):
+        """Deleted presets and removed games, to put back or delete for good."""
+        group = Adw.PreferencesGroup(
+            title=_("Trash"),
+            description=_("Deleted presets and removed games stay here for "
+                          "{days} days, then they are deleted for good.").format(
+                              days=trash.KEEP_DAYS))
+        empty = Gtk.Button(label=_("Empty Trash"), valign=Gtk.Align.CENTER)
+        empty.add_css_class("flat")
+        empty.connect("clicked", lambda b: self._ask_empty_trash())
+        group.set_header_suffix(empty)
+        self.trash_group, self._trash_empty, self._trash_rows = group, empty, []
+        self._refresh_trash()
+        return group
+
+    def _refresh_trash(self):
+        group = getattr(self, "trash_group", None)
+        if group is None:
+            return
+        for row in self._trash_rows:
+            group.remove(row)
+        self._trash_rows = []
+        items = trash.items()
+        self._trash_empty.set_sensitive(bool(items))
+        if not items:
+            row = Adw.ActionRow(title=_("The trash is empty"))
+            row.add_css_class("dim-label")
+            self._trash_rows.append(row)
+            group.add(row)
+            return
+        for item in items:
+            when = GLib.DateTime.new_from_unix_local(int(item["deleted"])).format("%x")
+            parts = [_("Preset") if item["kind"] == "preset" else _("Game")]
+            if item.get("folder"):
+                parts.append(_("Folder: {folder}").format(folder=item["folder"]))
+            parts.append(_("Deleted on {date}").format(date=when))
+            row = Adw.ActionRow(title=item["name"], subtitle=" · ".join(parts),
+                                use_markup=False)
+            row.add_prefix(Gtk.Image.new_from_icon_name(
+                "applications-games-symbolic" if item["kind"] == "game"
+                else "document-properties-symbolic"))
+            back = Gtk.Button(icon_name="edit-undo-symbolic", valign=Gtk.Align.CENTER,
+                              tooltip_text=_("Restore"))
+            back.add_css_class("flat")
+            back.connect("clicked", lambda b, i=item: self._restore_from_trash(i))
+            gone = Gtk.Button(icon_name="user-trash-symbolic", valign=Gtk.Align.CENTER,
+                              tooltip_text=_("Delete for Good"))
+            gone.add_css_class("flat")
+            gone.connect("clicked", lambda b, i=item: self._delete_from_trash(i))
+            row.add_suffix(back)
+            row.add_suffix(gone)
+            self._trash_rows.append(row)
+            group.add(row)
+
+    def _restore_from_trash(self, item):
+        if item["kind"] == "game":
+            if self.games_page.restore(item["id"]):
+                self._notify(_("“{name}” restored").format(name=item["name"]))
+            return
+        try:
+            path = trash.restore_preset(item["id"])
+        except (trash.Error, OSError) as e:
+            self._error(_("Could not restore presets"), str(e))
+            return
+        self._presets_changed()
+        self._refresh_trash()
+        name = self._preset_names.get(path, item["name"])
+        self._notify(_("“{name}” restored").format(name=name))
+
+    def _delete_from_trash(self, item):
+        trash.remove(item["id"])
+        log.info("%s %r deleted for good", item["kind"], item["name"])
+        self._refresh_trash()
+
+    def _ask_empty_trash(self):
+        dialog = Adw.AlertDialog(
+            heading=_("Empty Trash?"),
+            body=_("The presets and games in it are deleted for good."))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("empty", _("Empty Trash"))
+        dialog.set_close_response("cancel")
+        dialog.set_response_appearance("empty", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, response):
+            if response == "empty":
+                trash.empty()
+                log.info("Trash emptied")
+                self._refresh_trash()
+
+        dialog.connect("response", on_response)
+        dialog.present(self.prefs if self._prefs_open() else self)
 
     def _prefs_page(self, name, title, icon_name):
         """The preferences page name, emptied, or a new one."""

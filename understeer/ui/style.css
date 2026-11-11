@@ -22,7 +22,8 @@
 }
 
 /* The minimum width decides how many tiles fit next to each other. */
-flowbox > flowboxchild > .tile {
+flowbox > flowboxchild > .tile,
+flowbox > flowboxchild > overlay > .tile {
   min-width: 250px;
 }
 
@@ -172,7 +173,8 @@ button.advanced-toggle {
   border-radius: 11px;
 }
 
-.compact flowbox > flowboxchild > .tile {
+.compact flowbox > flowboxchild > .tile,
+.compact flowbox > flowboxchild > overlay > .tile {
   min-width: 190px;
 }
 
@@ -223,11 +225,13 @@ button.advanced-toggle {
 }
 
 /* Games */
-.games flowbox > flowboxchild > .tile {
+.games flowbox > flowboxchild > .tile,
+.games flowbox > flowboxchild > overlay > .tile {
   min-width: 170px;
 }
 
-.compact .games flowbox > flowboxchild > .tile {
+.compact .games flowbox > flowboxchild > .tile,
+.compact .games flowbox > flowboxchild > overlay > .tile {
   min-width: 140px;
 }
 
@@ -337,4 +341,23 @@ button.theme-choice:checked {
 /* Name suggestions in a dialog: the list scrolls, with its round corners */
 scrolledwindow.suggestions {
   border-radius: 12px;
+}
+
+/* Choosing tiles: the whole tile is the click target, chosen ones are
+   framed in the accent colour */
+button.select-catcher {
+  background: none;
+  box-shadow: none;
+  border-radius: 12px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+button.select-catcher:hover {
+  background-color: alpha(@accent_bg_color, 0.06);
+}
+
+.tile.selected {
+  box-shadow: inset 0 0 0 2px @accent_bg_color;
 }

@@ -5,10 +5,11 @@ import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from .. import config, games, steamgriddb
+from .. import config, games, steamgriddb, trash
 from ..i18n import _
 from . import cover_search
 from .live import CoverView
+from .selection import Selection
 
 log = logging.getLogger("understeer.games")
 
@@ -44,8 +45,16 @@ class GamesPage:
         column.add_css_class("games")
         for side in ("top", "bottom", "start", "end"):
             getattr(column, f"set_margin_{side}")(12)
-        title = Gtk.Label(label=_("Games"), xalign=0)
-        title.add_css_class("section-title")
+        self.selection = Selection(
+            _("Remove"), lambda: self.refresh(),
+            lambda ids: self._remove_games(
+                [g for g in self.games if g["game"] in set(ids)]))
+        label = Gtk.Label(label=_("Games"), xalign=0, hexpand=True)
+        label.add_css_class("section-title")
+        title = Gtk.Box(spacing=12)
+        title.append(label)
+        self.selection.button.set_valign(Gtk.Align.END)
+        title.append(self.selection.button)
         desc = Gtk.Label(
             label=_("Give each game a preset. While Understeer is open, it "
                     "applies the preset as soon as the game starts."),
@@ -90,9 +99,10 @@ class GamesPage:
             column.append(w)
         clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
         clamp.set_child(column)
-        self.widget = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
-                                         vexpand=True)
-        self.widget.set_child(clamp)
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                    vexpand=True)
+        scroll.set_child(clamp)
+        self.widget = self.selection.page(scroll)
         self.refresh()
 
     # -- state ---------------------------------------------------------------
@@ -125,14 +135,18 @@ class GamesPage:
     # -- tiles ---------------------------------------------------------------
     def refresh(self):
         self.flow.remove_all()
-        self.flow.append(self._add_tile())
+        self.selection.available([g["game"] for g in self.games])
+        add = self._add_tile()
+        add.set_sensitive(not self.selection.active)
+        self.flow.append(add)
         # In the order of the menus, a preset in a folder as "Folder – Name"
         presets = [(_("{folder} – {name}").format(folder=folder, name=name)
                     if folder else name, path)
                    for folder, group in config.list_presets_by_folder()
                    for name, path in group]
         for game in self.games:
-            self.flow.append(self._game_tile(game, presets))
+            self.flow.append(self.selection.wrap(
+                self._game_tile(game, presets), game["game"]))
 
     def _add_tile(self):
         button = Gtk.Button()
@@ -210,7 +224,7 @@ class GamesPage:
         add("remove-cover", lambda: self._remove_cover(game))
         add("find-cover", lambda: self.search_covers([game]))
         add("steamgriddb", lambda: cover_search.CoverSearch(self, game))
-        add("remove", lambda: self._remove(game))
+        add("remove", lambda: self._remove_games([game]))
 
         menu = Gio.Menu()
         pictures = Gio.Menu()
@@ -245,7 +259,8 @@ class GamesPage:
 
         overlay = Gtk.Overlay()
         overlay.set_child(self._cover(game))
-        overlay.add_overlay(self._game_menu(game))
+        if not self.selection.active:           # a check mark is there then
+            overlay.add_overlay(self._game_menu(game))
         if running:
             badge = Gtk.Label(label=_("Running"), halign=Gtk.Align.START,
                               valign=Gtk.Align.START)
@@ -253,11 +268,22 @@ class GamesPage:
             overlay.add_overlay(badge)
         tile.append(overlay)
 
-        name = Gtk.Label(label=game["name"], xalign=0, wrap=True, lines=2)
+        name = Gtk.Label(label=game["name"], xalign=0, wrap=True, lines=2,
+                         hexpand=True)
         name.set_ellipsize(Pango.EllipsizeMode.END)
         name.set_max_width_chars(8)
         name.add_css_class("heading")
-        tile.append(name)
+        # A pencil next to the name, as at presets and folders
+        rename = Gtk.Button(icon_name="document-edit-symbolic",
+                            valign=Gtk.Align.CENTER,
+                            tooltip_text=_("Change the name shown for this game"))
+        rename.add_css_class("flat")
+        rename.connect("clicked", lambda b: self._ask_rename(game))
+        head = Gtk.Box(spacing=4)
+        head.append(name)
+        if not self.selection.active:
+            head.append(rename)
+        tile.append(head)
 
         files = [path.name for _n, path in presets]
         choose = Gtk.DropDown.new_from_strings(
@@ -285,12 +311,67 @@ class GamesPage:
         game["auto"] = auto
         self._save()
 
-    def _remove(self, game):
-        log.info("Removed game %s (%s)", game["name"], game["game"])
-        config.remove_game_cover(game)
-        self.games = [g for g in self.games if g is not game]
+    def _remove_games(self, removed):
+        """Put games in the bin, with their preset and picture; the message
+        offers Undo, and they stay in the bin under Preferences → Data."""
+        items = []
+        for game in removed:
+            try:
+                items.append(trash.put_game(game))
+            except OSError as e:
+                self.window._error(_("Could not remove game"), str(e))
+                break
+            log.info("Removed game %s (%s)", game["name"], game["game"])
+        gone = set(id(g) for g in removed[:len(items)])
+        if not items:
+            return
+        self.games = [g for g in self.games if id(g) not in gone]
         self._save()
         GLib.idle_add(lambda: self.refresh() and False)
+        self.window._trash_changed()
+        text = (_("“{name}” removed").format(name=removed[0]["name"])
+                if len(items) == 1 else
+                _("Games removed: {n}").format(n=len(items)))
+
+        def undo():
+            for item in items:
+                self.restore(item)
+
+        self.window._notify(text, _("Undo"), undo)
+
+    def restore(self, item):
+        """Put a game back from the bin; returns whether it worked."""
+        try:
+            game = trash.restore_game(item, self.games)
+        except (trash.Error, OSError) as e:
+            self.window._error(_("Could not restore game"), str(e))
+            return False
+        self.games.append(game)
+        self.games.sort(key=lambda g: g["name"].lower())
+        self._save()
+        self.refresh()
+        self.window._trash_changed()
+        return True
+
+    def _ask_rename(self, game):
+        entry = Adw.EntryRow(title=_("Name"), text=game["name"],
+                             activates_default=True)
+        self.window._name_dialog(
+            _("Rename Game"), _("Only the name shown in Understeer changes; "
+                                "the game is found as before."),
+            [entry], _("Rename"), lambda: self._rename(game, entry.get_text()),
+            entry, _("Enter a name for the game."))
+        entry.select_region(0, -1)
+
+    def _rename(self, game, name):
+        name = " ".join(name.split())
+        if not name or name == game["name"]:
+            return
+        log.info("Game %s renamed to %r", game["game"], name)
+        game["name"] = name
+        self.games.sort(key=lambda g: g["name"].lower())
+        self._save()
+        self.refresh()
 
     def _add(self, game_id, name, steamgriddb_id=None):
         if any(g["game"] == game_id for g in self.games):
