@@ -37,6 +37,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="1.9.4" date="2026-11-11">
+            <description>
+                <ul>
+                    <li>The changes are now only in What's New in the main menu, with all versions; About links to all versions on GitHub instead</li>
+                    <li xml:lang="de">Die Änderungen stehen jetzt nur noch in den Neuigkeiten im Hauptmenü, mit allen Versionen; Über Understeer verlinkt stattdessen alle Versionen auf GitHub</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.9.3" date="2026-11-11">
             <description>
                 <ul>

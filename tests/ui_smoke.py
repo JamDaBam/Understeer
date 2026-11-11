@@ -682,8 +682,8 @@ def steps(win):
     yield "about", lambda: (
         check(isinstance(win.get_visible_dialog(), Adw.AboutDialog), "About shown"),
         check(same_size(win.get_visible_dialog()), "About as big as the others"),
-        check(win.get_visible_dialog().get_release_notes_version() == newest,
-              "About has the notes of this version"),
+        check(not win.get_visible_dialog().get_release_notes(),
+              "no notes in About, What's New has them"),
         win.get_visible_dialog().close())
 
     # -- wheel base and steering wheel ---------------------------------------
