@@ -684,7 +684,18 @@ def steps(win):
         check(same_size(win.get_visible_dialog()), "About as big as the others"),
         check(not win.get_visible_dialog().get_release_notes(),
               "no notes in About, What's New has them"),
+        check(win.get_visible_dialog().emit(
+            "activate-link", win.get_visible_dialog().get_issue_url()) is True,
+            "Report an Issue handled by Understeer"))
+    yield "report from About", lambda: (
+        check(win.get_visible_dialog() is not None and
+              win.get_visible_dialog().get_title() == "Report a Problem",
+              "report window instead of GitHub"),
         win.get_visible_dialog().close())
+    yield "back in About", lambda: (
+        check(isinstance(win.get_visible_dialog(), Adw.AboutDialog),
+              "closing the report window goes back to About"),
+        close_dialogs(win))
 
     # -- wheel base and steering wheel ---------------------------------------
     yield "hardware shown", lambda: (

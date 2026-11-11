@@ -510,15 +510,26 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             application_icon="io.github.JamDaBam.Understeer",
             version=session_log.version(),
             developer_name="JamDaBam",
-            website="https://github.com/JamDaBam/Understeer",
-            issue_url="https://github.com/JamDaBam/Understeer/issues",
+            website=report.REPO_URL,
+            issue_url=report.REPO_URL + "/issues",
             license_type=Gtk.License.GPL_3_0,
             debug_info=report.system_info(self.report_details()),
             debug_info_filename="understeer-debug.txt")
         # No release notes here: What's New in the main menu has them all.
         about = self.fit_dialog(Adw.AboutDialog(**props))
         about.add_link(_("All Versions on GitHub"),
-                       "https://github.com/JamDaBam/Understeer/releases")
+                       report.REPO_URL + "/releases")
+
+        def on_link(_dialog, uri):
+            # "Report an Issue" opens our report window, which fills in the
+            # details, instead of GitHub; on top, so closing it goes back
+            # to About
+            if uri != props["issue_url"]:
+                return False
+            ReportDialog(self)
+            return True
+
+        about.connect("activate-link", on_link)
         about.add_acknowledgement_section(_("Started as a fork of"), [
             "SimPower (FanatecLinux) by BenryBoi "
             "https://github.com/BenryBoi/FanatecLinux"])
