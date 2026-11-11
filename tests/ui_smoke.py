@@ -285,6 +285,28 @@ def steps(win):
         win._presets_changed()
     yield "apply preset", apply_preset
 
+    def preset_values():
+        win._apply_values({"SHO": 55})
+        win._show_preset(gt3)
+        d = win.get_visible_dialog()
+        rows = {r.get_title(): (r_suffix(r), r.get_subtitle())
+                for r in walk(d) if isinstance(r, Adw.ActionRow)}
+        check(rows.get("Wheel Vibration") == ("40 %", "Now: 55 %"),
+              f"preset value and the current one: {rows.get('Wheel Vibration')}")
+        check(rows.get("Force Feedback Strength", ("", "x"))[1] in ("", None),
+              "equal values not marked")
+        titles = [g.get_title() for g in walk(d) if isinstance(g, Adw.PreferencesGroup)]
+        check("Pedals &amp; Paddles" in titles or "Wheel Feel" in titles,
+              f"groups by tab: {titles}")
+        check((dev / "SHO").read_text().strip() == "55", "nothing applied by looking")
+        apply_btn = next(w for w in walk(d) if isinstance(w, Gtk.Button)
+                         and w.get_label() == "Apply")
+        apply_btn.emit("clicked")
+        d.force_close()
+        answer("discard")                       # unsaved changes of Test GT3
+        check((dev / "SHO").read_text().strip() == "40", "applied from the values")
+    yield "preset values", preset_values
+
     clip = []
     copy = config.preset_path("Test GT3 (2)")
 
