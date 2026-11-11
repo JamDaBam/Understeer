@@ -52,7 +52,7 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, background, backup, config, inputs, releases, sharing, updates, log as session_log  # noqa: E402
+from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
@@ -555,10 +555,17 @@ def steps(win):
             games_before = win.games_page.games
             win.games_page.games = [dict(game="g", name="BeamNG.drive", auto=True,
                                          preset="Gone F.json")]
-            win._confirm_delete_preset(config.preset_path("Gone F"), "Gone F")
-            d = win.get_visible_dialog()
-            check("Used by: BeamNG.drive" in d.get_body(), f"game named: {d.get_body()}")
-            d.force_close()
+            # One preset from its menu: at once into the trash, with Undo
+            gone = config.preset_path("Gone F")
+            win.activate_action("win.delete-preset", GLib.Variant.new_string(str(gone)))
+            check(not gone.exists(), f"deleted at once (dialog: {win.get_visible_dialog()})")
+            check("Used by: BeamNG.drive" in win._toast.get_title(),
+                  f"game named: {win._toast.get_title()}")
+            check([i["name"] for i in trash.items()] == ["Gone F"], "in the trash")
+            win._on_toast_button(win._toast)       # Undo
+            check(config.preset_folder(gone) == "Trash" and not trash.items(),
+                  "undone: back in its folder, out of the trash")
+            win._set_active_preset(gone, {"FF": 30})
             win._ask_delete_folder("Trash", 1)
             d = win.get_visible_dialog()
             check("Used by: BeamNG.drive" in d.get_body(), "game named for the folder")
@@ -604,6 +611,82 @@ def steps(win):
             win._set_active_preset(gt3, config.read_preset(gt3)[1])
     yield "folders", folders
 
+    def choose_and_trash():
+        a, b = config.preset_path("Pick A"), config.preset_path("Pick B")
+        config.write_preset(a, "Pick A", {"FF": 10})
+        config.write_preset(b, "Pick B", {"FF": 20}, "Picks")
+        sel = win.preset_selection
+        try:
+            win._presets_changed()
+            sel.start()
+            catchers = [w for w in walk(win.presets_box) if isinstance(w, Gtk.Button)
+                        and "select-catcher" in w.get_css_classes()]
+            check(sel.bar.get_revealed() and len(catchers) == len(sel._available),
+                  f"choosing: {len(catchers)} tiles to pick")
+            check(sel.button.get_label() == "Done", "Select turned into Done")
+            sel.toggle(str(a))
+            sel.toggle(str(b))
+            check(sel.count.get_label() == "Selected: 2", sel.count.get_label())
+            sel.delete_button.emit("clicked")
+            check(not a.exists() and not b.exists() and not sel.active,
+                  "chosen ones deleted, choosing ended")
+            check(win._toast.get_title() == "Presets deleted: 2", win._toast.get_title())
+            win._on_toast_button(win._toast)
+            check(a.exists() and config.preset_folder(b) == "Picks", "both back")
+            sel.start()
+            sel.all_button.emit("clicked")
+            check(sel.keys == set(sel._available)
+                  and sel.all_button.get_label() == "Select None", "all chosen")
+            win._select_page("games")
+            check(not sel.active, "choosing ends on another page")
+            # Games: rename, choose, remove, back from the trash
+            page = win.games_page
+            before = list(page.games)
+            page._add("dummy:1", "Dummy One")
+            page._add("dummy:2", "Dummy Two")
+            dummy = [g for g in page.games if g["game"] == "dummy:1"][0]
+            page._rename(dummy, "  Dummy   First ")
+            check(dummy["name"] == "Dummy First", f"renamed: {dummy['name']!r}")
+            page.selection.start()
+            page.selection.toggle("dummy:1")
+            page.selection.toggle("dummy:2")
+            page.selection.delete_button.emit("clicked")
+            check(not any(g["game"].startswith("dummy:") for g in page.games)
+                  and len(config.load_games()) == len(before), "games removed")
+            check(win._toast.get_title() == "Games deleted: 2", win._toast.get_title())
+            # The trash of the Games page: only games, put one back from there
+            sel.start()
+            sel.toggle(str(a))
+            sel.delete_button.emit("clicked")
+            shown = win._show_trash("game")
+
+            def titles():
+                return [r.get_title() for r in walk(shown.rows)
+                        if isinstance(r, Adw.ActionRow)]
+            check({"Dummy First", "Dummy Two"} == set(titles()),
+                  f"games in their trash: {titles()}")
+            item = [i for i in trash.items() if i["name"] == "Dummy Two"][0]
+            win._restore_from_trash(item)
+            check(any(g["game"] == "dummy:2" for g in page.games)
+                  and titles() == ["Dummy First"], "restored from the trash")
+            win._ask_empty_trash("game").emit("response", "empty")
+            check(titles() == ["The trash is empty"]
+                  and [i["name"] for i in trash.items()] == ["Pick A"],
+                  "games emptied, the preset still there")
+            shown.force_close()
+            page.games = [g for g in page.games if not g["game"].startswith("dummy:")]
+            page._save()
+            page.refresh()
+        finally:
+            sel.stop()
+            a.unlink(missing_ok=True)
+            b.unlink(missing_ok=True)
+            config.delete_folder("Picks")
+            trash.empty()
+            win._select_page("presets")
+            win._presets_changed()
+    yield "choose and trash", choose_and_trash
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")
@@ -631,7 +714,6 @@ def steps(win):
         win._ask_preset_name()
         win._confirm_overwrite(config.preset_path("Renamed"))
         win._ask_rename_preset(config.preset_path("Renamed"), "Renamed")
-        win._confirm_delete_preset(config.preset_path("Renamed"), "Renamed")
         win._confirm_reset()
         win._error("Could not save", "Disk full")
     yield "open dialogs", dialogs

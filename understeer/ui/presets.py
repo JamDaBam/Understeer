@@ -6,9 +6,10 @@ import pathlib
 
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
-from .. import config, sharing
+from .. import config, sharing, trash
 from ..i18n import _
 from ..settings import SETTINGS, SIM_DEFAULTS, TABS, changes, format_value
+from .selection import Selection
 
 log = logging.getLogger("understeer.window")
 
@@ -50,6 +51,11 @@ class PresetsMixin:
                                 tooltip_text=tip)
             button.add_css_class("flat")
             bring.append(button)
+        self.preset_selection = Selection(
+            _("Delete"), lambda: self._rebuild_presets_list(),
+            lambda keys: self._delete_presets([pathlib.Path(k) for k in keys]))
+        bring.append(self._trash_button("preset"))
+        bring.append(self.preset_selection.button)
         self._section(column, _("Saved Presets"),
                       _("Saves all current settings under a name in "
                         "~/.config/Understeer/."), bring)
@@ -58,7 +64,7 @@ class PresetsMixin:
                                    spacing=12)
         column.append(self.presets_box)
         self._rebuild_presets_list()
-        return page
+        return self.preset_selection.page(page)
 
     def _rebuild_presets_list(self):
         while (child := self.presets_box.get_first_child()) is not None:
@@ -66,6 +72,8 @@ class PresetsMixin:
         groups = config.list_presets_by_folder(empty=True)
         presets = [p for _f, group in groups for p in group]
         loose = groups[0][1] if groups and groups[0][0] is None else []
+        choosing = self.preset_selection.active
+        self.preset_selection.available([str(p) for _n, p in presets])
         # Making new things and the built-in preset, no drop target as a whole
         actions = self._tile_grid()
         self.presets_box.append(actions)
@@ -81,6 +89,7 @@ class PresetsMixin:
         self._drop_target(folder_tile, self._ask_new_folder)
         actions.append(folder_tile)
         actions.append(self._sim_defaults_tile())
+        actions.set_sensitive(not choosing)     # nothing to choose there
         # The presets without a folder; dropping one here takes it out
         self.presets_flow = self._tile_grid()
         if loose or len(groups) > (1 if loose else 0):
@@ -122,7 +131,8 @@ class PresetsMixin:
         flow = self.presets_flow if folder is None else self._tile_grid()
         if group:
             for name, path in group:
-                flow.append(self._preset_tile(name, path))
+                flow.append(self.preset_selection.wrap(
+                    self._preset_tile(name, path), str(path)))
             section.append(flow)
         else:
             empty = Gtk.Label(label=_("Drag presets here"), wrap=True)
@@ -172,6 +182,8 @@ class PresetsMixin:
         grab = {}
 
         def prepare(src, x, y):
+            if self.preset_selection.active:
+                return None                 # a click chooses then
             grab["at"] = (x, y)
             return Gdk.ContentProvider.new_for_value(str(path))
 
@@ -211,7 +223,8 @@ class PresetsMixin:
         self._set_preset_folder(path, name, folder)
 
     def _preset_tile(self, name, path):
-        """A tile of a saved preset with its buttons."""
+        """A tile of a saved preset: its name with a pencil and a menu for
+        the rarer things, then Apply and Save Here."""
         active = self.active_preset is not None and path == self.active_preset
         tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         tile.add_css_class("card")
@@ -221,7 +234,7 @@ class PresetsMixin:
             tile.add_css_class("active")
         title = Gtk.Label(label=name, xalign=0, wrap=True)
         title.add_css_class("preset-name")
-        # Right after the name, like at a folder
+        # Right after the name, like at a folder and a game
         rename_btn = Gtk.Button(icon_name="document-edit-symbolic",
                                 valign=Gtk.Align.CENTER,
                                 tooltip_text=_("Change the name of this preset"))
@@ -230,12 +243,16 @@ class PresetsMixin:
                            self._ask_rename_preset(p, n))
         head = Gtk.Box(spacing=6)
         head.append(title)
-        head.append(rename_btn)
+        if not self.preset_selection.active:     # a check mark is there then
+            head.append(rename_btn)
+            head.append(Gtk.Box(hexpand=True))
+            head.append(self._preset_menu(path))
+        else:
+            head.set_margin_end(36)
         sub = Gtk.Label(label=_("Active preset") if active else path.name,
                         xalign=0, vexpand=True, valign=Gtk.Align.START)
         sub.set_ellipsize(3)                # Pango.EllipsizeMode.END
         sub.add_css_class("dim-label")
-        buttons = Gtk.Box(spacing=6)
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
         apply_btn.connect("clicked", lambda b, p=path: self._ask_apply_preset(p))
@@ -243,29 +260,30 @@ class PresetsMixin:
         save_btn.set_tooltip_text(_("Save current settings to this preset"))
         save_btn.connect("clicked", lambda b, p=path:
                          self._confirm_overwrite(p))
-        info_btn = Gtk.Button(icon_name="help-about-symbolic",
-                              tooltip_text=_("Show Values"))
-        info_btn.add_css_class("flat")
-        info_btn.connect("clicked", lambda b, p=path: self._show_preset(p))
-        share_btn = Gtk.MenuButton(icon_name="understeer-share-symbolic",
-                                   menu_model=self._share_menu(path),
-                                   tooltip_text=_("Share"))
-        share_btn.add_css_class("flat")
-        del_btn = Gtk.Button(icon_name="user-trash-symbolic")
-        del_btn.set_tooltip_text(_("Delete"))
-        del_btn.add_css_class("flat")
-        del_btn.connect("clicked", lambda b, p=path, n=name:
-                        self._confirm_delete_preset(p, n))
-        # Apply on its own row: with the text buttons in one row, the
-        # tiles would get too wide for two of them side by side.
-        for w in (save_btn, info_btn, share_btn, del_btn):
-            buttons.append(w)
-        save_btn.set_hexpand(True)
-        for w in (head, sub, apply_btn, buttons):
+        for w in (head, sub, apply_btn, save_btn):
             tile.append(w)
         tile.set_tooltip_text(_("Drag onto a folder to put it there"))
         self._drag_source(tile, path)
         return tile
+
+    def _preset_menu(self, path):
+        """The ⋮ button of a preset tile, like the one of a game."""
+        target = GLib.Variant.new_string(str(path))
+        menu = Gio.Menu()
+        values = Gio.MenuItem.new(_("Show Values"), None)
+        values.set_action_and_target_value("win.show-preset", target)
+        menu.append_item(values)
+        menu.append_submenu(_("Share"), self._share_menu(path))
+        delete = Gio.Menu()
+        item = Gio.MenuItem.new(_("Delete"), None)
+        item.set_action_and_target_value("win.delete-preset", target)
+        delete.append_item(item)
+        menu.append_section(None, delete)
+        button = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=menu,
+                                valign=Gtk.Align.START,
+                                tooltip_text=_("Values, Share and More"))
+        button.add_css_class("flat")
+        return button
 
     @staticmethod
     def _share_menu(path):
@@ -759,7 +777,7 @@ class PresetsMixin:
         files = {p.name for name, p in dict(config.list_presets_by_folder(
             empty=True)).get(folder, [])}
         body = _("Presets in it: {n}. Keep them, shown without a folder, or "
-                 "delete them too? Deleting can be undone right after.").format(n=count)
+                 "delete them too? Deleted presets go to the trash.").format(n=count)
         body += self._games_note(files)
         dialog = Adw.AlertDialog(
             heading=_("Delete Folder “{folder}”?").format(folder=folder),
@@ -781,26 +799,18 @@ class PresetsMixin:
         dialog.present(self)
 
     def _delete_folder_with_presets(self, folder):
-        deleted, error = config.delete_folder_with_presets(folder)
-        log.info("Folder %r deleted with %d presets%s", folder, len(deleted),
-                 f", stopped: {error}" if error else "")
-        paths = {path for path, _content in deleted}
-        if self.active_preset in paths:
-            self.active_preset, self.active_values = None, {}
+        """Its presets go to the bin; Undo there brings back the folder too."""
+        paths = [p for _n, p in dict(config.list_presets_by_folder(
+            empty=True)).get(folder, [])]
+        log.info("Folder %r deleted with %d presets", folder, len(paths))
+        self._delete_presets(paths, _(
+            "Folder “{folder}” deleted. Presets deleted: {n}").format(
+                folder=folder, n=len(paths)))
+        try:
+            config.delete_folder(folder)
+        except OSError as e:
+            self._error(_("Could not delete folder"), str(e))
         self._presets_changed()
-        if error is not None:
-            self._error(_("Could not delete folder"), str(error))
-
-        def undo():
-            try:
-                config.restore_presets(deleted, folder)
-            except OSError as e:
-                self._error(_("Could not restore presets"), str(e))
-            log.info("Folder %r with %d presets restored", folder, len(deleted))
-            self._presets_changed()
-
-        self._notify(_("Folder “{folder}” deleted. Presets deleted: {n}").format(
-            folder=folder, n=len(deleted)), _("Undo"), undo)
 
     def _delete_folder(self, folder):
         try:
@@ -1399,25 +1409,43 @@ class PresetsMixin:
         return "\n\n" + _("Used by: {games}. Without their preset, these games "
                            "get none applied.").format(games=", ".join(games))
 
-    def _confirm_delete_preset(self, path, name):
-        dialog = Adw.AlertDialog(
-            heading=_("Delete “{name}”?").format(name=name),
-            body=_("The preset file will be removed. This cannot be undone.")
-            + self._games_note({pathlib.Path(path).name}))
-        dialog.add_response("cancel", _("Cancel"))
-        dialog.add_response("delete", _("Delete"))
-        dialog.set_response_appearance("delete",
-                                       Adw.ResponseAppearance.DESTRUCTIVE)
+    def _delete_presets(self, paths, text=None):
+        """Put presets in the bin; the message offers Undo, and they stay
+        in the bin (the Trash button) for trash.KEEP_DAYS days."""
+        items, names, files = [], [], set()
+        for path in paths:
+            try:
+                name, _values = self._read_preset(path)
+            except (OSError, json.JSONDecodeError):
+                name = pathlib.Path(path).stem
+            try:
+                items.append(trash.put_preset(path))
+            except OSError as e:
+                self._error(_("Could not delete preset"), str(e))
+                break
+            names.append(name)
+            files.add(pathlib.Path(path).name)
+            if self.active_preset == pathlib.Path(path):
+                self.active_preset, self.active_values = None, {}
+        if not items:
+            return
+        self._presets_changed()
+        self._trash_changed()
+        games = [g["name"] for g in getattr(self.games_page, "games", [])
+                 if g.get("preset") in files]
+        text = text or (_("“{name}” deleted").format(name=names[0])
+                        if len(names) == 1 else
+                        _("Presets deleted: {n}").format(n=len(names)))
+        if games:
+            text += " · " + _("Used by: {games}").format(games=", ".join(games))
 
-        def on_response(d, response):
-            if response == "delete":
+        def undo():
+            for item in items:
                 try:
-                    pathlib.Path(path).unlink(missing_ok=True)
-                except OSError as e:
-                    self._error(_("Could not delete preset"), str(e))
-                if self.active_preset == pathlib.Path(path):
-                    self.active_preset, self.active_values = None, {}
-                self._presets_changed()
+                    trash.restore_preset(item)
+                except (trash.Error, OSError) as e:
+                    self._error(_("Could not restore presets"), str(e))
+            self._presets_changed()
+            self._trash_changed()
 
-        dialog.connect("response", on_response)
-        dialog.present(self)
+        self._notify(text, _("Undo"), undo)

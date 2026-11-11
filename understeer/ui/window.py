@@ -25,6 +25,7 @@ from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
+from .trash_dialog import TrashMixin
 
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheel base
@@ -35,13 +36,13 @@ DIALOG_MIN_WIDTH = 720  # big dialogs: About, What's New, Preferences, ...
 DIALOG_MIN_HEIGHT = 680
 DIALOG_MAX_WIDTH = 1000
 TOAST_MS = 3000         # how long a message stays
-TOAST_BUTTON_MS = 5000  # ... with a button such as Undo, to have time to click
+TOAST_BUTTON_MS = 10000  # ... with a button such as Undo, to have time to click
 
 log = logging.getLogger("understeer.window")
 
 
-class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMixin,
-                  Adw.ApplicationWindow):
+class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
+                  UpdateCheckMixin, Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")
@@ -323,6 +324,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMix
         # Choose view and tab before the content is shown, so a rebuild
         # doesn't show the first ones for a moment.
         self.views.set_visible_child_name(view or VIEWS[0][0])
+        # Choosing tiles ends on another page
+        self.views.connect("notify::visible-child-name",
+                           lambda *a: self._stop_choosing())
         if tab:
             self.tabs.set_visible_child_name(tab)
         self._set_narrow(self._narrow)
@@ -650,6 +654,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMix
         add("apply-preset", lambda a, p: self._ask_apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
         for name, cb in (
+                ("show-preset", self._show_preset),
+                ("delete-preset", lambda p: self._delete_presets([p])),
                 ("export-preset", self._export_preset),
                 ("copy-preset-text", lambda p: self._copy_preset(p, False)),
                 ("copy-preset-json", lambda p: self._copy_preset(p, True))):
@@ -682,6 +688,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMix
         # Wait until the language menu has finished its signal: it is
         # replaced as well.
         GLib.idle_add(lambda: self.relocalize() and False)
+
+    def _stop_choosing(self):
+        for selection in (getattr(self, "preset_selection", None),
+                          getattr(getattr(self, "games_page", None), "selection", None)):
+            if selection is not None:
+                selection.stop()
 
     def _select_page(self, key):
         """Show a view: "tuning", "presets" or "games"."""

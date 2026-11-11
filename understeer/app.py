@@ -2,7 +2,7 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, background, config, games, i18n, log, releases, updates
+from . import DATA_DIR, background, config, games, i18n, log, releases, trash, updates
 from .ui.window import TunerWindow  # also selects the GTK version
 from .i18n import _
 from .ui import theme
@@ -62,6 +62,7 @@ class TunerApplication(Adw.Application):
         self.add_action(quit_action)
         self.set_accels_for_action("app.quit", ["<Control>q"])
         background.refresh_autostart()      # e.g. the AppImage moved
+        trash.expire()                      # older than trash.KEEP_DAYS
         self.update_tray()
 
     def do_activate(self):

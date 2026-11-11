@@ -40,8 +40,14 @@
         <release version="1.12.0" date="2026-11-11">
             <description>
                 <ul>
-                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name, keeping its presets or with them (which can be undone right after)</li>
-                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst, wahlweise mit seinen Presets (gleich danach rückgängig zu machen) oder ohne</li>
+                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name, keeping its presets or with them</li>
+                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst, wahlweise mit seinen Presets oder ohne</li>
+                    <li>Presets and games look and work the same: a pencil next to the name renames them (games too, now), a ⋮ menu holds the rarer actions, and Select lets you choose several tiles and delete them at once</li>
+                    <li xml:lang="de">Presets und Spiele sehen gleich aus und funktionieren gleich: Der Stift neben dem Namen benennt sie um (jetzt auch Spiele), ein ⋮-Menü enthält die selteneren Aktionen, und „Auswählen“ wählt mehrere Kacheln, um sie auf einmal zu löschen</li>
+                    <li>Deleted presets and games go to a trash and stay there for 30 days, opened with Trash next to Select on their page; the message after deleting offers Undo for 10 seconds</li>
+                    <li xml:lang="de">Gelöschte Presets und Spiele kommen in einen Papierkorb und bleiben dort 30 Tage, zu öffnen mit „Papierkorb“ neben „Auswählen“ auf ihrer Seite; die Meldung nach dem Löschen bietet 10 Sekunden lang „Rückgängig“</li>
+                    <li>The dialogs for names are wider and list your folders and games to pick from; a missing name is marked red in the dialog</li>
+                    <li xml:lang="de">Die Dialoge für Namen sind breiter und listen deine Ordner und Spiele zur Auswahl; ein fehlender Name wird im Dialog rot markiert</li>
                 </ul>
             </description>
         </release>
