@@ -54,6 +54,7 @@ steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
 from understeer.ui import cover_search, theme  # noqa: E402
+from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
@@ -810,6 +811,17 @@ def steps(win):
         win._error("Could not save", "Disk full")
     yield "open dialogs", dialogs
     yield "close dialogs", lambda: close_dialogs(win)
+
+    def reset_failed():
+        real = window_module.write_values
+        window_module.write_values = lambda writes: list(writes)
+        try:
+            win._reset_slots()
+        finally:
+            window_module.write_values = real
+        check(win._toast_text.get_label() == "Could not reset the tuning slots",
+              f"failed reset told: {win._toast_text.get_label()!r}")
+    yield "reset failed", reset_failed
 
     def steam_names():
         from understeer import games

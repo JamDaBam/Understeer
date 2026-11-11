@@ -1329,18 +1329,18 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         dialog.set_response_appearance("reset",
                                        Adw.ResponseAppearance.DESTRUCTIVE)
 
-        def on_response(d, response):
-            if response != "reset":
-                return
-            path = self._attr_file("RESET")
-            if not os.path.exists(path):
-                self._error(_("Not Available"),
-                            _("This wheel base does not support resetting."))
-            elif not write_values({path: 1}):
-                GLib.timeout_add(300, lambda: self._load_from_device() and False)
-
-        dialog.connect("response", on_response)
+        dialog.connect("response", lambda d, r: r == "reset" and self._reset_slots())
         dialog.present(self)
+
+    def _reset_slots(self):
+        path = self._attr_file("RESET")
+        if not os.path.exists(path):
+            self._error(_("Not Available"),
+                        _("This wheel base does not support resetting."))
+        elif write_values({path: 1}):
+            self._notify(_("Could not reset the tuning slots"))
+        else:
+            GLib.timeout_add(300, lambda: self._load_from_device() and False)
 
     def _error(self, heading, body):
         log.error("%s: %s", heading, body)
