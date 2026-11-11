@@ -37,7 +37,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <release version="1.9.1" date="2026-11-12">
+        <release version="1.9.1" date="2026-11-11">
             <description>
                 <ul>
                     <li>After an update, what is new opens by itself in a big window, also for versions you skipped; if Understeer started in the background, it opens with the window. It is also in the main menu</li>
