@@ -67,6 +67,52 @@ def _blocks(release, language):
     return blocks
 
 
+def blocks(version, language=None, path=None):
+    """[(tag, text or [items])] of the notes of version, e.g.
+    [("ul", ["…", "…"])]; [] without notes."""
+    release = _release(version, path)
+    return _blocks(release, language) if release is not None else []
+
+
+def release_date(version, path=None):
+    """"2026-11-11" or None."""
+    release = _release(version, path)
+    return release.get("date") if release is not None else None
+
+
+def versions_since(last, current, path=None):
+    """Versions with notes after last up to current, newest first: what is
+    new for someone who used last. Just current if last is unknown."""
+    try:
+        root = ET.parse(path or METAINFO).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    old, new = _number(last) if last else None, _number(current)
+    found = []
+    for release in root.iterfind("releases/release"):
+        version = release.get("version")
+        if release.find("description") is None:
+            continue
+        number = _number(version)
+        if version == plain_version(current) or (
+                old is not None and new is not None and number is not None
+                and old < number <= new):
+            found.append((number or (), version))
+    return [v for _n, v in sorted(found, reverse=True)]
+
+
+def latest(path=None):
+    """The newest version with notes, e.g. for a build from git."""
+    try:
+        root = ET.parse(path or METAINFO).getroot()
+    except (OSError, ET.ParseError):
+        return None
+    for release in root.iterfind("releases/release"):
+        if release.find("description") is not None:
+            return release.get("version")
+    return None
+
+
 def notes(version, language=None, path=None):
     """Notes of version as AppStream markup for Adw.AboutDialog, or None."""
     release = _release(version, path)

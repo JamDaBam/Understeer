@@ -608,30 +608,70 @@ def steps(win):
         check(key_entry().row.get_text() == "good-2", "prefs row shows the key"),
         cover["c"].dialog.close())
 
-    # -- after an update: message once, "What's New" in the About dialog ---
+    # -- after an update: what's new, once, also after the background ------
     newest = ET.parse(releases.METAINFO).getroot().find("releases/release")
     newest, older = newest.get("version"), "1.0.0"
+
+    def news_shown():
+        d = win.get_visible_dialog()
+        return d if d is not None and d.get_title() == "What's New" else None
+
+    def news_lines(d):
+        return [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)]
 
     def updated():
         session_log.version = lambda: f"v{newest}"
         config.set_setting("last_version", older)
         win._announce_update()
-        check(win._toast is not None and newest in win._toast.get_title(),
-              "update message shown")
+        d = news_shown()
+        check(d is not None, "what's new shown after an update")
+        lines = news_lines(d) if d else []
+        check(f"Understeer {newest}" in lines, f"newest version listed: {lines[:3]}")
+        check(len([t for t in lines if t.startswith("Understeer ")]) > 1,
+              "skipped versions listed too")
         check(config.get_setting("last_version") == newest, "new version remembered")
-    yield "update message", updated
+        width = d.get_content_width() if d else 0
+        check(width >= 560, f"big dialog: {width}")
+        close_dialogs(win)
+    yield "what's new after an update", updated
 
     def not_again():
-        win._hide_toast()
         win._announce_update()
-        check(win._toast is None, "update message only once")
+        check(news_shown() is None, "what's new only once")
+    yield "what's new once", not_again
+
+    def hidden_update():
+        config.set_setting("last_version", older)
+        win._in_background = True               # started in the background
+        try:
+            win._announce_update()
+            check(news_shown() is None, "not shown while hidden")
+            check(config.get_setting("last_version") == older,
+                  "not seen yet while hidden")
+        finally:
+            win._in_background = False
+    yield "update while hidden", hidden_update
+
+    def shown_when_opened():
+        win.show_again()
+    yield "window opened", shown_when_opened
+    yield "what's new when opened", lambda: (
+        check(news_shown() is not None, "what's new shown once the window opens"),
+        check(config.get_setting("last_version") == newest, "remembered then"),
+        close_dialogs(win))
+
+    def from_menu():
+        win.activate_action("win.whats-new", None)
+        d = news_shown()
+        lines = news_lines(d) if d else []
+        check(lines[:1] == [f"Understeer {newest}"], f"menu shows this version: {lines[:1]}")
+        close_dialogs(win)
         win._show_about()
-    yield "update message once", not_again
-    yield "what's new", lambda: (
+    yield "what's new from the menu", from_menu
+    yield "about", lambda: (
         check(isinstance(win.get_visible_dialog(), Adw.AboutDialog), "About shown"),
         check(win.get_visible_dialog().get_release_notes_version() == newest,
               "About has the notes of this version"),
-        check(bool(win.get_visible_dialog().get_release_notes()), "notes not empty"),
         win.get_visible_dialog().close())
 
     # -- wheel base and steering wheel ---------------------------------------

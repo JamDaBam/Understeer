@@ -112,3 +112,24 @@ def test_shipped_metainfo():
             english = [e for e in parent if e.tag in ("p", "li") and lang not in e.attrib]
             german = [e for e in parent if e.tag in ("p", "li") and e.get(lang) == "de"]
             assert len(english) == len(german), release.get("version")
+
+
+def test_blocks_and_date(metainfo):
+    assert releases.blocks("2.0.0", "de", metainfo)[0] == (
+        "ul", ["Neues Ding & mehr", "Behoben"])
+    assert releases.blocks("1.0.0", None, metainfo) == []
+    assert releases.release_date("v2.0.0", metainfo) == "2026-12-01"
+    assert releases.release_date("3.0.0", metainfo) is None
+
+
+@pytest.mark.parametrize("last, current, expected", [
+    (None, "2.0.0", ["2.0.0"]),
+    ("1.9.0", "2.0.0", ["2.0.0"]),
+    ("1.0.0", "2.0.0", ["2.0.0", "1.9.0"]),     # skipped one, 1.0.0 has no notes
+    ("0.5", "2.0.0", ["2.0.0", "1.9.0"]),
+    ("1.0.0", "1.9.0", ["1.9.0"]),
+    ("2.0.0", "2.0.0", ["2.0.0"]),               # asked from the menu
+    ("garbage", "2.0.0", ["2.0.0"]),
+])
+def test_versions_since(metainfo, last, current, expected):
+    assert releases.versions_since(last, current, metainfo) == expected

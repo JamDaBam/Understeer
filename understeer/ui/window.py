@@ -51,6 +51,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self.wheel = {}          # see device.wheel_info()
         self._in_background = False     # window hidden, still watching games
         self._shut_down = False
+        self._news = []                 # versions still to show after an update
         self._save_dialog = None        # asking to save the active preset
 
         self.rows = {}           # attr id -> SettingTile
@@ -211,6 +212,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             self._start_inputs()
             self._load_from_device()
         self.present()
+        GLib.idle_add(lambda: self._show_news() and False)   # after an update
 
     # -----------------------------------------------------------------------
     # Layout
@@ -260,6 +262,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
         app.append(_("Report a Problem…"), "win.report")
+        app.append(_("What's New"), "win.whats-new")
         app.append(_("About Understeer"), "win.about")
         menu.append_section(None, app)
         quit_section = Gio.Menu()
@@ -522,18 +525,78 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         about.present(self)
 
     def _announce_update(self):
-        """After an update, say so once, with a way to what is new."""
+        """After an update, show what is new: right away, or when the
+        window is opened if Understeer started in the background. It only
+        counts as seen once it was shown."""
         current = releases.plain_version(session_log.version())
         last = config.get_setting("last_version")
         used = getattr(self.get_application(), "used_before", True)
         if releases.should_announce(current, last, used):
             log.info("Updated from %s to %s", last or "an older version", current)
-            self._notify(_("Understeer was updated to {version}").format(
-                version=current), _("What's New"),
-                lambda: (self._hide_toast(), self._show_about()))
+            self._news = releases.versions_since(last, current)
+            if self.get_visible() and not self._in_background:
+                self._show_news()
         # Only released versions are remembered, not ones run from git.
-        if last != current and releases.has_notes(current):
+        elif last != current and releases.has_notes(current):
             config.set_setting("last_version", current)
+
+    def _show_news(self):
+        """Show the news of an update that is still waiting to be seen."""
+        if not self._news:
+            return
+        versions, self._news = self._news, []
+        self._show_whats_new(versions)
+        config.set_setting("last_version", versions[0])
+
+    def _dialog_size(self, min_width, min_height, max_width):
+        """A size for a big dialog: grows with the window, so it is easy
+        to read on a big screen. Libadwaita shrinks it in a small window."""
+        width = self.get_width() or self.get_default_size()[0]
+        height = self.get_height() or self.get_default_size()[1]
+        return (max(min_width, min(max_width, int(width * 0.7))),
+                max(min_height, int(height * 0.85)))
+
+    def _show_whats_new(self, versions=None):
+        """The notes of versions (newest first) in a big dialog; by default
+        those of this version."""
+        if not versions:
+            current = releases.plain_version(session_log.version())
+            version = current if releases.has_notes(current) else releases.latest()
+            versions = [version] if version else []
+        language = i18n.current_language()
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
+                         margin_top=18, margin_bottom=24, margin_start=24,
+                         margin_end=24)
+        for n, version in enumerate(versions):
+            title = Gtk.Label(label=f"Understeer {version}", xalign=0,
+                              css_classes=["title-2"])
+            if n:
+                title.set_margin_top(18)
+            column.append(title)
+            date = releases.release_date(version)
+            if date:
+                column.append(Gtk.Label(label=date, xalign=0,
+                                        css_classes=["dim-label"]))
+            for tag, content in releases.blocks(version, language):
+                for text in (content if tag != "p" else [content]):
+                    line = Gtk.Box(spacing=10)
+                    if tag != "p":
+                        line.append(Gtk.Label(label="•", valign=Gtk.Align.START,
+                                              css_classes=["accent"]))
+                    line.append(Gtk.Label(label=text, xalign=0, wrap=True,
+                                          hexpand=True))
+                    column.append(line)
+        width, height = self._dialog_size(560, 560, 900)
+        dialog = Adw.Dialog(title=_("What's New"), content_width=width,
+                            content_height=height)
+        clamp = Adw.Clamp(child=column, maximum_size=820)
+        scroll = Gtk.ScrolledWindow(child=clamp,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        toolbar = Adw.ToolbarView(content=scroll)
+        toolbar.add_top_bar(Adw.HeaderBar())
+        dialog.set_child(toolbar)
+        log.info("Showing what's new in %s", ", ".join(versions) or "nothing")
+        dialog.present(self)
 
     # -----------------------------------------------------------------------
     # Actions
@@ -550,6 +613,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         add("show-presets", lambda *a: self._select_page("presets"))
         add("preferences", lambda *a: self._show_preferences())
         add("about", lambda *a: self._show_about())
+        add("whats-new", lambda *a: self._show_whats_new())
         add("report", lambda *a: ReportDialog(self))
         app = self.get_application()
         if app is not None:

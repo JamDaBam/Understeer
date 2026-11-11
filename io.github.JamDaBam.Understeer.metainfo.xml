@@ -37,6 +37,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="1.9.1" date="2026-11-11">
+            <description>
+                <ul>
+                    <li>Pasting presets and looking at the values of a preset use big windows that grow with the main window</li>
+                    <li xml:lang="de">Das Einfügen von Presets und die Werte eines Presets erscheinen in großen Fenstern, die mit dem Hauptfenster mitwachsen</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.9.0" date="2026-11-11">
             <description>
                 <ul>

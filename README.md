@@ -119,7 +119,7 @@ Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt install python3-pytest`). They use a fake sysfs and temporary folders, so no wheel base or password is needed. One test runs the whole app on an invisible screen; it needs Xvfb (`sudo apt install xvfb`) and is skipped without it.
 GitHub runs them on every push and pull request, and a release is only built when they pass.
 
-To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app shows these notes as *What's New* after an update, and the release build takes the GitHub release notes from there; without them it stops.
+To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.
 
 ## Credits & License
 
