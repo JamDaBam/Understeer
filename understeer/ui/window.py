@@ -26,6 +26,7 @@ from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
+from .dates import date_text
 from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
 
@@ -622,7 +623,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             column.append(heading)
             date = releases.release_date(version)
             if date:
-                column.append(Gtk.Label(label=date, xalign=0,
+                column.append(Gtk.Label(label=date_text(date), xalign=0,
                                         css_classes=["dim-label"]))
             for tag, content in releases.blocks(version, language):
                 for text in (content if tag != "p" else [content]):

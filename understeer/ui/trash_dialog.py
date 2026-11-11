@@ -3,10 +3,11 @@ on the Games page, each opened with a button next to Select. A small
 dialog with a list that scrolls when it gets long."""
 import logging
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from .. import trash
 from ..i18n import _
+from .dates import date_text
 from .names import cap_row, short
 
 log = logging.getLogger("understeer.window")
@@ -81,8 +82,7 @@ class TrashMixin:
             rows.append(row)
             return
         for item in items:
-            when = GLib.DateTime.new_from_unix_local(int(item["deleted"])).format("%x")
-            parts = [_("Deleted on {date}").format(date=when)]
+            parts = [_("Deleted on {date}").format(date=date_text(item["deleted"]))]
             if item.get("folder"):
                 parts.insert(0, _("Folder: {folder}").format(folder=short(item["folder"])))
             row = cap_row(Adw.ActionRow(title=item["name"], subtitle=" · ".join(parts),
