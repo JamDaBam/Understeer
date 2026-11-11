@@ -37,7 +37,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <release version="1.9.0" date="2026-11-10">
+        <release version="1.9.0" date="2026-11-11">
             <description>
                 <ul>
                     <li>Understeer can keep running in the background, with an icon in the system tray, so the presets of your games are applied without opening it first; it can also start at login</li>
