@@ -60,7 +60,7 @@ class SettingTile:
         for w in (icon, title, self.revert_btn, info):
             head.append(w)
         tile.append(head)
-        self.head, self.title = head, title
+        self.head = head
 
         # Large value with the sysfs name next to it
         value_line = Gtk.Box(spacing=8)

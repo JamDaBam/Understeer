@@ -2,10 +2,11 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, background, config, games, i18n, log, releases, trash, updates
+from . import (APP_ICON, APP_ID, DATA_DIR, background, config, games, i18n, log,
+               releases, trash, updates)
 from .ui.window import TunerWindow  # also selects the GTK version
 from .i18n import _
-from .ui import theme
+from .ui import theme, toolkit_versions
 from .ui.tray import Tray
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
@@ -14,8 +15,6 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 # (icons/hicolor/scalable/apps); loose files are not recoloured by GTK.
 ICON_DIR = DATA_DIR / "icons"
 STYLE = pathlib.Path(__file__).resolve().parent / "ui" / "style.css"
-APP_ID = background.APP_ID
-APP_ICON = DATA_DIR / "io.github.JamDaBam.Understeer.png"    # for the tray
 
 
 class TunerApplication(Adw.Application):
@@ -159,10 +158,9 @@ def main():
     log.setup()
     config.migrate_config()
     i18n.set_language(config.get_setting("language"))
-    log.log.info("GTK %s.%s.%s, Libadwaita %s.%s.%s, language %s, layout %s",
-                 Gtk.get_major_version(), Gtk.get_minor_version(),
-                 Gtk.get_micro_version(), Adw.get_major_version(),
-                 Adw.get_minor_version(), Adw.get_micro_version(),
+    versions = toolkit_versions()
+    log.log.info("GTK %s, Libadwaita %s, language %s, layout %s",
+                 versions["GTK"], versions["Libadwaita"],
                  config.get_setting("language") or "system",
                  config.get_setting("layout") or "full")
     return TunerApplication().run(sys.argv)

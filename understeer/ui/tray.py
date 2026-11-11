@@ -15,6 +15,7 @@ import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gio, GLib  # noqa: E402
 
+from .. import APP_ID  # noqa: E402
 from ..names import menu_label  # noqa: E402
 
 log = logging.getLogger("understeer.tray")
@@ -274,7 +275,7 @@ class Tray:
             return GLib.Variant("(sa(iiay)ss)",
                                 ("", [], texts["title"], texts["tooltip"]))
         values = {"Category": ("s", "ApplicationStatus"),
-                  "Id": ("s", "io.github.JamDaBam.Understeer"),
+                  "Id": ("s", APP_ID),
                   "Title": ("s", texts["title"]),
                   "Status": ("s", "Active"),
                   "WindowId": ("i", 0),

@@ -16,11 +16,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import config
+from . import USER_AGENT, config
 
 API = "https://www.steamgriddb.com/api/v2"
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
-USER_AGENT = "Understeer"
 
 log = logging.getLogger("understeer.steamgriddb")
 

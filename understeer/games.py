@@ -12,7 +12,7 @@ import struct
 import time
 import urllib.request
 
-from . import config
+from . import USER_AGENT, config
 
 HOME = pathlib.Path.home()
 STEAM_ROOTS = [
@@ -210,7 +210,7 @@ def download_cover(appid, cache_dir, timeout=10):
         for url in CDN_URLS:
             try:
                 req = urllib.request.Request(url.format(appid=appid, file=file),
-                                             headers={"User-Agent": "Understeer"})
+                                             headers={"User-Agent": USER_AGENT})
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     if resp.status != 200 or not resp.headers.get(
                             "Content-Type", "").startswith("image/"):

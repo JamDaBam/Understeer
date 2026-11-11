@@ -10,9 +10,8 @@ import pathlib
 import re
 import sys
 
-from . import DATA_DIR, config
+from . import APP_ID, DATA_DIR, config
 
-APP_ID = "io.github.JamDaBam.Understeer"
 BACKGROUND_OPTION = "--background"
 
 

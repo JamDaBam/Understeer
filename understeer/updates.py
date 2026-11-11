@@ -22,14 +22,13 @@ import time
 import urllib.error
 import urllib.request
 
-from . import releases
+from . import USER_AGENT, releases
 
 LATEST_URL = "https://api.github.com/repos/JamDaBam/Understeer/releases/latest"
 RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
 DOWNLOAD_URL = RELEASES_URL + "/download/"
 MAX_DOWNLOAD = 200 * 1024 * 1024        # far more than an AppImage needs
 CHECK_EVERY = 3600              # at most one look an hour, also over restarts
-USER_AGENT = "Understeer"
 
 log = logging.getLogger("understeer.updates")
 

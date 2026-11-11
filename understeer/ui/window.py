@@ -8,7 +8,7 @@ import os
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
-from .. import DATA_DIR, config, games, releases, report
+from .. import APP_ICON, APP_ID, config, games, releases, report
 from .. import log as session_log
 from ..device import (RIMS, can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -19,7 +19,7 @@ from ..i18n import _
 from ..inputs import InputMonitor
 from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SETTINGS_BY_ID,
                         SLOTS, TABS, VIEWS)
-from . import layout
+from . import layout, toolkit_versions
 from .games_page import GamesPage
 from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PreferencesMixin
@@ -210,9 +210,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         note = Gio.Notification.new(title)
         note.set_body(body)
         # Without an installed .desktop file the desktop knows no icon
-        icon = DATA_DIR / "io.github.JamDaBam.Understeer.png"
-        if icon.is_file():
-            note.set_icon(Gio.FileIcon.new(Gio.File.new_for_path(str(icon))))
+        if APP_ICON.is_file():
+            note.set_icon(Gio.FileIcon.new(Gio.File.new_for_path(str(APP_ICON))))
         self.get_application().send_notification(key, note)
 
     def show_again(self, token=None):
@@ -456,7 +455,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 f"{_(t.setting['label'])} {t.value_label.get_label()}" for t in tiles))
 
         button.connect("clicked", toggle)
-        button.update_summary = update
         self._group_summaries.append(update)
         column.append(button)
         column.append(revealer)
@@ -484,7 +482,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def _show_about(self):
         props = dict(
             application_name="Understeer",
-            application_icon="io.github.JamDaBam.Understeer",
+            application_icon=APP_ID,
             version=session_log.version(),
             developer_name="JamDaBam",
             website=report.REPO_URL,
@@ -1315,12 +1313,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
     def report_details(self):
         """What a problem report needs to know about this window."""
-        details = [("GTK", "{}.{}.{}".format(Gtk.get_major_version(),
-                                             Gtk.get_minor_version(),
-                                             Gtk.get_micro_version())),
-                   ("Libadwaita", "{}.{}.{}".format(Adw.get_major_version(),
-                                                    Adw.get_minor_version(),
-                                                    Adw.get_micro_version()))]
+        details = list(toolkit_versions().items())
         if self.device_path:
             details += [("Wheelbase", f"{model_id(self.device_path)} "
                          f"({'writable' if self.writable else 'no write access'})"),
