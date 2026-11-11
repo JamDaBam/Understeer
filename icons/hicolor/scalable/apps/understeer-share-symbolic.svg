@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Three dots joined by two lines: share -->
+  <circle fill="#222222" cx="12.5" cy="3" r="2.5"/>
+  <circle fill="#222222" cx="3.5" cy="8" r="2.5"/>
+  <circle fill="#222222" cx="12.5" cy="13" r="2.5"/>
+  <path fill="#222222" d="M12.9 3.66 L12.1 2.34 L3.1 7.34 L3.9 8.66 Z M3.1 8.66 L3.9 7.34 L12.9 12.34 L12.1 13.66 Z"/>
+</svg>

@@ -6,7 +6,7 @@ import pathlib
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from .. import config
+from .. import config, sharing
 from ..i18n import _
 from ..settings import SIM_DEFAULTS, changes
 
@@ -19,9 +19,19 @@ class PresetsMixin:
 
     def _build_presets_page(self):
         page, column = self._scroll_page()
+        bring = Gtk.Box(spacing=6)
+        for label, tip, action in (
+                (_("Import…"), _("Add a preset shared as a file"),
+                 "win.import-preset"),
+                (_("Paste"), _("Add a preset shared as text or JSON"),
+                 "win.paste-preset")):
+            button = Gtk.Button(label=label, action_name=action,
+                                tooltip_text=tip)
+            button.add_css_class("flat")
+            bring.append(button)
         self._section(column, _("Saved Presets"),
                       _("Saves all current settings under a name in "
-                        "~/.config/Understeer/."))
+                        "~/.config/Understeer/."), bring)
         self.presets_flow = self._tile_grid()
         column.append(self.presets_flow)
         self._rebuild_presets_list()
@@ -78,6 +88,10 @@ class PresetsMixin:
             rename_btn.set_tooltip_text(_("Change the name of this preset"))
             rename_btn.connect("clicked", lambda b, p=path, n=name:
                                self._ask_rename_preset(p, n))
+            share_btn = Gtk.MenuButton(icon_name="understeer-share-symbolic",
+                                       menu_model=self._share_menu(path),
+                                       tooltip_text=_("Share"))
+            share_btn.add_css_class("flat")
             del_btn = Gtk.Button(icon_name="user-trash-symbolic")
             del_btn.set_tooltip_text(_("Delete"))
             del_btn.add_css_class("flat")
@@ -85,7 +99,7 @@ class PresetsMixin:
                             self._confirm_delete_preset(p, n))
             # Apply on its own row: with the text buttons in one row, the
             # tiles would get too wide for two of them side by side.
-            for w in (save_btn, rename_btn, del_btn):
+            for w in (save_btn, rename_btn, share_btn, del_btn):
                 buttons.append(w)
             save_btn.set_hexpand(True)
             rename_btn.set_hexpand(True)
@@ -93,6 +107,18 @@ class PresetsMixin:
                 tile.append(w)
             self.presets_flow.append(tile)
         self.presets_flow.append(self._sim_defaults_tile())
+
+    @staticmethod
+    def _share_menu(path):
+        menu = Gio.Menu()
+        for label, action in ((_("Save as File…"), "win.export-preset"),
+                              (_("Copy as Text"), "win.copy-preset-text"),
+                              (_("Copy as JSON"), "win.copy-preset-json")):
+            item = Gio.MenuItem.new(label, None)
+            item.set_action_and_target_value(action,
+                                             GLib.Variant.new_string(str(path)))
+            menu.append_item(item)
+        return menu
 
     def _sim_defaults_tile(self):
         """A built-in preset that can't be changed or deleted."""
@@ -135,6 +161,8 @@ class PresetsMixin:
             menu.append_section(None, presets)
         manage = Gio.Menu()
         manage.append(_("Save as Preset…"), "win.save-preset")
+        manage.append(_("Import Preset…"), "win.import-preset")
+        manage.append(_("Paste Preset"), "win.paste-preset")
         manage.append(_("Manage Presets"), "win.show-presets")
         menu.append_section(None, manage)
         self.preset_button.set_menu_model(menu)
@@ -398,6 +426,187 @@ class PresetsMixin:
 
         self._notify(_("Preset “{name}” saved").format(name=name),
                      _("Undo") if old_text is not None else None, undo)
+
+    # -- sharing ---------------------------------------------------------------
+    def _shared(self, path):
+        """(name, values) of a preset to share, or None after an error."""
+        path = pathlib.Path(path)
+        try:
+            return self._read_preset(path)
+        except (OSError, json.JSONDecodeError) as e:
+            self._error(_("Could not load preset"), str(e))
+            return None
+
+    def _copy_preset(self, path, as_json):
+        shared = self._shared(path)
+        if shared is None:
+            return
+        name, values = shared
+        if as_json:
+            text = sharing.preset_json(name, values)
+            message = _("Preset “{name}” copied as JSON")
+        else:
+            text = sharing.preset_text(name, values)
+            message = _("Preset “{name}” copied as text")
+        self.get_clipboard().set(text)
+        log.info("Preset %s copied as %s", pathlib.Path(path).name,
+                 "JSON" if as_json else "text")
+        self._notify(message.format(name=name))
+
+    @staticmethod
+    def _preset_filters():
+        presets = Gtk.FileFilter(name=_("Presets (JSON or text)"))
+        for pattern in ("*.json", "*.txt"):
+            presets.add_pattern(pattern)
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(presets)
+        return filters, presets
+
+    def _export_preset(self, path):
+        shared = self._shared(path)
+        if shared is None:
+            return
+        name, values = shared
+        filters, presets = self._preset_filters()
+        dialog = Gtk.FileDialog(title=_("Save Preset as File"), filters=filters,
+                                default_filter=presets,
+                                initial_name=pathlib.Path(path).name)
+
+        def chosen(d, result):
+            try:
+                file = d.save_finish(result)
+            except GLib.Error:
+                return                          # cancelled
+            dest = file.get_path() if file else None
+            if dest is None:
+                return
+            try:
+                config.write_file(pathlib.Path(dest),
+                                  sharing.preset_json(name, values))
+            except OSError as e:
+                self._error(_("Could not save preset"), str(e))
+                return
+            log.info("Preset %s saved as file", pathlib.Path(path).name)
+            self._notify(_("Preset “{name}” saved as file").format(name=name),
+                         _("Show Folder"),
+                         lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(dest))
+                         .open_containing_folder(self, None, None))
+
+        dialog.save(self, None, chosen)
+
+    def _ask_import_preset(self):
+        filters, presets = self._preset_filters()
+        dialog = Gtk.FileDialog(title=_("Import Preset"), filters=filters,
+                                default_filter=presets)
+
+        def chosen(d, result):
+            try:
+                file = d.open_finish(result)
+            except GLib.Error:
+                return                          # cancelled
+            source = file.get_path() if file else None
+            if source is None:
+                return
+            source = pathlib.Path(source)
+            try:
+                if source.stat().st_size > sharing.MAX_SIZE:
+                    raise sharing.Error(_("This is too long to be a preset."))
+                text = source.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                self._not_a_preset(_("The file holds no text."))
+                return
+            except sharing.Error as e:
+                self._not_a_preset(str(e))
+                return
+            except OSError as e:
+                self._error(_("Could not load preset"), str(e))
+                return
+            self._import_preset(text, source.stem)
+
+        dialog.open(self, None, chosen)
+
+    def _paste_preset(self):
+        def done(clipboard, result):
+            try:
+                text = clipboard.read_text_finish(result)
+            except GLib.Error:
+                text = None
+            if not text:
+                self._not_a_preset(_("The clipboard holds no text. Copy a "
+                                     "shared preset first."))
+                return
+            self._import_preset(text)
+
+        self.get_clipboard().read_text_async(None, done)
+
+    def _not_a_preset(self, reason):
+        log.info("Not a preset: %s", reason)
+        dialog = Adw.AlertDialog(heading=_("No Preset Found"), body=reason)
+        dialog.add_response("ok", _("OK"))
+        dialog.present(self)
+
+    def _import_preset(self, text, fallback_name=""):
+        """Add a shared preset; asks first if one has the same name."""
+        try:
+            name, values = sharing.parse(text, fallback_name)
+        except sharing.Error as e:
+            self._not_a_preset(str(e))
+            return
+        values = {a: v for a, v in values.items() if a in self.rows}
+        path = config.preset_path(name)
+        if not path.exists():
+            self._add_imported(path, name, values)
+            return
+        try:
+            _n, stored = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            stored = {}
+        if stored == values:
+            self._notify(_("You already have the preset “{name}”").format(
+                name=name))
+            return
+        diff = changes(stored, values)
+        dialog = Adw.AlertDialog(
+            heading=_("“{name}” Already Exists").format(name=name),
+            body=_("Replace your preset, or keep both? The shared preset "
+                   "has these settings:") if diff else
+            _("Replace your preset, or keep both?"))
+        if diff:
+            dialog.set_extra_child(self._changes_list(diff))
+            if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
+                dialog.set_prefer_wide_layout(True)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("keep", _("Keep Both"))
+        dialog.add_response("replace", _("Replace"))
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("keep")
+        dialog.set_response_appearance("replace",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, response):
+            if response == "replace":
+                self._add_imported(path, name, values)
+            elif response == "keep":
+                new = sharing.free_name(
+                    name, lambda n: config.preset_path(n).exists())
+                self._add_imported(config.preset_path(new), new, values)
+
+        dialog.connect("response", on_response)
+        dialog.present(self)
+
+    def _add_imported(self, path, name, values):
+        try:
+            config.write_preset(path, name, values)
+        except OSError as e:
+            self._error(_("Could not save preset"), str(e))
+            return
+        log.info("Preset %r imported as %s: %s", name, path.name,
+                 " ".join(f"{a}={v}" for a, v in values.items()))
+        if self.active_preset == path:
+            self.active_values = dict(values)
+        self._presets_changed()
+        self._notify(_("Preset “{name}” imported").format(name=name),
+                     _("Apply"), lambda: self._ask_apply_preset(path))
 
     def _ask_rename_preset(self, path, name):
         entry = Gtk.Entry(text=name, activates_default=True)

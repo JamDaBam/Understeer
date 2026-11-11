@@ -52,7 +52,7 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, background, backup, config, inputs, releases, log as session_log  # noqa: E402
+from understeer import app, background, backup, config, inputs, releases, sharing, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
@@ -284,6 +284,63 @@ def steps(win):
         rally.unlink()
         win._presets_changed()
     yield "apply preset", apply_preset
+
+    clip = []
+    copy = config.preset_path("Test GT3 (2)")
+
+    def read_clipboard():
+        clip.clear()
+        win.get_clipboard().read_text_async(
+            None, lambda c, r: clip.append(c.read_text_finish(r)))
+
+    def share_as_text():
+        win.activate_action("win.copy-preset-text",
+                            GLib.Variant.new_string(str(gt3)))
+        read_clipboard()
+    yield "share as text", share_as_text
+
+    def import_shared_text():
+        text = clip[0] if clip else ""
+        check(text.startswith("Understeer preset “Test GT3”\n")
+              and "\nWheel Vibration: 40 %\n" in text, f"shared text: {text!r}")
+        win._import_preset(text)
+        check(win.get_visible_dialog() is None, "same preset: nothing to ask")
+        win._import_preset(text.replace('"SHO": 40', '"SHO": 70'))
+        lines = answer("keep")
+        check(lines == ["Wheel Vibration: 40 % → 70 %"], f"import changes: {lines}")
+        _n, vals = config.read_preset(copy)
+        check(vals.get("SHO") == 70, "kept both")
+        win._import_preset("no preset here")
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_heading() == "No Preset Found", "not a preset")
+        close_dialogs(win)
+    yield "import shared text", import_shared_text
+
+    def share_as_json():
+        win.activate_action("win.copy-preset-json",
+                            GLib.Variant.new_string(str(copy)))
+        copy.unlink()
+        win._presets_changed()
+        win.activate_action("win.paste-preset", None)
+    yield "share as JSON and paste", share_as_json
+
+    def pasted():
+        _n, vals = config.read_preset(copy)
+        check(vals.get("SHO") == 70, "pasted preset added")
+        names = [n for n, _p in config.list_presets()]
+        check("Test GT3 (2)" in names, f"pasted preset listed: {names}")
+        text = sharing.preset_json("Test GT3", {"SHO": 10})
+        win._import_preset(text)
+        answer("replace")
+        _n, vals = config.read_preset(gt3)
+        check(vals == {"SHO": 10}, f"replaced: {vals}")
+        check(win.preset_button.get_label() == "Test GT3 •",
+              "replaced active preset differs from the settings")
+        win._write_preset(gt3, "Test GT3")      # as the next steps expect
+        copy.unlink()
+        win._presets_changed()
+    yield "pasted", pasted
 
 
     def rename():
