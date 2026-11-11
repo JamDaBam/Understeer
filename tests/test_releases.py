@@ -43,26 +43,24 @@ def test_plain_version():
 
 
 def test_notes_in_english(metainfo):
-    assert releases.notes("v2.0.0", "en", metainfo) == (
-        "<ul><li>New thing &amp; more</li><li>Fix</li></ul>"
-        "<p>Needs 1 &lt; 2.</p>")
+    assert releases.blocks("v2.0.0", "en", metainfo) == [
+        ("ul", ["New thing & more", "Fix"]), ("p", "Needs 1 < 2.")]
 
 
 def test_notes_translated(metainfo):
-    assert releases.notes("2.0.0", "de", metainfo) == (
-        "<ul><li>Neues Ding &amp; mehr</li><li>Behoben</li></ul>"
-        "<p>Braucht 1 &lt; 2.</p>")
+    assert releases.blocks("2.0.0", "de", metainfo) == [
+        ("ul", ["Neues Ding & mehr", "Behoben"]), ("p", "Braucht 1 < 2.")]
 
 
 def test_notes_fall_back_to_english(metainfo):
-    assert releases.notes("1.9.0", "de", metainfo) == "<p>Only English.</p>"
-    assert releases.notes("2.0.0", "fr", metainfo).startswith("<ul><li>New")
+    assert releases.blocks("1.9.0", "de", metainfo) == [("p", "Only English.")]
+    assert releases.blocks("2.0.0", "fr", metainfo)[0] == ("ul", ["New thing & more", "Fix"])
 
 
 def test_no_notes(metainfo, tmp_path):
-    assert releases.notes("1.0.0", "en", metainfo) is None      # no description
-    assert releases.notes("3.0.0", "en", metainfo) is None      # unknown
-    assert releases.notes("1.9.0", "en", tmp_path / "missing.xml") is None
+    assert releases.blocks("1.0.0", "en", metainfo) == []        # no description
+    assert releases.blocks("3.0.0", "en", metainfo) == []        # unknown
+    assert releases.blocks("1.9.0", "en", tmp_path / "missing.xml") == []
     assert not releases.has_notes("1.0.0", metainfo)
     assert releases.has_notes("1.9.0", metainfo)
 

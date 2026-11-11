@@ -515,11 +515,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             license_type=Gtk.License.GPL_3_0,
             debug_info=report.system_info(self.report_details()),
             debug_info_filename="understeer-debug.txt")
-        version = releases.plain_version(props["version"])
-        notes = releases.notes(version, i18n.current_language())
-        if notes:                   # "What's New" of the installed version
-            props.update(release_notes=notes, release_notes_version=version)
+        # No release notes here: What's New in the main menu has them all.
         about = self.fit_dialog(Adw.AboutDialog(**props))
+        about.add_link(_("All Versions on GitHub"),
+                       "https://github.com/JamDaBam/Understeer/releases")
         about.add_acknowledgement_section(_("Started as a fork of"), [
             "SimPower (FanatecLinux) by BenryBoi "
             "https://github.com/BenryBoi/FanatecLinux"])

@@ -5,7 +5,6 @@ The <releases> list of the metainfo file is the only place the changes
 are written down. Translations are the same element again with xml:lang,
 e.g. <li xml:lang="de">. Works without GTK.
 """
-import html
 import pathlib
 import xml.etree.ElementTree as ET
 
@@ -121,22 +120,6 @@ def latest(path=None):
         if release.find("description") is not None:
             return release.get("version")
     return None
-
-
-def notes(version, language=None, path=None):
-    """Notes of version as AppStream markup for Adw.AboutDialog, or None."""
-    release = _release(version, path)
-    if release is None:
-        return None
-    parts = []
-    for tag, content in _blocks(release, language):
-        if tag == "p":
-            parts.append(f"<p>{html.escape(content, quote=False)}</p>")
-        else:
-            items = "".join(f"<li>{html.escape(i, quote=False)}</li>"
-                            for i in content)
-            parts.append(f"<{tag}>{items}</{tag}>")
-    return "".join(parts) or None
 
 
 def markdown(version, path=None):
