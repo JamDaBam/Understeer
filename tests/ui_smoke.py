@@ -808,6 +808,20 @@ def steps(win):
     yield "open dialogs", dialogs
     yield "close dialogs", lambda: close_dialogs(win)
 
+    def steam_names():
+        from understeer import games
+        real = games.installed_games
+        games.installed_games = lambda: [("1213210", "Command & Conquer Remastered")]
+        try:
+            win.games_page._ask_game()
+        finally:
+            games.installed_games = real
+        texts = [w.get_text() for w in walk(win.get_visible_dialog())
+                 if isinstance(w, Gtk.Label)]
+        check("Command & Conquer Remastered" in texts, f"name with & shown: {texts}")
+    yield "Steam names with &", steam_names
+    yield "close the game list", lambda: close_dialogs(win)
+
     def live_input():
         # A wheel and pedals, as the input devices would report them.
         win.inputs.axes = {}

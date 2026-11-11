@@ -586,8 +586,9 @@ class GamesPage:
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
         for appid, name in installed:
+            # Names are plain text: "Command & Conquer" is no markup
             row = cap_row(Adw.ActionRow(title=name, subtitle=f"Steam · {appid}",
-                                        activatable=True))
+                                        activatable=True, use_markup=False))
             row.game = (games.steam_id(appid), name)
             listbox.append(row)
         if not installed:
