@@ -66,14 +66,11 @@ class PresetsMixin:
         groups = config.list_presets_by_folder(empty=True)
         presets = [p for _f, group in groups for p in group]
         loose = groups[0][1] if groups and groups[0][0] is None else []
-        # The presets without a folder; dropping one here takes it out
-        self.presets_flow = self._tile_grid()
-        self.presets_flow.add_css_class("preset-drop")
-        self._drop_target(self.presets_flow, lambda path: self._drop_preset(path, None))
-        self.presets_box.append(self.presets_flow)
+        # Making new things and the built-in preset, no drop target as a whole
+        actions = self._tile_grid()
+        self.presets_box.append(actions)
         self.folder_flows = {}
-
-        self.presets_flow.append(self._dashed_tile(
+        actions.append(self._dashed_tile(
             "list-add-symbolic", _("Save as Preset…"),
             None if presets else _("Saved presets appear here and in the "
                                    "Presets menu at the top."),
@@ -82,13 +79,15 @@ class PresetsMixin:
             "folder-new-symbolic", _("New Folder…"),
             _("Or drag a preset here"), clicked=lambda: self._ask_new_folder())
         self._drop_target(folder_tile, self._ask_new_folder)
-        self.presets_flow.append(folder_tile)
-        for name, path in loose:
-            self.presets_flow.append(self._preset_tile(name, path))
-        self.presets_flow.append(self._sim_defaults_tile())
+        actions.append(folder_tile)
+        actions.append(self._sim_defaults_tile())
+        # The presets without a folder; dropping one here takes it out
+        self.presets_flow = self._tile_grid()
+        if loose or len(groups) > (1 if loose else 0):
+            self.presets_box.append(self._preset_section(None, loose))
         for folder, group in groups:
             if folder is not None:
-                self.presets_box.append(self._folder_section(folder, group))
+                self.presets_box.append(self._preset_section(folder, group))
 
     @staticmethod
     def _dashed_tile(icon, title, hint=None, action=None, clicked=None):
@@ -114,39 +113,45 @@ class PresetsMixin:
         button.set_child(inner)
         return button
 
-    def _folder_section(self, folder, group):
-        """A folder: its heading and its tiles; presets dropped on it go in."""
+    def _preset_section(self, folder, group):
+        """A folder (None: the presets without one): its heading and its
+        tiles; presets dropped on it go in."""
         section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         section.add_css_class("preset-folder")
         section.append(self._folder_head(folder, group))
+        flow = self.presets_flow if folder is None else self._tile_grid()
         if group:
-            flow = self._tile_grid()
             for name, path in group:
                 flow.append(self._preset_tile(name, path))
             section.append(flow)
-            self.folder_flows[folder] = flow
         else:
             empty = Gtk.Label(label=_("Drag presets here"), wrap=True)
             empty.add_css_class("dim-label")
             empty.add_css_class("folder-empty")
             section.append(empty)
-            self.folder_flows[folder] = None
+        if folder is not None:
+            self.folder_flows[folder] = flow if group else None
         self._drop_target(section, lambda path: self._drop_preset(path, folder))
         return section
 
     def _folder_head(self, folder, group):
-        """Heading of a folder: its name, how many presets, rename, delete."""
+        """Heading of a folder: its name, how many presets, rename, delete;
+        for folder None (no folder) just the name and count."""
         head = Gtk.Box(spacing=8, margin_start=6)
-        icon = Gtk.Image.new_from_icon_name("folder-symbolic")
+        icon = Gtk.Image.new_from_icon_name(
+            "folder-symbolic" if folder is not None else "view-grid-symbolic")
         icon.add_css_class("dim-label")
         head.append(icon)
-        label = Gtk.Label(label=folder, xalign=0, ellipsize=3)
+        label = Gtk.Label(label=folder if folder is not None else
+                          _("Without Folder"), xalign=0, ellipsize=3)
         label.add_css_class("heading")
         head.append(label)
         count = Gtk.Label(label=_("Presets: {n}").format(n=len(group)), xalign=0)
         count.add_css_class("dim-label")
         count.add_css_class("caption")
         head.append(count)
+        if folder is None:
+            return head
         rename = Gtk.Button(icon_name="document-edit-symbolic",
                             tooltip_text=_("Rename Folder"))
         rename.add_css_class("flat")
