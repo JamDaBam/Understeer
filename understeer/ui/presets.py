@@ -545,7 +545,10 @@ class PresetsMixin:
 
         Not an Adw.AlertDialog: all of that is a window handle, so a double
         click to select a word would maximize the window."""
-        dialog = Adw.Dialog(title=_("Paste Presets"), content_width=600)
+        # Big: a pasted thread and the presets found in it should be easy
+        # to read. Libadwaita makes it smaller in a small window.
+        dialog = Adw.Dialog(title=_("Paste Presets"), content_width=720,
+                            content_height=760)
         cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda b: dialog.close())
         add = Gtk.Button(label=_("Add Preset"))
@@ -563,18 +566,18 @@ class PresetsMixin:
         view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, monospace=True,
                             top_margin=8, bottom_margin=8, left_margin=8,
                             right_margin=8, accepts_tab=False)
-        scroll = Gtk.ScrolledWindow(child=view, min_content_height=160,
+        scroll = Gtk.ScrolledWindow(child=view, min_content_height=200,
                                     vexpand=True,
                                     hscrollbar_policy=Gtk.PolicyType.NEVER)
         scroll.add_css_class("card")
         scroll.set_overflow(Gtk.Overflow.HIDDEN)    # round corners
         status = Gtk.Label(xalign=0, wrap=True)
-        found_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        found_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE,
+                                 valign=Gtk.Align.START)
         found_list.add_css_class("boxed-list")
         found_scroll = Gtk.ScrolledWindow(
-            child=found_list, propagate_natural_height=True,
-            max_content_height=280, hscrollbar_policy=Gtk.PolicyType.NEVER,
-            visible=False)
+            child=found_list, min_content_height=200, vexpand=True,
+            hscrollbar_policy=Gtk.PolicyType.NEVER, visible=False)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=12, margin_bottom=18, margin_start=18,
                       margin_end=18)
@@ -619,7 +622,9 @@ class PresetsMixin:
                         check.connect("toggled", update_add)
                         checks.append((found, check))
                         found_list.append(row)
+            # The text field gets the room the list doesn't need
             found_scroll.set_visible(bool(checks))
+            scroll.set_vexpand(not checks)
             update_add()
             return GLib.SOURCE_REMOVE
 
