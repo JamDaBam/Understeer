@@ -1,0 +1,16 @@
+name: Suggest an idea
+description: Something Understeer could do or do better.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What should Understeer do, and in which situation would it help you?
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Your wheel base and game (optional)
+      description: If it is about certain hardware or a game, which ones?
