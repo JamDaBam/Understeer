@@ -53,11 +53,11 @@ class GamesPage:
         label.add_css_class("section-title")
         title = Gtk.Box(spacing=12)
         title.append(label)
-        trash_button = self.window._trash_button("game")
-        for button in (trash_button, self.selection.button):
-            button.set_valign(Gtk.Align.END)
-        title.append(trash_button)
-        title.append(self.selection.button)
+        # Spaced as on the Presets page, so the buttons stay in place
+        buttons = Gtk.Box(spacing=6, valign=Gtk.Align.END)
+        buttons.append(self.window._trash_button("game"))
+        buttons.append(self.selection.button)
+        title.append(buttons)
         desc = Gtk.Label(
             label=_("Give each game a preset. While Understeer is open, it "
                     "applies the preset as soon as the game starts."),
