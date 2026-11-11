@@ -25,6 +25,7 @@ from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
+from .names import label_factory, name_label
 from .trash_dialog import TrashMixin
 
 LIVE_DELAY_MS = 120
@@ -37,6 +38,7 @@ DIALOG_MIN_HEIGHT = 680
 DIALOG_MAX_WIDTH = 1000
 TOAST_MS = 3000         # how long a message stays
 TOAST_BUTTON_MS = 10000  # ... with a button such as Undo, to have time to click
+TOAST_CHARS = 50        # a longer message goes on two lines
 
 log = logging.getLogger("understeer.window")
 
@@ -247,14 +249,19 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.slot_dropdown = Gtk.DropDown.new_from_strings(
             [_("Slot {n}").format(n=i) for i in range(1, SLOTS + 1)])
+        # Slot names are the user's: short on the button, whole in the list
+        self.slot_dropdown.set_factory(label_factory(chars=16))
+        self.slot_dropdown.set_list_factory(label_factory(in_list=True))
         self.slot_dropdown.set_tooltip_text(
             _("Tuning slot on the wheel base that is being edited"))
         self._slot_handler = self.slot_dropdown.connect(
             "notify::selected", lambda *a: self._on_slot_selected())
         header.pack_start(self.slot_dropdown)
 
+        # The active preset's name, ending in "…" when long
+        self.preset_label = name_label(Gtk.Label(label=_("Presets")), chars=24)
         self.preset_button = Gtk.MenuButton(
-            label=_("Presets"), always_show_arrow=True)
+            child=self.preset_label, always_show_arrow=True)
         self.preset_button.set_tooltip_text(_("Apply or save a preset"))
         header.pack_start(self.preset_button)
 
@@ -1077,7 +1084,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         While the preferences are open, messages show there instead.
         """
         if self._prefs_open():
-            toast = Adw.Toast(title=text, timeout=3, use_markup=False)
+            toast = Adw.Toast(timeout=3, custom_title=self._toast_label(text))
             if button:
                 toast.set_button_label(button)
                 toast.connect("button-clicked", lambda t: action())
@@ -1089,15 +1096,28 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             toast.set_timeout(0)            # hidden by our own timer
             toast.connect("dismissed", self._on_toast_dismissed)
             toast.connect("button-clicked", self._on_toast_button)
+            self._toast_text = self._toast_label("")
+            toast.set_custom_title(self._toast_text)
             self._toast = toast
             self.toasts.add_toast(toast)
-        self._toast.set_title(text)
+        self._toast_text.set_label(text)
+        self._toast_text.set_width_chars(min(len(text), TOAST_CHARS))
         self._toast.set_button_label(button)
         self._toast_action = action if button else None
         if self._toast_timer:
             GLib.source_remove(self._toast_timer)
         self._toast_timer = GLib.timeout_add(
             TOAST_BUTTON_MS if button else TOAST_MS, self._hide_toast)
+
+    @staticmethod
+    def _toast_label(text):
+        """The text of a message: one line up to TOAST_CHARS characters,
+        longer ones on two, so a long name in it can't make it wider than
+        the window."""
+        label = name_label(Gtk.Label(label=text, justify=Gtk.Justification.CENTER),
+                           lines=2, chars=TOAST_CHARS)
+        label.set_width_chars(min(len(text), TOAST_CHARS))
+        return label
 
     def _hide_toast(self):
         self._toast_timer = 0

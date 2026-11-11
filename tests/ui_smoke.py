@@ -150,8 +150,8 @@ def steps(win):
         win.rows["SHO"].set(40, silent=False)
         win.flush_live()
         check(win.update_action.get_enabled(), "update action enabled after change")
-        check(win.preset_button.get_label() == "Test GT3 •",
-              f"modified marker: {win.preset_button.get_label()!r}")
+        check(win.preset_label.get_label() == "Test GT3 •",
+              f"modified marker: {win.preset_label.get_label()!r}")
         win.activate_action("win.update-preset", None)
     yield "save to the active preset", modify_and_update
 
@@ -455,7 +455,7 @@ def steps(win):
         answer("replace")
         _n, vals = config.read_preset(gt3)
         check(vals == {"SHO": 10}, f"replaced: {vals}")
-        check(win.preset_button.get_label() == "Test GT3 •",
+        check(win.preset_label.get_label() == "Test GT3 •",
               "replaced active preset differs from the settings")
         win._write_preset(gt3, "Test GT3")      # as the next steps expect
         copy.unlink()
@@ -559,8 +559,8 @@ def steps(win):
             gone = config.preset_path("Gone F")
             win.activate_action("win.delete-preset", GLib.Variant.new_string(str(gone)))
             check(not gone.exists(), f"deleted at once (dialog: {win.get_visible_dialog()})")
-            check("Used by: BeamNG.drive" in win._toast.get_title(),
-                  f"game named: {win._toast.get_title()}")
+            check("Used by: BeamNG.drive" in win._toast_text.get_label(),
+                  f"game named: {win._toast_text.get_label()}")
             check([i["name"] for i in trash.items()] == ["Gone F"], "in the trash")
             win._on_toast_button(win._toast)       # Undo
             check(config.preset_folder(gone) == "Trash" and not trash.items(),
@@ -630,7 +630,7 @@ def steps(win):
             sel.delete_button.emit("clicked")
             check(not a.exists() and not b.exists() and not sel.active,
                   "chosen ones deleted, choosing ended")
-            check(win._toast.get_title() == "Presets deleted: 2", win._toast.get_title())
+            check(win._toast_text.get_label() == "Presets deleted: 2", win._toast_text.get_label())
             win._on_toast_button(win._toast)
             check(a.exists() and config.preset_folder(b) == "Picks", "both back")
             sel.start()
@@ -653,7 +653,7 @@ def steps(win):
             page.selection.delete_button.emit("clicked")
             check(not any(g["game"].startswith("dummy:") for g in page.games)
                   and len(config.load_games()) == len(before), "games removed")
-            check(win._toast.get_title() == "Games deleted: 2", win._toast.get_title())
+            check(win._toast_text.get_label() == "Games deleted: 2", win._toast_text.get_label())
             # The trash of the Games page: only games, put one back from there
             sel.start()
             sel.toggle(str(a))
@@ -687,13 +687,71 @@ def steps(win):
             win._presets_changed()
     yield "choose and trash", choose_and_trash
 
+    def long_names():
+        """Very long names end in "…": they must not make tiles, menus,
+        lists or messages wider, nor the window."""
+        name = "Nordschleife Endurance for long nights with rain and little grip at the end"
+        nospace = "Supercalifragilistic_Setup_Without_Any_Spaces_1234567890_ABCDEFGHIJ"
+        folder = "Assetto Corsa Competizione Endurance Championship Season 2026 Part Two"
+        game_name = "The Very Long Racing Game Title Ultimate Deluxe Remastered Edition"
+        long_path, nospace_path = config.preset_path(name), config.preset_path(nospace)
+        config.write_preset(long_path, name, {"FF": 10})
+        config.write_preset(nospace_path, nospace, {"FF": 20}, folder)
+        page = win.games_page
+        page._add("dummy:long", game_name)
+        game = [g for g in page.games if g["game"] == "dummy:long"][0]
+        game["preset"] = nospace_path.name
+
+        def width(widget):
+            return widget.measure(Gtk.Orientation.HORIZONTAL, -1)[:2]
+        before = (win.active_preset, win.active_values)
+        try:
+            win._presets_changed()
+            win._set_active_preset(long_path, config.read_preset(long_path)[1])
+            win._select_page("presets")
+            tiles = [w for w in walk(win.presets_box)
+                     if "preset-tile" in w.get_css_classes()]
+            widest = max(width(t)[1] for t in tiles)
+            check(len(tiles) >= 3 and widest < 400, f"preset tiles not widened: {widest}")
+            check(width(win.preset_label)[1] < 300,
+                  f"preset button short: {width(win.preset_label)}")
+            labels = []
+            menu = win.preset_button.get_menu_model()
+            for i in range(menu.get_n_items()):
+                section = menu.get_item_link(i, "section")
+                for j in range(section.get_n_items() if section else 0):
+                    labels.append(section.get_item_attribute_value(j, "label").unpack())
+            check(max(map(len, labels)) <= 60 and any(n.endswith("…") for n in labels),
+                  f"menu entries cut: {max(map(len, labels))}")
+            win._delete_presets([long_path])
+            check(width(win._toast_text)[0] < 600, f"message short: {width(win._toast_text)}")
+            win._on_toast_button(win._toast)            # undo
+            win._select_page("games")
+            game_tiles = [w for w in walk(page.flow) if "game-tile" in w.get_css_classes()]
+            widest = max(width(t)[1] for t in game_tiles)
+            check(widest < 300, f"game tiles not widened: {widest}")
+            choose = [w for w in walk(page.flow) if isinstance(w, Gtk.DropDown)]
+            check(all(width(d)[1] < 260 for d in choose),
+                  f"preset choice short: {[width(d) for d in choose]}")
+            check(width(win)[0] < 1000, f"window not widened: {width(win)}")
+        finally:
+            page.games = [g for g in page.games if g["game"] != "dummy:long"]
+            page._save()
+            for path in (long_path, nospace_path):
+                path.unlink(missing_ok=True)
+            config.delete_folder(folder)
+            trash.empty()
+            win._set_active_preset(*before)
+            win._select_page("presets")
+    yield "long names", long_names
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")
         check(config.preset_path("Renamed").is_file(), "renamed file exists")
         check(win.active_preset == config.preset_path("Renamed"), "active follows rename")
-        check(win.preset_button.get_label().startswith("Renamed"),
-              f"preset button shows new name: {win.preset_button.get_label()!r}")
+        check(win.preset_label.get_label().startswith("Renamed"),
+              f"preset button shows new name: {win.preset_label.get_label()!r}")
     yield "rename preset", rename
 
     def rebuilt_without_wheel_base():

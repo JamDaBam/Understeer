@@ -15,6 +15,8 @@ import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gio, GLib  # noqa: E402
 
+from ..names import short  # noqa: E402
+
 log = logging.getLogger("understeer.tray")
 
 WATCHER = "org.kde.StatusNotifierWatcher"
@@ -309,8 +311,9 @@ class Tray:
 
     @staticmethod
     def _label(text):
-        # "_" marks a mnemonic in dbusmenu labels, "__" is a "_"
-        return GLib.Variant("s", text.replace("_", "__"))
+        # Short, so a long name can't make the menu very wide; "_" marks
+        # a mnemonic in dbusmenu labels, "__" is a "_"
+        return GLib.Variant("s", short(text).replace("_", "__"))
 
     @staticmethod
     def _toggle(on):

@@ -7,6 +7,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from .. import trash
 from ..i18n import _
+from .names import cap_row, short
 
 log = logging.getLogger("understeer.window")
 
@@ -83,9 +84,9 @@ class TrashMixin:
             when = GLib.DateTime.new_from_unix_local(int(item["deleted"])).format("%x")
             parts = [_("Deleted on {date}").format(date=when)]
             if item.get("folder"):
-                parts.insert(0, _("Folder: {folder}").format(folder=item["folder"]))
-            row = Adw.ActionRow(title=item["name"], subtitle=" · ".join(parts),
-                                use_markup=False)
+                parts.insert(0, _("Folder: {folder}").format(folder=short(item["folder"])))
+            row = cap_row(Adw.ActionRow(title=item["name"], subtitle=" · ".join(parts),
+                                        use_markup=False))
             back = Gtk.Button(icon_name="edit-undo-symbolic", valign=Gtk.Align.CENTER,
                               tooltip_text=_("Restore"))
             back.add_css_class("flat")
@@ -107,7 +108,7 @@ class TrashMixin:
     def _restore_from_trash(self, item):
         if item["kind"] == "game":
             if self.games_page.restore(item["id"]):
-                self._notify(_("“{name}” restored").format(name=item["name"]))
+                self._notify(_("“{name}” restored").format(name=short(item["name"])))
             return
         try:
             path = trash.restore_preset(item["id"])
@@ -117,7 +118,7 @@ class TrashMixin:
         self._presets_changed()
         self._trash_changed()
         name = self._preset_names.get(path, item["name"])
-        self._notify(_("“{name}” restored").format(name=name))
+        self._notify(_("“{name}” restored").format(name=short(name)))
 
     def _delete_from_trash(self, item):
         trash.remove(item["id"])

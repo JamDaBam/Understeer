@@ -9,14 +9,16 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 from .. import config, sharing, trash
 from ..i18n import _
 from ..settings import SETTINGS, SIM_DEFAULTS, TABS, changes, format_value
+from .names import cap_row, full_name_tip, join_names, name_label, short
 from .selection import Selection
 
 log = logging.getLogger("understeer.window")
 
 
 def _menu_text(text):
-    """Menus read "_" as a keyboard shortcut; keep it in names."""
-    return text.replace("_", "__")
+    """A name in a menu: short, and with its "_" kept (menus read "_" as
+    a keyboard shortcut)."""
+    return short(text).replace("_", "__")
 
 
 def _outcome_text(name, outcome, failed, no_device):
@@ -32,7 +34,7 @@ def _outcome_text(name, outcome, failed, no_device):
                  "Failed: {names}")
     else:
         text = no_device
-    return text.format(name=name, names=", ".join(failed))
+    return text.format(name=short(name), names=", ".join(failed))
 
 
 class PresetsMixin:
@@ -152,8 +154,10 @@ class PresetsMixin:
             "folder-symbolic" if folder is not None else "view-grid-symbolic")
         icon.add_css_class("dim-label")
         head.append(icon)
-        label = Gtk.Label(label=folder if folder is not None else
-                          _("Without Folder"), xalign=0, ellipsize=3)
+        label = name_label(Gtk.Label(label=folder if folder is not None else
+                                     _("Without Folder"), xalign=0), chars=40)
+        if folder is not None:
+            full_name_tip(label, folder, 30)
         label.add_css_class("heading")
         head.append(label)
         count = Gtk.Label(label=_("Presets: {n}").format(n=len(group)), xalign=0)
@@ -232,7 +236,10 @@ class PresetsMixin:
         tile.add_css_class("preset-tile")
         if active:
             tile.add_css_class("active")
-        title = Gtk.Label(label=name, xalign=0, wrap=True)
+        # Two lines at most, asking for the room of a usual name: a long
+        # name made every tile as wide
+        title = name_label(Gtk.Label(label=name, xalign=0), lines=2, chars=16)
+        full_name_tip(title, name, 16)
         title.add_css_class("preset-name")
         # Right after the name, like at a folder and a game
         rename_btn = Gtk.Button(icon_name="document-edit-symbolic",
@@ -249,9 +256,8 @@ class PresetsMixin:
             head.append(self._preset_menu(path))
         else:
             head.set_margin_end(36)
-        sub = Gtk.Label(label=_("Active preset") if active else path.name,
-                        xalign=0, vexpand=True, valign=Gtk.Align.START)
-        sub.set_ellipsize(3)                # Pango.EllipsizeMode.END
+        sub = name_label(Gtk.Label(label=_("Active preset") if active else path.name,
+                                   xalign=0, vexpand=True, valign=Gtk.Align.START))
         sub.add_css_class("dim-label")
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
@@ -381,14 +387,14 @@ class PresetsMixin:
 
     def _update_preset_indicator(self):
         if self.active_preset is None:
-            self.preset_button.set_label(_("Presets"))
+            self.preset_label.set_label(_("Presets"))
             self.update_action.set_enabled(False)
             return
         modified = bool(self._unsaved_preset_changes())
         name = self._active_name()
-        self.preset_button.set_label(f"{name} •" if modified else name)
+        self.preset_label.set_label(f"{name} •" if modified else name)
         self.preset_button.set_tooltip_text(
-            _("Preset “{name}” has unsaved changes").format(name=name)
+            _("Preset “{name}” has unsaved changes").format(name=short(name))
             if modified else _("Apply or save a preset"))
         self.update_action.set_enabled(modified)
 
@@ -427,9 +433,9 @@ class PresetsMixin:
             outcome, failed = self._apply_values(
                 values,
                 _("Wheel base connected: preset “{name}” for {game} applied")
-                .format(game=game, name=name),
+                .format(game=short(game), name=short(name)),
                 _("Wheel base connected: preset “{name}” for {game} loaded — "
-                  "click Apply to write it").format(game=game, name=name))
+                  "click Apply to write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed, connected)
         elif game:
             # Without a wheel base, it is written once one is connected
@@ -439,13 +445,13 @@ class PresetsMixin:
                 _("{game} started: preset “{name}” applied").format(
                     game=game, name=name) if self.device_path else
                 _("{game} started: preset “{name}” is applied once the wheel "
-                  "base is connected").format(game=game, name=name),
+                  "base is connected").format(game=short(game), name=short(name)),
                 _("{game} started: preset “{name}” loaded — click Apply to "
-                  "write it").format(game=game, name=name))
+                  "write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed)
         else:
             outcome, failed = self._apply_values(
-                values, _("Preset “{name}” applied").format(name=name),
+                values, _("Preset “{name}” applied").format(name=short(name)),
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
             if self._in_background:         # chosen in the tray menu
@@ -479,7 +485,7 @@ class PresetsMixin:
             return
         current = self._collect_values()
         differ = {a for a, v in values.items() if a in current and current[a] != v}
-        dialog = self.fit_dialog(Adw.Dialog(title=name))
+        dialog = self.fit_dialog(Adw.Dialog(title=short(name)))
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
 
@@ -545,7 +551,7 @@ class PresetsMixin:
                 "game_notifications", True):
             return
         title = (_("Wheel base connected, {game} runs") if connected
-                 else _("{game} started")).format(game=game)
+                 else _("{game} started")).format(game=short(game))
         log.info("Notification for %s: preset %s %s%s", game, name, outcome,
                  " after connecting" if connected else "")
         self._desktop_notify("game-preset", title, _outcome_text(
@@ -602,7 +608,7 @@ class PresetsMixin:
             self._confirm_overwrite(path, new_name=name)
             return
         if self._write_preset(path, name, config.existing_folder(folder)):
-            self._notify(_("Preset “{name}” saved").format(name=name))
+            self._notify(_("Preset “{name}” saved").format(name=short(name)))
 
     # -- folders ---------------------------------------------------------------
     def _name_dialog(self, title, body, rows, action, done, name_row=None,
@@ -703,7 +709,8 @@ class PresetsMixin:
         rows.add_css_class("boxed-list")
         checks = []
         for name, kind in found:
-            row = Adw.ActionRow(title=name, activatable=True, use_markup=False)
+            row = cap_row(Adw.ActionRow(title=name, activatable=True,
+                                        use_markup=False))
             row.add_prefix(Gtk.Image.new_from_icon_name(
                 "folder-symbolic" if kind == "folder"
                 else "applications-games-symbolic"))
@@ -745,7 +752,7 @@ class PresetsMixin:
         entry.set_title(_("Name"))
         return self._name_dialog(
             _("New Folder"),
-            _("“{name}” is put into it.").format(name=name) if name else
+            _("“{name}” is put into it.").format(name=short(name)) if name else
             _("A folder groups presets here and in the menus, e.g. several "
               "for one game. Drag presets onto it."),
             [entry], _("Create"),
@@ -766,7 +773,7 @@ class PresetsMixin:
         log.info("Folder %r made", folder)
         self._presets_changed()
         self._notify((_("Folder “{folder}” already exists") if existed else
-                      _("Folder “{folder}” made")).format(folder=folder))
+                      _("Folder “{folder}” made")).format(folder=short(folder)))
 
     def _ask_delete_folder(self, folder, count):
         """Delete a folder, keeping its presets or with them. Asks only if
@@ -780,7 +787,7 @@ class PresetsMixin:
                  "delete them too? Deleted presets go to the trash.").format(n=count)
         body += self._games_note(files)
         dialog = Adw.AlertDialog(
-            heading=_("Delete Folder “{folder}”?").format(folder=folder),
+            heading=_("Delete Folder “{folder}”?").format(folder=short(folder)),
             body=body)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("keep", _("Keep Presets"))
@@ -821,7 +828,7 @@ class PresetsMixin:
             return
         log.info("Folder %r deleted, %d presets taken out", folder, moved)
         self._presets_changed()
-        self._notify(_("Folder “{folder}” deleted").format(folder=folder))
+        self._notify(_("Folder “{folder}” deleted").format(folder=short(folder)))
 
     def _set_preset_folder(self, path, name, folder):
         folder = config.existing_folder(folder)
@@ -836,12 +843,12 @@ class PresetsMixin:
         self._presets_changed()
         self._notify(_("“{name}” moved to “{folder}”").format(
             name=name, folder=folder) if folder else
-            _("“{name}” is in no folder now").format(name=name))
+            _("“{name}” is in no folder now").format(name=short(name)))
 
     def _ask_rename_folder(self, folder):
         entry = Adw.EntryRow(title=_("Name"), text=folder, activates_default=True)
         dialog = self._name_dialog(
-            _("Rename Folder “{folder}”").format(folder=folder),
+            _("Rename Folder “{folder}”").format(folder=short(folder)),
             _("With the name of another folder, both become one. Left empty, "
               "the presets are taken out of the folder."),
             [entry], _("Rename"), lambda: self._rename_folder(folder, entry.get_text()))
@@ -887,7 +894,7 @@ class PresetsMixin:
         body = (_("Settings that change:") if diff else
                 _("The preset already matches the current settings."))
         dialog = Adw.AlertDialog(
-            heading=_("Overwrite “{name}”?").format(name=name), body=body)
+            heading=_("Overwrite “{name}”?").format(name=short(name)), body=body)
         if diff:
             dialog.set_extra_child(self._changes_list(diff))
             if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
@@ -926,7 +933,7 @@ class PresetsMixin:
         self._ask_save_changes(
             lambda: self._apply_preset(path), f"apply {path.name}",
             _("These settings differ from the preset. Then “{name}” is "
-              "applied.").format(name=name))
+              "applied.").format(name=short(name)))
 
     def _ask_save_changes(self, then, what, body):
         """Offer to save unsaved changes of the active preset into it,
@@ -939,7 +946,7 @@ class PresetsMixin:
             return
         path, name = self.active_preset, self._active_name()
         dialog = Adw.AlertDialog(
-            heading=_("Save Changes to “{name}”?").format(name=name), body=body)
+            heading=_("Save Changes to “{name}”?").format(name=short(name)), body=body)
         dialog.set_extra_child(self._changes_list(diff))
         if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
             dialog.set_prefer_wide_layout(True)
@@ -987,7 +994,7 @@ class PresetsMixin:
                 return
             self._set_active_preset(path, old_values)
 
-        self._notify(_("Preset “{name}” saved").format(name=name),
+        self._notify(_("Preset “{name}” saved").format(name=short(name)),
                      _("Undo") if old_text is not None else None, undo)
 
     # -- sharing ---------------------------------------------------------------
@@ -1015,7 +1022,7 @@ class PresetsMixin:
         self.get_clipboard().set(text)
         log.info("Preset %s copied as %s", pathlib.Path(path).name,
                  "JSON" if as_json else "text")
-        self._notify(message.format(name=name))
+        self._notify(message.format(name=short(name)))
 
     @staticmethod
     def _preset_filters():
@@ -1051,7 +1058,7 @@ class PresetsMixin:
                 self._error(_("Could not save preset"), str(e))
                 return
             log.info("Preset %s saved as file", pathlib.Path(path).name)
-            self._notify(_("Preset “{name}” saved as file").format(name=name),
+            self._notify(_("Preset “{name}” saved as file").format(name=short(name)),
                          _("Show Folder"),
                          lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(dest))
                          .open_containing_folder(self, None, None))
@@ -1249,9 +1256,9 @@ class PresetsMixin:
         if sum(f.name == found.name for f in all_found) > 1:
             subtitle = _("Version {n}").format(n=found.version) + " · " + subtitle
         if found.folder:
-            subtitle = _("Folder: {folder}").format(folder=found.folder) + \
+            subtitle = _("Folder: {folder}").format(folder=short(found.folder)) + \
                 " · " + subtitle
-        row = Adw.ExpanderRow(title=found.name, subtitle=subtitle)
+        row = cap_row(Adw.ExpanderRow(title=found.name, subtitle=subtitle))
         row.set_use_markup(False)           # names come from others
         check = Gtk.CheckButton(active=True, valign=Gtk.Align.CENTER,
                                 tooltip_text=_("Add this preset"))
@@ -1315,7 +1322,7 @@ class PresetsMixin:
         else:
             body = _("Replace your preset, or keep both?")
         dialog = Adw.AlertDialog(
-            heading=_("“{name}” Already Exists").format(name=name), body=body)
+            heading=_("“{name}” Already Exists").format(name=short(name)), body=body)
         if diff:
             dialog.set_extra_child(self._changes_list(diff))
             if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
@@ -1363,7 +1370,7 @@ class PresetsMixin:
         self._presets_changed()
         if len(added) == 1:
             path, name = added[0]
-            self._notify(_("Preset “{name}” imported").format(name=name),
+            self._notify(_("Preset “{name}” imported").format(name=short(name)),
                          _("Apply"), lambda: self._ask_apply_preset(path))
         else:
             self._notify(_("Presets imported: {n}").format(n=len(added)))
@@ -1397,7 +1404,7 @@ class PresetsMixin:
             self.active_preset = new_path
         self.games_page.games = config.load_games()
         self._presets_changed()
-        self._notify(_("Preset renamed to “{name}”").format(name=new_name))
+        self._notify(_("Preset renamed to “{name}”").format(name=short(new_name)))
 
     def _games_note(self, files):
         """For a delete dialog: which games use one of these preset files,
@@ -1407,7 +1414,7 @@ class PresetsMixin:
         if not games:
             return ""
         return "\n\n" + _("Used by: {games}. Without their preset, these games "
-                           "get none applied.").format(games=", ".join(games))
+                           "get none applied.").format(games=join_names(games))
 
     def _delete_presets(self, paths, text=None):
         """Put presets in the bin; the message offers Undo, and they stay
@@ -1433,11 +1440,11 @@ class PresetsMixin:
         self._trash_changed()
         games = [g["name"] for g in getattr(self.games_page, "games", [])
                  if g.get("preset") in files]
-        text = text or (_("“{name}” deleted").format(name=names[0])
+        text = text or (_("“{name}” deleted").format(name=short(names[0]))
                         if len(names) == 1 else
                         _("Presets deleted: {n}").format(n=len(names)))
         if games:
-            text += " · " + _("Used by: {games}").format(games=", ".join(games))
+            text += " · " + _("Used by: {games}").format(games=join_names(games))
 
         def undo():
             for item in items:

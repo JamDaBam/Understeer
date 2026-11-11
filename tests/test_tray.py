@@ -368,3 +368,19 @@ def test_ids_stay_with_their_item(panel, with_presets):
     assert folder[1]["toggle-type"] == ""               # never a choice
     preset = [c for c in children if c[1].get("toggle-type") == "radio"][0]
     assert preset[1]["children-display"] == ""          # never a submenu
+
+
+def test_long_names_are_cut(panel, with_presets):
+    """A long name would make the whole tray menu as wide."""
+    conn, _items = panel
+    t, state = with_presets
+    long_name = "Nordschleife Endurance for long nights with rain_and_little grip"
+    state["presets"] = [(long_name, "a", False), (long_name + " folder", [("Drift", "b", True)])]
+    t.start()
+    spin(lambda: t.registered)
+    _revision, (_root, _props, children) = layout(conn, t)
+    preset, folder = children[2][1]["label"], children[3][1]["label"]
+    assert preset == "Nordschleife Endurance for long nights…"
+    assert folder.startswith("Nordschleife Endurance") and folder.endswith("…")
+    assert len(preset) <= 40 and len(folder) <= 40
+    assert children[3][2][0][1]["label"] == "Drift"

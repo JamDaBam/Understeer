@@ -24,9 +24,11 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheel bases an
 - **Your look:** Every setting is a tile with its value in large type, in two sizes (*Full* or *Compact*). Under *Preferences → General* you choose light, dark or system colours, one of four themes (Standard, Carbon, Midnight, Pit Lane), an accent colour and the corner radius (3 px by default).
 - **Translations:** Available in English and German, chosen automatically or under *Preferences → General*. More languages can be added easily (see below).
 
-![Presets page with a folder of BeamNG.drive presets](docs/presets.png)
+![Presets page with presets without a folder and in a folder](docs/presets.png)
 
-![Games page with BeamNG.drive running](docs/games.png)
+![Choosing presets to delete them at once](docs/select.png)
+
+![Games page with a preset for each game and BeamNG.drive running](docs/games.png)
 
 ## Prerequisites
 
