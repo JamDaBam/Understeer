@@ -392,7 +392,7 @@ class PresetsMixin:
 
     def _apply_preset(self, path, game=None, connected=False):
         """Apply a preset; game: the game it is applied for, connected: the
-        wheel base just got connected while the game runs."""
+        wheelbase just got connected while the game runs."""
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
@@ -416,7 +416,7 @@ class PresetsMixin:
                   "click Apply to write it").format(game=short(game), name=short(name)))
             self._notify_game_preset(game, name, outcome, failed, connected)
         elif game:
-            # Without a wheel base, it is written once one is connected
+            # Without a wheelbase, it is written once one is connected
             # (_apply_running_game_preset).
             outcome, failed = self._apply_values(
                 values,
@@ -508,15 +508,15 @@ class PresetsMixin:
         dialog.present(self)
 
     def _apply_running_game_preset(self):
-        """After a wheel base got connected: apply the preset of a running
-        game, chosen before there was a wheel base to write it to. Returns
+        """After a wheelbase got connected: apply the preset of a running
+        game, chosen before there was a wheelbase to write it to. Returns
         whether there was one."""
         for game in self.games_page.games:
             if game["game"] not in self._game_watch.running or not game["auto"]:
                 continue
             path = config.game_preset_path(game)
             if path is not None:
-                log.info("Wheel base connected while %s runs", game["name"])
+                log.info("Wheelbase connected while %s runs", game["name"])
                 self._apply_preset(path, game=game["name"], connected=True)
                 return True
         return False
@@ -524,7 +524,7 @@ class PresetsMixin:
     def _notify_game_preset(self, game, name, outcome, failed, connected=False):
         """While the window is closed, tell with a notification of the
         desktop what became of the preset of a game that started, or that
-        runs while the wheel base got connected."""
+        runs while the wheelbase got connected."""
         if not self._in_background or not config.get_setting(
                 "game_notifications", True):
             return
@@ -891,13 +891,13 @@ class PresetsMixin:
 
     def confirm_quit(self, quit_now):
         """Call quit_now(), but first offer to save unsaved changes of the
-        active preset. The wheel base keeps its settings either way."""
+        active preset. The wheelbase keeps its settings either way."""
         if self._shut_down or not self._unsaved_preset_changes():
             if self._save_dialog is None:
                 quit_now()
             return
         if self._in_background:
-            self.show_again()               # also reads the wheel base again
+            self.show_again()               # also reads the wheelbase again
         self._ask_save_changes(
             quit_now, "quit",
             _("These settings differ from the preset. The wheelbase "

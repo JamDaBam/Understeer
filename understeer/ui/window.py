@@ -32,8 +32,8 @@ from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
 
 LIVE_DELAY_MS = 120
-WATCH_MS = 250       # how often to look for changes made on the wheel base
-PLUG_TICKS = 4       # ... and every 4th time (1 s) for a wheel base plugged in or out
+WATCH_MS = 250       # how often to look for changes made on the wheelbase
+PLUG_TICKS = 4       # ... and every 4th time (1 s) for a wheelbase plugged in or out
 INPUT_SETTLE_MS = 2000  # udev may give access to a new input device a bit later
 GAMES_WATCH_MS = 2000   # how often to look for started games
 DIALOG_MIN_WIDTH = 720  # big dialogs: About, What's New, Preferences, ...
@@ -75,9 +75,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._live_timer = 0
         self._status = ""
 
-        self.model = None           # wheel base model, e.g. "0EB7:0020"
+        self.model = None           # wheelbase model, e.g. "0EB7:0020"
         self.slot_names = {}        # slot number -> name chosen by the user
-        self.slot_count = SLOTS     # more if the wheel base reported more
+        self.slot_count = SLOTS     # more if the wheelbase reported more
         self._filling_slot_names = False
 
         self.active_preset = None   # path of the last applied/saved preset
@@ -117,7 +117,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         Text is set when widgets are made, so the window content is built
         again. The window itself stays, with its position and size, and so
         do the active preset, the state "Undo All" goes back to, changes
-        waiting for Apply, the shown values (without a wheel base there is
+        waiting for Apply, the shown values (without a wheelbase there is
         nothing to read them from again), the shown view and tab, the
         preferences window with its page, and the shown message.
         """
@@ -189,7 +189,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def go_to_background(self, announce=True):
         """Hide the window but keep applying the presets of games.
 
-        Watching the wheel base and the games goes on; the live input
+        Watching the wheelbase and the games goes on; the live input
         display stops, nobody sees it.
         """
         self.flush_live()
@@ -673,13 +673,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     # -----------------------------------------------------------------------
     def _refresh_device_state(self):
         if self.device_path:
-            log.info("Wheel base %s (model %s), %s", self.device_path,
+            log.info("Wheelbase %s (model %s), %s", self.device_path,
                      model_id(self.device_path),
                      "writable" if self.writable else "no write access")
             log.info("Access: %s", describe_access(self.device_path))
             log.info("Rumble: %s", self.rumble_path or "not available")
         else:
-            log.info("No wheel base found")
+            log.info("No wheelbase found")
         self.wheel = wheel_info(self.device_path) if self.device_path else {}
         if self.wheel.get("base_firmware") is not None or self.wheel.get("rim_id"):
             log.info("Wheel: %s", self._wheel_text())
@@ -726,7 +726,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._update_slot_dropdown()
 
     def _show_slot_name_rows(self):
-        """One name row per slot of the connected wheel base."""
+        """One name row per slot of the connected wheelbase."""
         for n in range(1, self.slot_count + 1):
             if n not in self.slot_name_rows:
                 entry = Adw.EntryRow(title=_("Slot {n}").format(n=n))
@@ -743,7 +743,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             entry.set_visible(n <= self.slot_count)
 
     def _show_device_slot(self):
-        """Select the slot the wheel base reports in the slot menu.
+        """Select the slot the wheelbase reports in the slot menu.
 
         Returns the slot number, or None if it can't be read.
         """
@@ -751,7 +751,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if not slot or not 1 <= slot <= MAX_SLOT:
             return None
         if slot > self.slot_count:
-            # Some wheel bases have more slots than the driver can switch
+            # Some wheelbases have more slots than the driver can switch
             # to (a CSL DD has 6); remember that for this model.
             self.slot_count = slot
             if self.model:
@@ -778,7 +778,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def _update_slot_dropdown(self):
         labels = [self._slot_label(n) for n in range(1, self.slot_count + 1)]
         model = self.slot_dropdown.get_model()
-        # Changing the list must not switch the slot on the wheel base.
+        # Changing the list must not switch the slot on the wheelbase.
         with self.slot_dropdown.handler_block(self._slot_handler):
             selected = self.slot_dropdown.get_selected()
             model.splice(0, model.get_n_items(), labels)
@@ -868,7 +868,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._detect_device()
 
     def _detect_device(self):
-        """Look for the wheel base again, e.g. after it was switched on."""
+        """Look for the wheelbase again, e.g. after it was switched on."""
         self.device_path = find_device_path()
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
@@ -878,7 +878,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             GLib.timeout_add(INPUT_SETTLE_MS, lambda: self._start_inputs() and False)
 
     def _check_plugged(self):
-        """Notice a wheel base being switched on, off or plugged in again.
+        """Notice a wheelbase being switched on, off or plugged in again.
 
         Plugging in again gives the device folder a new name, so a gone
         folder means: look again. A new device counts only once the driver
@@ -894,9 +894,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 found is None or not os.path.exists(os.path.join(found, "FF"))):
             return False
         if found is None:
-            log.info("Wheel base %s is gone", self.device_path)
+            log.info("Wheelbase %s is gone", self.device_path)
         else:
-            log.info("Wheel base found: %s", found)
+            log.info("Wheelbase found: %s", found)
         had_device = self.device_path is not None
         self._detect_device()
         if self.device_path:
@@ -926,12 +926,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 row.set(value)
             row.set_baseline(row.get())
         self.device_values["SLOT"] = self._show_device_slot()
-        log.info("Read from wheel base (slot %s): %s", self.device_values["SLOT"],
+        log.info("Read from wheelbase (slot %s): %s", self.device_values["SLOT"],
                  " ".join(f"{a}={v}" for a, v in self.device_values.items()
                           if a != "SLOT" and v is not None))
         missing = [a for a, v in self.device_values.items() if v is None]
         if missing:
-            log.info("Not supported by this wheel base: %s", ", ".join(missing))
+            log.info("Not supported by this wheelbase: %s", ", ".join(missing))
         self._set_status(_("In sync with device"))
         self._update_preset_indicator()
 
@@ -1107,7 +1107,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 self._toast_timer = 0
 
     def _check_device(self):
-        """Follow changes made on the wheel base itself.
+        """Follow changes made on the wheelbase itself.
 
         Switching the slot there reloads everything; a value changed in its
         tuning menu moves the matching control. Values the app wrote itself
@@ -1121,7 +1121,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         slot = read_int(self._attr_file("SLOT"))
         if slot is not None and slot != self.device_values.get("SLOT"):
             discarded = bool(self.pending)
-            log.info("Slot changed on the wheel base: %s -> %s%s",
+            log.info("Slot changed on the wheelbase: %s -> %s%s",
                      self.device_values.get("SLOT"), slot,
                      ", unapplied changes discarded" if discarded else "")
             self._load_from_device()
@@ -1138,7 +1138,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             value = self._read_value(attr_id)
             if value is None or value == self.device_values.get(attr_id):
                 continue
-            log.info("Changed on the wheel base: %s %s -> %s", attr_id,
+            log.info("Changed on the wheelbase: %s %s -> %s", attr_id,
                      self.device_values.get(attr_id), value)
             self.device_values[attr_id] = value
             row.set(value)
@@ -1148,7 +1148,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         return GLib.SOURCE_CONTINUE
 
     # -----------------------------------------------------------------------
-    # Wheel base and steering wheel
+    # Wheelbase and steering wheel
     # -----------------------------------------------------------------------
     def _rim_name(self, rim_id):
         return RIMS.get(rim_id) or _("Unknown wheel (ID {id})").format(id=rim_id)

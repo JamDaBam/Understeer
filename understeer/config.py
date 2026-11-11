@@ -94,7 +94,7 @@ def save_axis_roles(roles):
 
 
 def load_slot_names(model):
-    """{slot number: name} the user gave the slots of this wheel base model."""
+    """{slot number: name} the user gave the slots of this wheelbase model."""
     names = _read_json(SLOT_NAMES_FILE).get(model)
     if not isinstance(names, dict):
         return {}
@@ -119,7 +119,7 @@ def save_slot_name(model, slot, name):
 
 
 def load_slot_count(model):
-    """Highest slot number seen on this wheel base model, 0 if unknown."""
+    """Highest slot number seen on this wheelbase model, 0 if unknown."""
     count = _read_json(SLOT_COUNTS_FILE).get(model)
     return count if isinstance(count, int) and count > 0 else 0
 

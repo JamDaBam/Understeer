@@ -19,7 +19,7 @@ body:
     id: system
     attributes:
       label: System details
-      description: Versions, wheel base and access rights. Without Understeer's report window, copy them from About Understeer → Troubleshooting.
+      description: Versions, wheelbase and access rights. Without Understeer's report window, copy them from About Understeer → Troubleshooting.
       render: text
     validations:
       required: true

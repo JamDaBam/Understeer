@@ -1,4 +1,4 @@
-"""Drive the whole app against a fake wheel base; run by test_ui.py.
+"""Drive the whole app against a fake wheelbase; run by test_ui.py.
 
 Usage: ui_smoke.py <scratch dir>
 Expects an isolated HOME and a display (test_ui.py starts Xvfb). Nothing
@@ -16,7 +16,7 @@ import traceback
 scratch = pathlib.Path(sys.argv[1])
 sys.argv = sys.argv[:1]
 
-# A fake wheel base: one sysfs folder with every setting as a plain file.
+# A fake wheelbase: one sysfs folder with every setting as a plain file.
 dev = scratch / "sysfs" / "ftec_tuning" / "0003:0EB7:0020.0005"
 dev.mkdir(parents=True, exist_ok=True)
 VALUES = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0, "FFS": 1,
@@ -127,7 +127,7 @@ def r_suffix(row):
 
 def steps(win):
     """Each step runs on its own main loop turn, so the UI can settle."""
-    yield "start", lambda: check(win.device_path is not None, "fake wheel base found")
+    yield "start", lambda: check(win.device_path is not None, "fake wheelbase found")
 
     def live_write():
         win.rows["FF"].set(55, silent=False)
@@ -137,9 +137,9 @@ def steps(win):
 
     def changed_on_wheel_base():
         (dev / "SHO").write_text("60\n")
-    yield "change on the wheel base", changed_on_wheel_base
+    yield "change on the wheelbase", changed_on_wheel_base
     yield "change followed", lambda: check(win.rows["SHO"].get() == 60,
-                                           "control follows the wheel base")
+                                           "control follows the wheelbase")
 
     def steering_auto():
         (dev / "SEN").write_text("2530\n")     # how a CSL DD reports Auto
@@ -248,7 +248,7 @@ def steps(win):
         _n, vals = config.read_preset(win.active_preset)
         check(quits and vals.get("SHO") == 40, "quit, preset left as it was")
         check((dev / "SHO").read_text().strip() == "20",
-              "wheel base keeps the changed value")
+              "wheelbase keeps the changed value")
     yield "quit without saving", quit_without_saving
 
     def quit_and_save():
@@ -846,14 +846,14 @@ def steps(win):
             win.relocalize()
             shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
             check(shown == {"SEN": 540, "SHO": 30},
-                  f"values kept without a wheel base: {shown}")
+                  f"values kept without a wheelbase: {shown}")
             win._set_setting("SEN", 0)                  # the Auto button
             check(win.rows["SEN"].value_label.get_label() == "Auto",
                   "Auto also without a wheelbase, e.g. for a preset")
         finally:
             win.device_path = path
             win.relocalize()
-    yield "rebuilt without wheel base", rebuilt_without_wheel_base
+    yield "rebuilt without wheelbase", rebuilt_without_wheel_base
 
     def dialogs():
         win._ask_preset_name()
@@ -1160,11 +1160,11 @@ def steps(win):
         win._show_update_banner()
     yield "update check off", update_check_off
 
-    # -- wheel base and steering wheel ---------------------------------------
+    # -- wheelbase and steering wheel ---------------------------------------
     yield "hardware shown", lambda: (
         win._show_preferences("wheelbase"),
         check(win.base_row.get_subtitle() == "CSL DD · Firmware 1234",
-              f"wheel base row: {win.base_row.get_subtitle()!r}"),
+              f"wheelbase row: {win.base_row.get_subtitle()!r}"),
         check(win.rim_row.get_visible() and win.rim_row.get_subtitle() ==
               "ClubSport Steering Wheel Formula V2 · Firmware 52",
               f"wheel row: {win.rim_row.get_subtitle()!r}"),
@@ -1241,12 +1241,12 @@ def steps(win):
         win._game_watch.running.add("test-game")
         path, win.device_path = win.device_path, None
         try:
-            win._apply_preset(bg_preset, game="BeamNG")     # no wheel base yet
+            win._apply_preset(bg_preset, game="BeamNG")     # no wheelbase yet
             (dev / "FF").write_text("20\n")                 # its own value
             notes.clear()
             win._plug_tick = -1                             # look right now
             win._check_plugged()
-            check(win.device_path == path, "wheel base found again")
+            check(win.device_path == path, "wheelbase found again")
             check((dev / "FF").read_text().strip() == "64",
                   "preset of the running game written once connected")
             check(notes == [("game-preset", "Wheelbase connected, BeamNG runs",
@@ -1282,7 +1282,7 @@ def steps(win):
             finally:
                 win.device_path = path
             check(notes and "was not written" in notes[0][2],
-                  f"told it was not written without a wheel base: {notes}")
+                  f"told it was not written without a wheelbase: {notes}")
             # Unsaved changes: the window opens and asks before they are lost
             application._tray_apply_preset(str(tray_preset))
             win._set_setting("FF", 55)           # written, as by the user

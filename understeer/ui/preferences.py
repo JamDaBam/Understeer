@@ -77,7 +77,7 @@ class PreferencesMixin:
         general.add(look.shape_group)
         general.add(self._updates_group())
 
-        # -- Wheel base -----------------------------------------------------
+        # -- Wheelbase -----------------------------------------------------
         wheel = self._prefs_page("wheelbase", _("Wheelbase"), "understeer-steering-symbolic")
         hardware = Adw.PreferencesGroup(title=_("Hardware"))
         self.base_row = Adw.ActionRow(title=_("Wheelbase"), subtitle_selectable=True)

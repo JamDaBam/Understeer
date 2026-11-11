@@ -12,5 +12,5 @@ body:
   - type: textarea
     id: hardware
     attributes:
-      label: Your wheel base and game (optional)
+      label: Your wheelbase and game (optional)
       description: If it is about certain hardware or a game, which ones?

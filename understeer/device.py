@@ -1,4 +1,4 @@
-"""Reading and writing the wheel base settings in sysfs, without GTK."""
+"""Reading and writing the wheelbase settings in sysfs, without GTK."""
 import glob
 import grp
 import logging
@@ -33,7 +33,7 @@ def find_device_path():
 
 
 def model_id(device_path):
-    """Vendor and product id of the wheel base, e.g. "0EB7:0020".
+    """Vendor and product id of the wheelbase, e.g. "0EB7:0020".
 
     The driver names the folder after the HID device ("0003:0EB7:0020.0005");
     the number after the dot changes on every reconnect, so it is left out.
@@ -84,7 +84,7 @@ RIMS = {                 # rim_id
 
 
 def wheel_info(device_path):
-    """What the driver tells about the wheel base and the wheel on it:
+    """What the driver tells about the wheelbase and the wheel on it:
     {"base": name or None, "base_firmware", "rim_id", "rim_firmware"}.
 
     rim_id and the firmware versions come with hid-fanatecff from October
@@ -183,7 +183,7 @@ def write_values(writes):
             denied[path] = value
         except OSError as e:
             # The driver answers e.g. EINVAL for values it does not accept
-            # and ENODEV once the wheel base is gone.
+            # and ENODEV once the wheelbase is gone.
             log.warning("Could not write %s to %s: %s", name, path,
                         e.strerror or e)
             failed.append(path)
