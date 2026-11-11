@@ -638,8 +638,12 @@ def steps(win):
         login = find_row(win.prefs, "Start at Login")
         check(run is not None and login is not None, "background switches found")
         check(not login.get_sensitive(), "start at login needs the background")
+        notify = find_row(win.prefs, "Notify When a Game Starts")
+        check(notify is not None and not notify.get_sensitive()
+              and notify.get_active(), "game notifications on, need the background")
         run.set_active(True)
         check(login.get_sensitive(), "start at login can be switched on")
+        check(notify.get_sensitive(), "game notifications can be switched")
         login.set_active(True)
         check(background.autostart_enabled(), "autostart file written")
         if os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
@@ -655,9 +659,40 @@ def steps(win):
         check(config.get_setting("background_hint_shown"), "hint shown once"))
     yield "games still watched", lambda: check(win._check_games() is True,
                                                "games watch runs on")
+
+    notes, active = [], []
+    bg_preset = config.preset_path("Background Test")
+
+    def game_in_background():
+        active.append((win.active_preset, dict(win.active_values)))
+        config.write_preset(bg_preset, "Background Test", {"FF": 64})
+        win._desktop_notify = lambda *note: notes.append(note)
+        win._apply_preset(bg_preset, game="BeamNG")
+        check((dev / "FF").read_text().strip() == "64", "applied in the background")
+        check(notes == [("game-preset", "BeamNG started",
+                         "Preset “Background Test” applied.")], f"notified: {notes}")
+        notes.clear()
+        path, win.device_path = win.device_path, None
+        try:
+            win._apply_preset(bg_preset, game="BeamNG")
+        finally:
+            win.device_path = path
+        check(notes and "no wheel base" in notes[0][2], f"no wheel base told: {notes}")
+        notes.clear()
+        config.set_setting("game_notifications", False)
+        win._apply_preset(bg_preset, game="BeamNG")
+        check(not notes, "no notification when switched off")
+        config.set_setting("game_notifications", None)
+    yield "game starts in the background", game_in_background
     yield "started again", lambda: application.activate()
-    yield "window back", lambda: (
-        check(win.get_visible() and not win._in_background, "window shown again"))
+    def window_back():
+        check(win.get_visible() and not win._in_background, "window shown again")
+        win._apply_preset(bg_preset, game="BeamNG")
+        check(not notes, "no notification with the window open")
+        del win._desktop_notify
+        bg_preset.unlink()
+        win._set_active_preset(*active[0])     # as the next steps expect
+    yield "window back", window_back
 
     def background_off():
         win._show_preferences("games")
