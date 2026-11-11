@@ -8,6 +8,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 from .. import config, steamgriddb
 from ..i18n import _
 from . import tasks
+from .layout import margins, tile_grid
 from .live import CoverView
 from .names import cap_row, short
 
@@ -225,9 +226,7 @@ class CoverSearch:
 
     # -- games ---------------------------------------------------------------
     def _search_page(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(box, f"set_margin_{side}")(12)
+        box = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12), 12)
         entry = Gtk.SearchEntry(placeholder_text=_("Game name"), search_delay=500)
         entry.set_text(self.game["name"])
         self.results = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE,
@@ -305,11 +304,7 @@ class CoverSearch:
                                     height_request=32), "busy")
         status = Adw.StatusPage(icon_name="image-missing-symbolic")
         stack.add_named(status, "status")
-        flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
-                           min_children_per_line=2, max_children_per_line=4,
-                           column_spacing=12, row_spacing=12, valign=Gtk.Align.START)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(flow, f"set_margin_{side}")(12)
+        flow = margins(tile_grid(2, 4), 12)
         scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         scroll.set_child(flow)
         stack.add_named(scroll, "covers")

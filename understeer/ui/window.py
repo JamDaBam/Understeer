@@ -6,7 +6,7 @@ Parts of it live in their own modules as mixins: the live input display
 import logging
 import os
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .. import DATA_DIR, config, games, releases, report
 from .. import log as session_log
@@ -19,6 +19,7 @@ from ..i18n import _
 from ..inputs import InputMonitor
 from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SETTINGS_BY_ID,
                         SLOTS, TABS, VIEWS)
+from . import layout
 from .games_page import GamesPage
 from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PreferencesMixin
@@ -356,53 +357,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.live_divider.set_orientation(Gtk.Orientation.HORIZONTAL if narrow
                                           else Gtk.Orientation.VERTICAL)
 
-    # -----------------------------------------------------------------------
-    # Page layout helpers
-    # -----------------------------------------------------------------------
-    @staticmethod
-    def _scroll_page():
-        """Scrollable page with a centred column; returns (page, column)."""
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(column, f"set_margin_{side}")(12)
-        clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
-        clamp.set_child(column)
-        page = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
-                                  vexpand=True)
-        page.set_child(clamp)
-        return page, column
-
-    @staticmethod
-    def _tile_grid():
-        """Grid of tiles that wraps to the window width."""
-        grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
-                           homogeneous=True, min_children_per_line=1,
-                           max_children_per_line=5, column_spacing=12,
-                           row_spacing=12, valign=Gtk.Align.START)
-        return grid
-
-    @staticmethod
-    def _section(column, title, description=None, suffix=None):
-        head = Gtk.Box(spacing=12)
-        label = Gtk.Label(label=title, xalign=0, hexpand=True)
-        label.add_css_class("section-title")
-        head.append(label)
-        if suffix is not None:
-            suffix.set_valign(Gtk.Align.END)
-            head.append(suffix)
-        column.append(head)
-        if description:
-            desc = Gtk.Label(label=description, xalign=0, wrap=True)
-            desc.add_css_class("dim-label")
-            desc.set_margin_start(6)
-            desc.set_margin_bottom(6)
-            column.append(desc)
-
     def _build_tuning_view(self):
         """Live input on top, the settings below in tabs."""
-        top = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        for side in ("top", "start", "end"):
-            getattr(top, f"set_margin_{side}")(12)
+        top = layout.margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6),
+                             12, ("top", "start", "end"))
         top.append(self._build_live_strip())
 
         tab_row = Gtk.Box(spacing=2)
@@ -425,7 +383,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.tabs.connect("notify::visible-child-name", lambda s, _p:
                           buttons[s.get_visible_child_name()].set_active(True))
         self.status_label = Gtk.Label(hexpand=True, xalign=1)
-        self.status_label.set_ellipsize(3)      # Pango.EllipsizeMode.END
+        self.status_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.status_label.add_css_class("dim-label")
         self.status_label.set_margin_end(6)
         tab_row.append(self.status_label)
@@ -439,7 +397,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         return view
 
     def _build_tab(self, tab):
-        page, column = self._scroll_page()
+        page, column = layout.scroll_page()
         if tab == "pedals":
             self._build_live_pedals(column)
         grids = {}
@@ -447,11 +405,11 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             if s["page"] != tab:
                 continue
             if s["group"] not in grids:
-                grids[s["group"]] = self._tile_grid()
+                grids[s["group"]] = layout.tile_grid()
                 if s["group"] in ADVANCED_GROUPS:
                     self._advanced_group(column, s["group"], grids[s["group"]])
                 else:
-                    self._section(column, _(s["group"]))
+                    layout.section(column, _(s["group"]))
                     column.append(grids[s["group"]])
             tile = SettingTile(s, self._on_setting_changed)
             self.rows[s["id"]] = tile
@@ -475,7 +433,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         title = Gtk.Label(label=_("{group} (advanced)").format(group=_(group)))
         title.add_css_class("heading")
         summary = Gtk.Label(xalign=0, hexpand=True)
-        summary.set_ellipsize(3)                # Pango.EllipsizeMode.END
+        summary.set_ellipsize(Pango.EllipsizeMode.END)
         summary.add_css_class("dim-label")
         for w in (arrow, title, summary):
             line.append(w)

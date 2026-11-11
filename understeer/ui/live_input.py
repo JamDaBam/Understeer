@@ -1,12 +1,23 @@
 """Live input on the Tuning view: steering angle and pedal axes."""
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gtk, Pango
 
 from .. import config
 from ..i18n import _
 from ..inputs import AXIS_ROLES
+from . import layout
 from .live import WheelView
 
 STRIP_PEDALS = 4        # pedals shown in the live strip
+
+
+def _level_bar(**props):
+    """A bar for pedal travel 0..1, in the accent colour all the way (GTK
+    colours a full bar differently)."""
+    bar = Gtk.LevelBar(min_value=0, max_value=1, **props)
+    for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
+                   Gtk.LEVEL_BAR_OFFSET_FULL):
+        bar.remove_offset_value(offset)
+    return bar
 
 
 class LiveInputMixin:
@@ -15,10 +26,8 @@ class LiveInputMixin:
 
     def _build_live_strip(self):
         """Steering angle and pedals, always in view above the tabs."""
-        self.live_strip = strip = Gtk.Box(spacing=18)
-        strip.add_css_class("card")
-        strip.add_css_class("tile")
-        strip.add_css_class("live-tile")
+        self.live_strip = strip = Gtk.Box(spacing=18,
+                                          css_classes=["card", "tile", "live-tile"])
         steering = Gtk.Box(spacing=18, hexpand=True)
         self.wheel_view = WheelView("understeer-steering-symbolic")
         steering.append(self.wheel_view)
@@ -55,14 +64,12 @@ class LiveInputMixin:
         reset = Gtk.Button(label=_("Reset Max"))
         reset.add_css_class("flat")
         reset.connect("clicked", lambda b: self._reset_peaks())
-        self._section(column, _("Pedal Axes"),
+        layout.section(column, _("Pedal Axes"),
                       _("Press a pedal to see which bar moves and choose "
                         "what it is. Max shows the highest value since the "
                         "last reset."), suffix=reset)
-        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        tile.add_css_class("card")
-        tile.add_css_class("tile")
-        tile.add_css_class("live-tile")
+        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                       css_classes=["card", "tile", "live-tile"])
         self.axes_empty = Gtk.Label(xalign=0, wrap=True)
         self.axes_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
                                      homogeneous=True, min_children_per_line=2,
@@ -120,12 +127,8 @@ class LiveInputMixin:
             name = Gtk.Label(label=_(label) if label else
                              _("Axis {name}").format(name=axis.name))
             name.add_css_class("heading")
-            bar = Gtk.LevelBar(min_value=0, max_value=1,
-                               orientation=Gtk.Orientation.VERTICAL,
-                               inverted=True, halign=Gtk.Align.CENTER)
-            for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
-                           Gtk.LEVEL_BAR_OFFSET_FULL):
-                bar.remove_offset_value(offset)
+            bar = _level_bar(orientation=Gtk.Orientation.VERTICAL,
+                             inverted=True, halign=Gtk.Align.CENTER)
             value = Gtk.Label()
             value.add_css_class("pedal-value")
             peak = Gtk.Label()
@@ -137,7 +140,7 @@ class LiveInputMixin:
             choose.connect("notify::selected", lambda d, _p, k=axis.key:
                            self._set_axis_role(k, role_keys[d.get_selected()]))
             source = Gtk.Label(label=f"{axis.device} · {axis.name}")
-            source.set_ellipsize(3)             # Pango.EllipsizeMode.END
+            source.set_ellipsize(Pango.EllipsizeMode.END)
             source.add_css_class("tile-id")
             for w in (name, bar, value, peak, choose, source):
                 pedal.append(w)
@@ -174,11 +177,7 @@ class LiveInputMixin:
             name = Gtk.Label(xalign=0, label=_(dict(AXIS_ROLES)[role]) if role
                              else _("Axis {name}").format(name=axis.name))
             name.add_css_class("dim-label")
-            bar = Gtk.LevelBar(min_value=0, max_value=1)
-            bar.add_css_class("strip-bar")
-            for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
-                           Gtk.LEVEL_BAR_OFFSET_FULL):
-                bar.remove_offset_value(offset)
+            bar = _level_bar(css_classes=["strip-bar"])
             value = Gtk.Label(xalign=0)
             value.add_css_class("strip-value")
             for w in (name, bar, value):
