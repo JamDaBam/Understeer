@@ -699,13 +699,38 @@ def steps(win):
             win._apply_preset(bg_preset, game="BeamNG")
         finally:
             win.device_path = path
-        check(notes and "no wheel base" in notes[0][2], f"no wheel base told: {notes}")
+        check(notes and "as soon as the wheel base is connected" in notes[0][2],
+              f"applied once connected: {notes}")
         notes.clear()
         config.set_setting("game_notifications", False)
         win._apply_preset(bg_preset, game="BeamNG")
         check(not notes, "no notification when switched off")
         config.set_setting("game_notifications", None)
     yield "game starts in the background", game_in_background
+
+    def connected_while_game_runs():
+        games_before = win.games_page.games
+        win.games_page.games = [dict(game="test-game", name="BeamNG", auto=True,
+                                     preset=bg_preset.name)]
+        win._game_watch.running.add("test-game")
+        path, win.device_path = win.device_path, None
+        try:
+            win._apply_preset(bg_preset, game="BeamNG")     # no wheel base yet
+            (dev / "FF").write_text("20\n")                 # its own value
+            notes.clear()
+            win._plug_tick = -1                             # look right now
+            win._check_plugged()
+            check(win.device_path == path, "wheel base found again")
+            check((dev / "FF").read_text().strip() == "64",
+                  "preset of the running game written once connected")
+            check(notes == [("game-preset", "Wheel base connected, BeamNG runs",
+                             "Preset “Background Test” applied.")], f"told: {notes}")
+        finally:
+            win.device_path = win.device_path or path
+            win.games_page.games = games_before
+            win._game_watch.running.discard("test-game")
+            notes.clear()
+    yield "connected while a game runs", connected_while_game_runs
     yield "started again", lambda: application.activate()
     def window_back():
         check(win.get_visible() and not win._in_background, "window shown again")

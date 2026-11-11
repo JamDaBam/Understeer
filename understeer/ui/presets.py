@@ -228,7 +228,9 @@ class PresetsMixin:
         self.active_values = dict(values)
         self._presets_changed()
 
-    def _apply_preset(self, path, game=None):
+    def _apply_preset(self, path, game=None, connected=False):
+        """Apply a preset; game: the game it is applied for, connected: the
+        wheel base just got connected while the game runs."""
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
@@ -241,11 +243,23 @@ class PresetsMixin:
         self.active_preset, self.active_values = path, dict(values)
         self._rebuild_preset_menu()
         self._rebuild_presets_list()
-        if game:
+        if game and connected:
+            outcome, failed = self._apply_values(
+                values,
+                _("Wheel base connected: preset “{name}” for {game} applied")
+                .format(game=game, name=name),
+                _("Wheel base connected: preset “{name}” for {game} loaded — "
+                  "click Apply to write it").format(game=game, name=name))
+            self._notify_game_preset(game, name, outcome, failed, connected)
+        elif game:
+            # Without a wheel base, it is written once one is connected
+            # (_apply_running_game_preset).
             outcome, failed = self._apply_values(
                 values,
                 _("{game} started: preset “{name}” applied").format(
-                    game=game, name=name),
+                    game=game, name=name) if self.device_path else
+                _("{game} started: preset “{name}” is applied once the wheel "
+                  "base is connected").format(game=game, name=name),
                 _("{game} started: preset “{name}” loaded — click Apply to "
                   "write it").format(game=game, name=name))
             self._notify_game_preset(game, name, outcome, failed)
@@ -310,9 +324,24 @@ class PresetsMixin:
         log.info("Showing the values of preset %s", path.name)
         dialog.present(self)
 
-    def _notify_game_preset(self, game, name, outcome, failed):
+    def _apply_running_game_preset(self):
+        """After a wheel base got connected: apply the preset of a running
+        game, chosen before there was a wheel base to write it to. Returns
+        whether there was one."""
+        for game in self.games_page.games:
+            if game["game"] not in self._game_watch.running or not game["auto"]:
+                continue
+            path = config.game_preset_path(game)
+            if path is not None:
+                log.info("Wheel base connected while %s runs", game["name"])
+                self._apply_preset(path, game=game["name"], connected=True)
+                return True
+        return False
+
+    def _notify_game_preset(self, game, name, outcome, failed, connected=False):
         """While the window is closed, tell with a notification of the
-        desktop what became of the preset of a game that started."""
+        desktop what became of the preset of a game that started, or that
+        runs while the wheel base got connected."""
         if not self._in_background or not config.get_setting(
                 "game_notifications", True):
             return
@@ -322,12 +351,15 @@ class PresetsMixin:
                          "Understeer and click Apply."),
             "failed": _("Preset “{name}” could not be written completely. "
                         "Failed: {names}"),
-            "no device": _("Preset “{name}” not applied: no wheel base is "
-                           "connected."),
+            "no device": _("Preset “{name}” chosen. It is applied as soon as "
+                           "the wheel base is connected."),
         }
-        log.info("Notification for %s: preset %s %s", game, name, outcome)
+        title = (_("Wheel base connected, {game} runs") if connected
+                 else _("{game} started")).format(game=game)
+        log.info("Notification for %s: preset %s %s%s", game, name, outcome,
+                 " after connecting" if connected else "")
         self._desktop_notify(
-            "game-preset", _("{game} started").format(game=game),
+            "game-preset", title,
             bodies[outcome].format(name=name, names=", ".join(failed)))
 
     def _changes_list(self, diff):

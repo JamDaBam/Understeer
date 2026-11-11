@@ -806,7 +806,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         had_device = self.device_path is not None
         self._detect_device()
         if self.device_path:
-            self._notify(_("Wheel base connected"))
+            if not self._apply_running_game_preset():
+                self._notify(_("Wheel base connected"))
         elif had_device:
             self._notify(_("Wheel base disconnected"))
         return True
