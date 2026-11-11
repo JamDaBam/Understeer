@@ -331,24 +331,29 @@ def steps(win):
     yield "share as JSON and paste", share_as_json
 
     def text_view(d):
-        return next((w for w in walk(d.get_extra_child())
-                     if isinstance(w, Gtk.TextView)), None)
+        return next((w for w in walk(d) if isinstance(w, Gtk.TextView)), None)
+
+    def add_button(d):
+        return next(w for w in walk(d) if isinstance(w, Gtk.Button)
+                    and w.get_label() == "Add Preset")
 
     def paste_dialog():
         d = win.get_visible_dialog()
-        check(isinstance(d, Adw.AlertDialog), "paste dialog shown")
-        if not isinstance(d, Adw.AlertDialog):
+        check(d is not None and text_view(d) is not None, "paste dialog shown")
+        if d is None or text_view(d) is None:
             return
+        check(not isinstance(d, Adw.AlertDialog),
+              "no window handle around the text field")
         buffer = text_view(d).get_buffer()
         pasted = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False)
         check('"Test GT3 (2)"' in pasted, f"preset taken from the clipboard: {pasted!r}")
         check(not config.preset_path("Test GT3 (2)").exists(),
               "nothing added before confirming")
         buffer.set_text("rm -rf ~")
-        check(not d.get_response_enabled("add"), "no preset: can't add")
+        check(not add_button(d).get_sensitive(), "no preset: can't add")
         buffer.set_text(pasted)
-        check(d.get_response_enabled("add"), "preset: can add")
-        d.emit("response", "add")
+        check(add_button(d).get_sensitive(), "preset: can add")
+        add_button(d).emit("clicked")
         d.force_close()
     yield "paste dialog", paste_dialog
 
@@ -362,7 +367,7 @@ def steps(win):
 
     def private_kept():
         d = win.get_visible_dialog()
-        view = text_view(d) if isinstance(d, Adw.AlertDialog) else None
+        view = text_view(d) if d is not None else None
         buffer = view.get_buffer() if view else None
         check(buffer is not None and buffer.get_char_count() == 0,
               "other clipboard text is not shown")

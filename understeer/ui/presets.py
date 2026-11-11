@@ -532,30 +532,42 @@ class PresetsMixin:
 
     def _ask_paste_preset(self):
         """A text field to paste a shared preset into. It shows what was
-        found; only the checked settings of it are added."""
+        found; only the checked settings of it are added.
+
+        Not an Adw.AlertDialog: all of that is a window handle, so a double
+        click to select a word would maximize the window."""
+        dialog = Adw.Dialog(title=_("Paste Preset"), content_width=580)
+        cancel = Gtk.Button(label=_("Cancel"))
+        cancel.connect("clicked", lambda b: dialog.close())
+        add = Gtk.Button(label=_("Add Preset"))
+        add.add_css_class("suggested-action")
+        header = Adw.HeaderBar(show_start_title_buttons=False,
+                               show_end_title_buttons=False)
+        header.pack_start(cancel)
+        header.pack_end(add)
+
+        intro = Gtk.Label(
+            label=_("Paste the text or JSON of a shared preset here. Understeer "
+                    "takes only the settings from it, nothing else."),
+            xalign=0, wrap=True)
         view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, monospace=True,
                             top_margin=8, bottom_margin=8, left_margin=8,
                             right_margin=8, accepts_tab=False)
-        view.add_css_class("card")
-        scroll = Gtk.ScrolledWindow(child=view, min_content_height=180,
-                                    max_content_height=300,
+        scroll = Gtk.ScrolledWindow(child=view, min_content_height=220,
+                                    vexpand=True,
                                     hscrollbar_policy=Gtk.PolicyType.NEVER)
-        scroll.set_size_request(520, -1)
+        scroll.add_css_class("card")
+        scroll.set_overflow(Gtk.Overflow.HIDDEN)    # round corners
         found = Gtk.Label(xalign=0, wrap=True)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.append(scroll)
-        box.append(found)
-        dialog = Adw.AlertDialog(
-            heading=_("Paste Preset"),
-            body=_("Paste the text or JSON of a shared preset here. Understeer "
-                   "takes only the settings from it, nothing else."))
-        dialog.set_extra_child(box)
-        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
-            dialog.set_prefer_wide_layout(True)
-        dialog.add_response("cancel", _("Cancel"))
-        dialog.add_response("add", _("Add Preset"))
-        dialog.set_close_response("cancel")
-        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                      margin_top=12, margin_bottom=18, margin_start=18,
+                      margin_end=18)
+        for w in (intro, scroll, found):
+            box.append(w)
+        toolbar = Adw.ToolbarView(content=box)
+        toolbar.add_top_bar(header)
+        dialog.set_child(toolbar)
+        dialog.set_default_widget(add)
         buffer = view.get_buffer()
 
         def text():
@@ -577,7 +589,7 @@ class PresetsMixin:
                     found.set_label(str(e))
             found.set_css_classes(["dim-label"] if ok or not pasted.strip()
                                   else ["error"])
-            dialog.set_response_enabled("add", ok)
+            add.set_sensitive(ok)
 
         buffer.connect("changed", check)
         check()
@@ -595,9 +607,13 @@ class PresetsMixin:
                     return
                 buffer.set_text(pasted)
 
+        def on_add(_button):
+            pasted = text()
+            dialog.close()
+            self._import_preset(pasted)
+
+        add.connect("clicked", on_add)
         self.get_clipboard().read_text_async(None, from_clipboard)
-        dialog.connect("response", lambda d, r: r == "add" and
-                       self._import_preset(text()))
         dialog.present(self)
         view.grab_focus()
 

@@ -1235,91 +1235,91 @@ msgstr "Preset importieren"
 msgid "The file holds no text."
 msgstr "Die Datei enthält keinen Text."
 
-#: understeer/ui/presets.py:549
+#: understeer/ui/presets.py:539
 msgid "Paste Preset"
 msgstr "Preset einfügen"
+
+#: understeer/ui/presets.py:542
+msgid "Add Preset"
+msgstr "Preset hinzufügen"
 
 #: understeer/ui/presets.py:550
 msgid "Paste the text or JSON of a shared preset here. Understeer takes only the settings from it, nothing else."
 msgstr "Füge hier den Text oder das JSON eines geteilten Presets ein. Understeer übernimmt daraus nur die Einstellungen, sonst nichts."
 
-#: understeer/ui/presets.py:556
-msgid "Add Preset"
-msgstr "Preset hinzufügen"
-
-#: understeer/ui/presets.py:573
+#: understeer/ui/presets.py:585
 msgid "Found: “{name}”, settings: {n}"
 msgstr "Gefunden: „{name}“, Einstellungen: {n}"
 
-#: understeer/ui/presets.py:606
+#: understeer/ui/presets.py:622
 msgid "No Preset Found"
 msgstr "Kein Preset gefunden"
 
-#: understeer/ui/presets.py:607
+#: understeer/ui/presets.py:623
 msgid "OK"
 msgstr "OK"
 
-#: understeer/ui/presets.py:629
+#: understeer/ui/presets.py:645
 msgid "Your preset already has the same settings. Replace it anyway, or keep both?"
 msgstr "Dein Preset hat schon dieselben Einstellungen. Trotzdem ersetzen oder beide behalten?"
 
-#: understeer/ui/presets.py:632
+#: understeer/ui/presets.py:648
 msgid "Replace your preset, or keep both? The shared preset has these settings:"
 msgstr "Dein Preset ersetzen oder beide behalten? Das geteilte Preset hat diese Einstellungen:"
 
-#: understeer/ui/presets.py:635
+#: understeer/ui/presets.py:651
 msgid "Replace your preset, or keep both?"
 msgstr "Dein Preset ersetzen oder beide behalten?"
 
-#: understeer/ui/presets.py:637
+#: understeer/ui/presets.py:653
 msgid "“{name}” Already Exists"
 msgstr "„{name}“ gibt es schon"
 
-#: understeer/ui/presets.py:643
+#: understeer/ui/presets.py:659
 msgid "Keep Both"
 msgstr "Beide behalten"
 
-#: understeer/ui/presets.py:644
+#: understeer/ui/presets.py:660
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: understeer/ui/presets.py:672
+#: understeer/ui/presets.py:688
 msgid "Preset “{name}” imported"
 msgstr "Preset „{name}“ importiert"
 
-#: understeer/ui/presets.py:678
+#: understeer/ui/presets.py:694
 msgid "Rename Preset"
 msgstr "Preset umbenennen"
 
-#: understeer/ui/presets.py:679
+#: understeer/ui/presets.py:695
 msgid "Games that use this preset keep it."
 msgstr "Spiele, die dieses Preset nutzen, behalten es."
 
-#: understeer/ui/presets.py:704
+#: understeer/ui/presets.py:720
 msgid "Name Already Used"
 msgstr "Name schon vergeben"
 
-#: understeer/ui/presets.py:705
+#: understeer/ui/presets.py:721
 msgid "Another preset is already called “{name}”."
 msgstr "Ein anderes Preset heißt bereits „{name}“."
 
-#: understeer/ui/presets.py:709
+#: understeer/ui/presets.py:725
 msgid "Could not rename preset"
 msgstr "Preset konnte nicht umbenannt werden"
 
-#: understeer/ui/presets.py:716
+#: understeer/ui/presets.py:732
 msgid "Preset renamed to “{name}”"
 msgstr "Preset in „{name}“ umbenannt"
 
-#: understeer/ui/presets.py:720
+#: understeer/ui/presets.py:736
 msgid "Delete “{name}”?"
 msgstr "„{name}“ löschen?"
 
-#: understeer/ui/presets.py:721
+#: understeer/ui/presets.py:737
 msgid "The preset file will be removed. This cannot be undone."
 msgstr "Die Preset-Datei wird entfernt. Das kann nicht rückgängig gemacht werden."
 
-#: understeer/ui/presets.py:732
+#: understeer/ui/presets.py:748
 msgid "Could not delete preset"
 msgstr "Preset konnte nicht gelöscht werden"
 
