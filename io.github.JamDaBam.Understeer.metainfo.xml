@@ -37,6 +37,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="1.9.3" date="2026-11-11">
+            <description>
+                <ul>
+                    <li>What's New shows the changes of all versions; after an update, the new ones are marked</li>
+                    <li xml:lang="de">Die Neuigkeiten zeigen die Änderungen aller Versionen; nach einem Update sind die neuen markiert</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.9.2" date="2026-11-11">
             <description>
                 <ul>

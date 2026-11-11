@@ -627,8 +627,13 @@ def steps(win):
         check(d is not None, "what's new shown after an update")
         lines = news_lines(d) if d else []
         check(f"Understeer {newest}" in lines, f"newest version listed: {lines[:3]}")
-        check(len([t for t in lines if t.startswith("Understeer ")]) > 1,
-              "skipped versions listed too")
+        listed = [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)
+                  and "title-2" in w.get_css_classes()] if d else []
+        check(len(listed) == len(releases.all_versions()), f"whole history: {listed}")
+        badges = [w for w in walk(d) if isinstance(w, Gtk.Label)
+                  and "new-badge" in w.get_css_classes()] if d else []
+        check(len(badges) == len(releases.versions_since(older, newest)),
+              f"versions since {older} marked new: {len(badges)}")
         check(config.get_setting("last_version") == newest, "new version remembered")
         width = d.get_content_width() if d else 0
         check(width >= 560, f"big dialog: {width}")
@@ -667,7 +672,9 @@ def steps(win):
         win.activate_action("win.whats-new", None)
         d = news_shown()
         lines = news_lines(d) if d else []
-        check(lines[:1] == [f"Understeer {newest}"], f"menu shows this version: {lines[:1]}")
+        check(lines[:1] == [f"Understeer {newest}"], f"menu starts with this version: {lines[:1]}")
+        check(not [w for w in walk(d) if isinstance(w, Gtk.Label)
+                   and "new-badge" in w.get_css_classes()], "nothing marked new")
         close_dialogs(win)
         check(d is not None and same_size(d), "what's new as big as the others")
         win._show_about()

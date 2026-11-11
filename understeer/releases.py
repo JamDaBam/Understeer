@@ -101,6 +101,16 @@ def versions_since(last, current, path=None):
     return [v for _n, v in sorted(found, reverse=True)]
 
 
+def all_versions(path=None):
+    """Every version with notes, newest first."""
+    try:
+        root = ET.parse(path or METAINFO).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    return [r.get("version") for r in root.iterfind("releases/release")
+            if r.find("description") is not None]
+
+
 def latest(path=None):
     """The newest version with notes, e.g. for a build from git."""
     try:

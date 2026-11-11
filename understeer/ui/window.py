@@ -567,13 +567,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         dialog.set_content_height(height)
         return dialog
 
-    def _show_whats_new(self, versions=None):
-        """The notes of versions (newest first) in a big dialog; by default
-        those of this version."""
-        if not versions:
-            current = releases.plain_version(session_log.version())
-            version = current if releases.has_notes(current) else releases.latest()
-            versions = [version] if version else []
+    def _show_whats_new(self, new=()):
+        """The notes of every version, newest first, in a big dialog; the
+        versions in new (those after an update) are marked as new."""
+        current = releases.plain_version(session_log.version())
+        versions = releases.all_versions()
+        if releases.has_notes(current):         # not newer ones, e.g. from git
+            versions = versions[versions.index(current):]
         language = i18n.current_language()
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
                          margin_top=18, margin_bottom=24, margin_start=24,
@@ -581,9 +581,15 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         for n, version in enumerate(versions):
             title = Gtk.Label(label=f"Understeer {version}", xalign=0,
                               css_classes=["title-2"])
+            heading = Gtk.Box(spacing=12)
+            heading.append(title)
+            if version in new:
+                badge = Gtk.Label(label=_("New"), valign=Gtk.Align.CENTER,
+                                  css_classes=["new-badge"])
+                heading.append(badge)
             if n:
-                title.set_margin_top(18)
-            column.append(title)
+                heading.set_margin_top(18)
+            column.append(heading)
             date = releases.release_date(version)
             if date:
                 column.append(Gtk.Label(label=date, xalign=0,
@@ -604,7 +610,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         toolbar = Adw.ToolbarView(content=scroll)
         toolbar.add_top_bar(Adw.HeaderBar())
         dialog.set_child(toolbar)
-        log.info("Showing what's new in %s", ", ".join(versions) or "nothing")
+        log.info("Showing what's new, new: %s", ", ".join(new) or "none")
         dialog.present(self)
 
     # -----------------------------------------------------------------------

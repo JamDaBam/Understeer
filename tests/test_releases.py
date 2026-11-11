@@ -133,3 +133,7 @@ def test_blocks_and_date(metainfo):
 ])
 def test_versions_since(metainfo, last, current, expected):
     assert releases.versions_since(last, current, metainfo) == expected
+
+
+def test_all_versions(metainfo):
+    assert releases.all_versions(metainfo) == ["2.0.0", "1.9.0"]
