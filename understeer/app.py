@@ -102,7 +102,15 @@ class TunerApplication(Adw.Application):
             self.activate()
 
     def quit_all(self):
-        """Quit for real, also when running in the background."""
+        """Quit for real, also when running in the background; first
+        offers to save unsaved changes of the active preset."""
+        windows = [w for w in self.get_windows() if hasattr(w, "confirm_quit")]
+        if windows:
+            windows[0].confirm_quit(self._quit_now)
+        else:
+            self._quit_now()
+
+    def _quit_now(self):
         for win in self.get_windows():
             if hasattr(win, "shut_down"):
                 win.shut_down()

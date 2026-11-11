@@ -51,6 +51,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self.wheel = {}          # see device.wheel_info()
         self._in_background = False     # window hidden, still watching games
         self._shut_down = False
+        self._quit_dialog = None        # asking to save before quitting
 
         self.rows = {}           # attr id -> SettingTile
         self.pending = {}        # attr id -> value waiting to be written
@@ -151,6 +152,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         if not self._shut_down and app is not None and app.runs_in_background():
             self.go_to_background()
             return True                     # keep running, without window
+        if not self._shut_down and app is not None and self._unsaved_preset_changes():
+            app.quit_all()                  # asks to save the preset first
+            return True
         self.shut_down()
         return False
 

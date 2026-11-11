@@ -154,15 +154,22 @@ class PresetsMixin:
         """[(attr id, stored value or None, current value)] that differ."""
         return changes(stored, self._collect_values())
 
+    def _unsaved_preset_changes(self):
+        """The diff of the active preset if it has unsaved changes, else [].
+
+        Only settings stored in the preset count; older presets may hold
+        just a few values."""
+        if self.active_preset is None:
+            return []
+        diff = self._preset_diff(self.active_values)
+        return diff if any(old is not None for _a, old, _v in diff) else []
+
     def _update_preset_indicator(self):
         if self.active_preset is None:
             self.preset_button.set_label(_("Presets"))
             self.update_action.set_enabled(False)
             return
-        # Only settings stored in the preset count; older presets may hold
-        # just a few values.
-        modified = any(old is not None
-                       for _a, old, _v in self._preset_diff(self.active_values))
+        modified = bool(self._unsaved_preset_changes())
         name = self._active_name()
         self.preset_button.set_label(f"{name} •" if modified else name)
         self.preset_button.set_tooltip_text(
@@ -301,6 +308,50 @@ class PresetsMixin:
                                        Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.connect("response", lambda d, r: self._overwrite_preset(path, name)
                        if r == "overwrite" else None)
+        dialog.present(self)
+
+    def confirm_quit(self, quit_now):
+        """Call quit_now(), but first offer to save unsaved changes of the
+        active preset. The wheel base keeps its settings either way."""
+        if self._quit_dialog is not None:
+            return                          # already asking
+        if self._shut_down or not self._unsaved_preset_changes():
+            quit_now()
+            return
+        if self._in_background:
+            self.show_again()               # also reads the wheel base again
+        diff = self._unsaved_preset_changes()
+        if not diff:
+            quit_now()
+            return
+        path, name = self.active_preset, self._active_name()
+        dialog = Adw.AlertDialog(
+            heading=_("Save Changes to “{name}”?").format(name=name),
+            body=_("These settings differ from the preset. The wheel base "
+                   "keeps them either way."))
+        dialog.set_extra_child(self._changes_list(diff))
+        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
+            dialog.set_prefer_wide_layout(True)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("discard", _("Don't Save"))
+        dialog.add_response("save", _("Save"))
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("save")
+        dialog.set_response_appearance("discard",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+
+        def on_response(d, response):
+            self._quit_dialog = None
+            log.info("Quit with unsaved changes to preset %s: %s",
+                     path.name, response)
+            if response == "save" and not self._write_preset(path, name):
+                return                      # the error is shown; stay open
+            if response in ("save", "discard"):
+                quit_now()
+
+        dialog.connect("response", on_response)
+        self._quit_dialog = dialog
         dialog.present(self)
 
     def _update_active_preset(self):

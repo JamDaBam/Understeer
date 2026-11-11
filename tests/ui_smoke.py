@@ -171,6 +171,63 @@ def steps(win):
         check(vals.get("SHO") == 40, "preset updated")
     yield "preset updated", update_confirmed
 
+    application = win.get_application()
+    quits = []
+
+    def ask_on_quit():
+        application._quit_now = lambda: quits.append(True)   # stay running
+        win.rows["SHO"].set(20, silent=False)
+        win.flush_live()
+        application.activate_action("quit", None)
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and not quits,
+              "asked before quitting with unsaved preset changes")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        check(lines == ["Wheel Vibration: 40 % → 20 %"], f"quit changes: {lines}")
+        application.activate_action("quit", None)
+        check(win.get_visible_dialog() is d, "asked only once")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(not quits, "cancel keeps running")
+    yield "quit with unsaved changes", ask_on_quit
+
+    def quit_without_saving():
+        win.close()                         # ✕ without background mode
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and win.get_visible(),
+              "closing the window asks too")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        d.emit("response", "discard")
+        d.force_close()
+        _n, vals = config.read_preset(win.active_preset)
+        check(quits and vals.get("SHO") == 40, "quit, preset left as it was")
+        check((dev / "SHO").read_text().strip() == "20",
+              "wheel base keeps the changed value")
+    yield "quit without saving", quit_without_saving
+
+    def quit_and_save():
+        quits.clear()
+        application.activate_action("quit", None)
+        d = win.get_visible_dialog()
+        if isinstance(d, Adw.AlertDialog):
+            d.emit("response", "save")
+            d.force_close()
+        _n, vals = config.read_preset(win.active_preset)
+        check(quits and vals.get("SHO") == 20, "saved, then quit")
+        quits.clear()
+        application.activate_action("quit", None)
+        check(quits and win.get_visible_dialog() is None,
+              "no question without unsaved changes")
+        win.rows["SHO"].set(40, silent=False)       # as the next steps expect
+        win.flush_live()
+        win._write_preset(win.active_preset, "Test GT3")
+        del application._quit_now
+    yield "quit and save", quit_and_save
+
     def apply_preset():
         win._apply_values({"FF": 70, "SHO": 80})
         win.activate_action("win.apply-preset", GLib.Variant.new_string(
