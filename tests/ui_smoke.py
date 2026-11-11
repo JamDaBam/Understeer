@@ -304,7 +304,10 @@ def steps(win):
         check(text.startswith("Understeer preset “Test GT3”\n")
               and "\nWheel Vibration: 40 %\n" in text, f"shared text: {text!r}")
         win._import_preset(text)
-        check(win.get_visible_dialog() is None, "same preset: nothing to ask")
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and not d.has_response("replace"),
+              "same preset: only offered as a copy")
+        answer("cancel")
         win._import_preset(text.replace('"SHO": 40', '"SHO": 70'))
         lines = answer("keep")
         check(lines == ["Wheel Vibration: 40 % → 70 %"], f"import changes: {lines}")
@@ -324,6 +327,52 @@ def steps(win):
         win._presets_changed()
         win.activate_action("win.paste-preset", None)
     yield "share as JSON and paste", share_as_json
+
+    def text_view(d):
+        return next((w for w in walk(d.get_extra_child())
+                     if isinstance(w, Gtk.TextView)), None)
+
+    def paste_dialog():
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog), "paste dialog shown")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        buffer = text_view(d).get_buffer()
+        pasted = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False)
+        check('"Test GT3 (2)"' in pasted, f"preset taken from the clipboard: {pasted!r}")
+        check(not config.preset_path("Test GT3 (2)").exists(),
+              "nothing added before confirming")
+        buffer.set_text("rm -rf ~")
+        check(not d.get_response_enabled("add"), "no preset: can't add")
+        buffer.set_text(pasted)
+        check(d.get_response_enabled("add"), "preset: can add")
+        d.emit("response", "add")
+        d.force_close()
+    yield "paste dialog", paste_dialog
+
+    def private_clipboard():
+        win.get_clipboard().set("my secret")
+    yield "other text on the clipboard", private_clipboard
+
+    def not_shown():
+        win.activate_action("win.paste-preset", None)
+    yield "paste again", not_shown
+
+    def private_kept():
+        d = win.get_visible_dialog()
+        view = text_view(d) if isinstance(d, Adw.AlertDialog) else None
+        buffer = view.get_buffer() if view else None
+        check(buffer is not None and buffer.get_char_count() == 0,
+              "other clipboard text is not shown")
+        close_dialogs(win)
+        name = "<b>Bold</b> & My_Preset"
+        win._import_preset(sharing.preset_json(name, {"FF": 33}))
+        tiles = [w.get_label() for w in walk(win.presets_flow)
+                 if isinstance(w, Gtk.Label) and "preset-name" in w.get_css_classes()]
+        check(name in tiles, f"name shown as plain text: {tiles}")
+        config.preset_path(name).unlink()
+        win._presets_changed()
+    yield "clipboard stays private", private_kept
 
     def pasted():
         _n, vals = config.read_preset(copy)

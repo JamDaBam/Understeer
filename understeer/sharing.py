@@ -13,6 +13,7 @@ from .settings import SETTINGS, SETTINGS_BY_ID, format_value
 
 FORMAT = 1                  # "understeer_preset" in shared presets
 MAX_NAME = 80               # longer names are cut
+MAX_NAME_BYTES = 200        # also in UTF-8, for the file name
 MAX_SIZE = 256 * 1024       # bigger files and texts are no presets
 
 _BY_ID = SETTINGS_BY_ID
@@ -90,7 +91,10 @@ def parse(text, fallback_name=""):
     if not isinstance(name, str):
         name = ""
     name = "".join(c for c in " ".join(name.split()) if c.isprintable())
-    name = name[:MAX_NAME].strip() or fallback_name or _("Imported Preset")
+    name = name[:MAX_NAME]
+    while len(name.encode()) > MAX_NAME_BYTES:     # a file is named after it
+        name = name[:-1]
+    name = name.strip() or fallback_name or _("Imported Preset")
     return name, values
 
 

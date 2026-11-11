@@ -95,3 +95,15 @@ def test_free_name():
     taken = {"GT3", "GT3 (2)"}
     assert sharing.free_name("Rally", taken.__contains__) == "Rally"
     assert sharing.free_name("GT3", taken.__contains__) == "GT3 (3)"
+
+
+def test_long_name_fits_a_file_name():
+    name = sharing.parse(json.dumps({"name": "ü" * 200, "values": {"FF": 1}}))[0]
+    assert len(name.encode()) <= sharing.MAX_NAME_BYTES
+
+
+def test_nothing_is_run():
+    """Text is only read as JSON; markup and code stay plain text."""
+    name = "<b>x</b> $(rm -rf ~) __import__('os')"
+    text = sharing.preset_text(name, {"FF": 70})
+    assert sharing.parse(text) == (name, {"FF": 70})

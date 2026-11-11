@@ -13,6 +13,11 @@ from ..settings import SIM_DEFAULTS, changes
 log = logging.getLogger("understeer.window")
 
 
+def _menu_text(text):
+    """Menus read "_" as a keyboard shortcut; keep it in names."""
+    return text.replace("_", "__")
+
+
 class PresetsMixin:
     """Part of TunerWindow. self.active_preset is the path of the last
     applied or saved preset, self.active_values the values stored in it."""
@@ -21,9 +26,9 @@ class PresetsMixin:
         page, column = self._scroll_page()
         bring = Gtk.Box(spacing=6)
         for label, tip, action in (
-                (_("Import…"), _("Add a preset shared as a file"),
+                (_("Import File…"), _("Add a preset shared as a file"),
                  "win.import-preset"),
-                (_("Paste"), _("Add a preset shared as text or JSON"),
+                (_("Paste Text…"), _("Add a preset shared as text or JSON"),
                  "win.paste-preset")):
             button = Gtk.Button(label=label, action_name=action,
                                 tooltip_text=tip)
@@ -149,11 +154,11 @@ class PresetsMixin:
         if self.active_preset is not None:
             update = Gio.Menu()
             update.append(_("Save to “{name}”").format(
-                name=self._active_name()), "win.update-preset")
+                name=_menu_text(self._active_name())), "win.update-preset")
             menu.append_section(None, update)
         presets = Gio.Menu()
         for name, path in presets_found:
-            item = Gio.MenuItem.new(name, None)
+            item = Gio.MenuItem.new(_menu_text(name), None)
             item.set_action_and_target_value(
                 "win.apply-preset", GLib.Variant.new_string(str(path)))
             presets.append_item(item)
@@ -161,8 +166,8 @@ class PresetsMixin:
             menu.append_section(None, presets)
         manage = Gio.Menu()
         manage.append(_("Save as Preset…"), "win.save-preset")
-        manage.append(_("Import Preset…"), "win.import-preset")
-        manage.append(_("Paste Preset"), "win.paste-preset")
+        manage.append(_("Import Preset File…"), "win.import-preset")
+        manage.append(_("Paste Preset Text…"), "win.paste-preset")
         manage.append(_("Manage Presets"), "win.show-presets")
         menu.append_section(None, manage)
         self.preset_button.set_menu_model(menu)
@@ -525,19 +530,76 @@ class PresetsMixin:
 
         dialog.open(self, None, chosen)
 
-    def _paste_preset(self):
-        def done(clipboard, result):
-            try:
-                text = clipboard.read_text_finish(result)
-            except GLib.Error:
-                text = None
-            if not text:
-                self._not_a_preset(_("The clipboard holds no text. Copy a "
-                                     "shared preset first."))
-                return
-            self._import_preset(text)
+    def _ask_paste_preset(self):
+        """A text field to paste a shared preset into. It shows what was
+        found; only the checked settings of it are added."""
+        view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, monospace=True,
+                            top_margin=8, bottom_margin=8, left_margin=8,
+                            right_margin=8, accepts_tab=False)
+        view.add_css_class("card")
+        scroll = Gtk.ScrolledWindow(child=view, min_content_height=180,
+                                    max_content_height=300,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_size_request(520, -1)
+        found = Gtk.Label(xalign=0, wrap=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.append(scroll)
+        box.append(found)
+        dialog = Adw.AlertDialog(
+            heading=_("Paste Preset"),
+            body=_("Paste the text or JSON of a shared preset here. Understeer "
+                   "takes only the settings from it, nothing else."))
+        dialog.set_extra_child(box)
+        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
+            dialog.set_prefer_wide_layout(True)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("add", _("Add Preset"))
+        dialog.set_close_response("cancel")
+        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+        buffer = view.get_buffer()
 
-        self.get_clipboard().read_text_async(None, done)
+        def text():
+            return buffer.get_text(buffer.get_start_iter(),
+                                   buffer.get_end_iter(), False)
+
+        def check(*_args):
+            pasted = text()
+            ok = False
+            if not pasted.strip():
+                found.set_label("")
+            else:
+                try:
+                    name, values = sharing.parse(pasted)
+                    found.set_label(_("Found: “{name}”, settings: {n}").format(
+                        name=name, n=len(values)))
+                    ok = True
+                except sharing.Error as e:
+                    found.set_label(str(e))
+            found.set_css_classes(["dim-label"] if ok or not pasted.strip()
+                                  else ["error"])
+            dialog.set_response_enabled("add", ok)
+
+        buffer.connect("changed", check)
+        check()
+
+        def from_clipboard(clipboard, result):
+            try:
+                pasted = clipboard.read_text_finish(result)
+            except GLib.Error:
+                return
+            # Only a preset: other text on the clipboard stays private.
+            if pasted and not text():
+                try:
+                    sharing.parse(pasted)
+                except sharing.Error:
+                    return
+                buffer.set_text(pasted)
+
+        self.get_clipboard().read_text_async(None, from_clipboard)
+        dialog.connect("response", lambda d, r: r == "add" and
+                       self._import_preset(text()))
+        dialog.present(self)
+        view.grab_focus()
 
     def _not_a_preset(self, reason):
         log.info("Not a preset: %s", reason)
@@ -561,27 +623,30 @@ class PresetsMixin:
             _n, stored = self._read_preset(path)
         except (OSError, json.JSONDecodeError):
             stored = {}
-        if stored == values:
-            self._notify(_("You already have the preset “{name}”").format(
-                name=name))
-            return
+        same = stored == values
         diff = changes(stored, values)
+        if same:
+            body = _("Your preset already has the same settings. Add the "
+                     "shared one anyway, under a new name?")
+        elif diff:
+            body = _("Replace your preset, or keep both? The shared preset "
+                     "has these settings:")
+        else:
+            body = _("Replace your preset, or keep both?")
         dialog = Adw.AlertDialog(
-            heading=_("“{name}” Already Exists").format(name=name),
-            body=_("Replace your preset, or keep both? The shared preset "
-                   "has these settings:") if diff else
-            _("Replace your preset, or keep both?"))
+            heading=_("“{name}” Already Exists").format(name=name), body=body)
         if diff:
             dialog.set_extra_child(self._changes_list(diff))
             if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
                 dialog.set_prefer_wide_layout(True)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("keep", _("Keep Both"))
-        dialog.add_response("replace", _("Replace"))
+        if not same:
+            dialog.add_response("replace", _("Replace"))
+            dialog.set_response_appearance("replace",
+                                           Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_close_response("cancel")
         dialog.set_default_response("keep")
-        dialog.set_response_appearance("replace",
-                                       Adw.ResponseAppearance.DESTRUCTIVE)
 
         def on_response(d, response):
             if response == "replace":

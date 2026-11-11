@@ -558,7 +558,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             add(name, lambda a, p, cb=cb: cb(p.get_string()),
                 GLib.VariantType.new("s"))
         add("import-preset", lambda *a: self._ask_import_preset())
-        add("paste-preset", lambda *a: self._paste_preset())
+        add("paste-preset", lambda *a: self._ask_paste_preset())
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())
