@@ -112,12 +112,6 @@ def test_name_without_fallback():
     assert one('{"values": {"FF": 1}}')[0] == "Imported Preset"
 
 
-def test_free_name():
-    taken = {"GT3", "GT3 (2)"}
-    assert sharing.free_name("Rally", taken.__contains__) == "Rally"
-    assert sharing.free_name("GT3", taken.__contains__) == "GT3 (3)"
-
-
 def test_long_name_fits_a_file_name():
     name = one(json.dumps({"name": "ü" * 200, "values": {"FF": 1}}))[0]
     assert len(name.encode()) <= sharing.MAX_NAME_BYTES

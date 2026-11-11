@@ -7,6 +7,8 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 
 from .. import config, steamgriddb
 from ..i18n import _
+from . import tasks
+from .layout import margins, tile_grid
 from .live import CoverView
 from .names import cap_row, short
 
@@ -18,20 +20,15 @@ THUMB_THREADS = 4
 
 
 def in_thread(work, done):
-    """Run work() in a thread; done(result, error) on the main loop."""
-    def run():
-        try:
-            result, error = work(), None
-        except steamgriddb.Error as e:
-            result, error = None, e
-        GLib.idle_add(lambda: done(result, error) and False)
-    threading.Thread(target=run, daemon=True).start()
+    """Run a SteamGridDB request in a thread, see tasks.in_thread()."""
+    tasks.in_thread(work, done, steamgriddb.Error)
 
 
 def error_text(error):
-    if error.kind == "key":
+    kind = getattr(error, "kind", "network")   # an unexpected error: like network
+    if kind == "key":
         return _("SteamGridDB did not accept the API key.")
-    if error.kind == "save":
+    if kind == "save":
         return _("Could not save the picture")
     return _("SteamGridDB could not be reached. Check your internet connection.")
 
@@ -119,7 +116,7 @@ class KeyRow:
                     self.accepted()
                 return
             log.warning("SteamGridDB API key check failed: %s", error)
-            if error.kind == "key":
+            if getattr(error, "kind", None) == "key":
                 self.row.add_css_class("error")
             self.notify(error_text(error))
         check_key(key, done)
@@ -229,9 +226,7 @@ class CoverSearch:
 
     # -- games ---------------------------------------------------------------
     def _search_page(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(box, f"set_margin_{side}")(12)
+        box = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12), 12)
         entry = Gtk.SearchEntry(placeholder_text=_("Game name"), search_delay=500)
         entry.set_text(self.game["name"])
         self.results = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE,
@@ -280,7 +275,7 @@ class CoverSearch:
                 log.warning("SteamGridDB search failed: %s", error)
                 self._show_status(self.search_stack, self.search_status,
                                   _("Search failed"), error_text(error))
-                if error.kind == "key":
+                if getattr(error, "kind", None) == "key":
                     self.nav.replace([self._key_page()])
                 return
             self.results.remove_all()
@@ -309,11 +304,7 @@ class CoverSearch:
                                     height_request=32), "busy")
         status = Adw.StatusPage(icon_name="image-missing-symbolic")
         stack.add_named(status, "status")
-        flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
-                           min_children_per_line=2, max_children_per_line=4,
-                           column_spacing=12, row_spacing=12, valign=Gtk.Align.START)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(flow, f"set_margin_{side}")(12)
+        flow = margins(tile_grid(2, 4), 12)
         scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         scroll.set_child(flow)
         stack.add_named(scroll, "covers")

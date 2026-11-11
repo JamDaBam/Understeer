@@ -17,7 +17,7 @@ import pathlib
 import time
 
 from . import config
-from .sharing import free_name
+from .names import free_name
 
 KEEP_DAYS = 30
 
@@ -85,10 +85,7 @@ def items(kind=None):
     time.time()) and, for a preset, "folder"."""
     found = []
     for path in _folder().glob("*.json") if _folder().is_dir() else []:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            continue
+        data = config.load_json(path)
         if not isinstance(data, dict) or data.get("kind") not in ("preset", "game") \
                 or kind not in (None, data["kind"]):
             continue

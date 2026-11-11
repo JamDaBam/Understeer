@@ -1,8 +1,9 @@
 """One tile per setting: icon, name, large value and the control below."""
-from gi.repository import Gtk
+from gi.repository import Gtk, Pango
 
 from ..i18n import _
 from ..settings import format_value
+from .layout import margins
 
 
 class SettingTile:
@@ -23,9 +24,8 @@ class SettingTile:
         self._placing = False       # set() moves the slider, not the user
         kind = setting.get("kind", "slider")
 
-        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        tile.add_css_class("card")
-        tile.add_css_class("tile")
+        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
+                       css_classes=["card", "tile"])
         tile.set_tooltip_text(_(setting["desc"]))
 
         # Icon, name, undo and info
@@ -52,22 +52,20 @@ class SettingTile:
         info.add_css_class("flat")
         info.add_css_class("circular")
         info.set_tooltip_text(_("About this setting"))
-        pop_label = Gtk.Label(label=_(setting["desc"]), wrap=True,
-                              max_width_chars=40)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(pop_label, f"set_margin_{side}")(8)
+        pop_label = margins(Gtk.Label(label=_(setting["desc"]), wrap=True,
+                                      max_width_chars=40), 8)
         popover = Gtk.Popover()
         popover.set_child(pop_label)
         info.set_popover(popover)
         for w in (icon, title, self.revert_btn, info):
             head.append(w)
         tile.append(head)
-        self.head, self.title = head, title
+        self.head = head
 
         # Large value with the sysfs name next to it
         value_line = Gtk.Box(spacing=8)
         self.value_label = Gtk.Label(xalign=0, hexpand=True)
-        self.value_label.set_ellipsize(3)       # Pango.EllipsizeMode.END
+        self.value_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.value_label.add_css_class("tile-value")
         self.value_label.set_max_width_chars(4)
         self.id_label = Gtk.Label(label=setting["id"], xalign=1)
@@ -129,12 +127,12 @@ class SettingTile:
         if compact:
             self.value_label.set_hexpand(False)
             self.value_label.set_valign(Gtk.Align.CENTER)
-            self.value_label.set_ellipsize(0)   # Pango.EllipsizeMode.NONE
+            self.value_label.set_ellipsize(Pango.EllipsizeMode.NONE)
             self.head.append(self.value_label)
         else:
             self.value_label.set_hexpand(True)
             self.value_label.set_valign(Gtk.Align.FILL)
-            self.value_label.set_ellipsize(3)   # Pango.EllipsizeMode.END
+            self.value_label.set_ellipsize(Pango.EllipsizeMode.END)
             self.value_line.prepend(self.value_label)
         self.head.set_spacing(6 if compact else 10)
         self.info_btn.set_visible(not compact)

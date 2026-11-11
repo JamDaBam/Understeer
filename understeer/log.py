@@ -71,6 +71,10 @@ def _read(path):
         return None
 
 
+def _driver():
+    return _read("/sys/module/hid_fanatec/version") or "version unknown"
+
+
 def _distribution():
     for line in (_read("/etc/os-release") or "").splitlines():
         if line.startswith("PRETTY_NAME="):
@@ -84,8 +88,7 @@ def debug_info():
         f"Understeer {version()}",
         f"Python {platform.python_version()}",
         f"System: {_distribution()}, kernel {platform.release()}",
-        "hid-fanatecff driver: "
-        + (_read("/sys/module/hid_fanatec/version") or "version unknown"),
+        f"hid-fanatecff driver: {_driver()}",
         f"Log file: {LOG_FILE}",
     ])
 
@@ -118,8 +121,7 @@ def setup(path=None):
     log.info("Understeer %s started", version())
     log.info("Python %s, %s, kernel %s", platform.python_version(),
              _distribution(), platform.release())
-    log.info("hid-fanatecff driver: %s",
-             _read("/sys/module/hid_fanatec/version") or "version unknown")
+    log.info("hid-fanatecff driver: %s", _driver())
     return path
 
 

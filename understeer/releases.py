@@ -8,9 +8,9 @@ e.g. <li xml:lang="de">. Works without GTK.
 import pathlib
 import xml.etree.ElementTree as ET
 
-from . import DATA_DIR
+from . import APP_ID, DATA_DIR
 
-METAINFO = DATA_DIR / "io.github.JamDaBam.Understeer.metainfo.xml"
+METAINFO = DATA_DIR / f"{APP_ID}.metainfo.xml"
 _LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
@@ -21,12 +21,22 @@ def plain_version(version):
     return version[1:] if version[:1] == "v" else version
 
 
-def _release(version, path):
+def _root(path):
+    """The root element of the metainfo file, or None if it can't be read."""
     try:
-        root = ET.parse(path or METAINFO).getroot()
+        return ET.parse(path or METAINFO).getroot()
     except (OSError, ET.ParseError):
         return None
-    for release in root.iterfind("releases/release"):
+
+
+def _releases(path):
+    """The <release> elements, newest first."""
+    root = _root(path)
+    return [] if root is None else root.findall("releases/release")
+
+
+def _release(version, path):
+    for release in _releases(path):
         if release.get("version") == plain_version(version):
             return release
     return None
@@ -82,13 +92,9 @@ def release_date(version, path=None):
 def versions_since(last, current, path=None):
     """Versions with notes after last up to current, newest first: what is
     new for someone who used last. Just current if last is unknown."""
-    try:
-        root = ET.parse(path or METAINFO).getroot()
-    except (OSError, ET.ParseError):
-        return []
     old, new = number(last) if last else None, number(current)
     found = []
-    for release in root.iterfind("releases/release"):
+    for release in _releases(path):
         version = release.get("version")
         if release.find("description") is None:
             continue
@@ -102,24 +108,14 @@ def versions_since(last, current, path=None):
 
 def all_versions(path=None):
     """Every version with notes, newest first."""
-    try:
-        root = ET.parse(path or METAINFO).getroot()
-    except (OSError, ET.ParseError):
-        return []
-    return [r.get("version") for r in root.iterfind("releases/release")
+    return [r.get("version") for r in _releases(path)
             if r.find("description") is not None]
 
 
 def latest(path=None):
     """The newest version with notes, e.g. for a build from git."""
-    try:
-        root = ET.parse(path or METAINFO).getroot()
-    except (OSError, ET.ParseError):
-        return None
-    for release in root.iterfind("releases/release"):
-        if release.find("description") is not None:
-            return release.get("version")
-    return None
+    versions = all_versions(path)
+    return versions[0] if versions else None
 
 
 def markdown(version, path=None):

@@ -168,11 +168,7 @@ def import_(found):
     for name, (_title, data) in found["presets"].items():
         config.write_file(presets_dir / name, data)
     for name, new in found["settings"].items():
-        try:
-            old = json.loads((settings_dir / name).read_text())
-        except (OSError, ValueError):
-            old = None
-        merged = _merge(name, old, new)
+        merged = _merge(name, config.load_json(settings_dir / name), new)
         config.write_file(settings_dir / name, json.dumps(
             merged, indent=2, sort_keys=name != "games.json").encode("utf-8"))
     for name, data in found["covers"].items():

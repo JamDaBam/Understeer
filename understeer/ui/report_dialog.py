@@ -1,11 +1,12 @@
 """Reporting a problem: a short description, the rest is filled in."""
 import logging
 
-from gi.repository import Adw, Gdk, Gio, Gtk
+from gi.repository import Adw, Gdk, Gio, Gtk, Pango
 
 from .. import log as session_log
 from .. import report
 from ..i18n import _
+from .layout import margins
 
 log = logging.getLogger("understeer.report")
 
@@ -35,9 +36,7 @@ class ReportDialog:
         view.set_content(self.toasts)
         self.dialog.set_child(view)
 
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(column, f"set_margin_{side}")(18)
+        column = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18), 18)
         clamp = Adw.Clamp(maximum_size=600, child=column)
         scroll = Gtk.ScrolledWindow(child=clamp, propagate_natural_height=True,
                                     max_content_height=MAX_HEIGHT,
@@ -98,9 +97,8 @@ class ReportDialog:
         sent.add(self.log_row)
         column.append(sent)
 
-        bar = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER)
-        for side in ("top", "bottom"):
-            getattr(bar, f"set_margin_{side}")(12)
+        bar = margins(Gtk.Box(spacing=12, halign=Gtk.Align.CENTER), 12,
+                      ("top", "bottom"))
         copy = Gtk.Button(label=_("Copy Only"))
         copy.add_css_class("pill")
         copy.set_tooltip_text(_("Copy the filled-in report, e.g. for a comment "
@@ -127,12 +125,9 @@ class ReportDialog:
 
     @staticmethod
     def _text_row(text):
-        label = Gtk.Label(label=text, xalign=0, wrap=True, selectable=True,
-                          wrap_mode=2)      # Pango.WrapMode.WORD_CHAR
-        label.add_css_class("monospace")
-        label.add_css_class("caption")
-        for side in ("top", "bottom", "start", "end"):
-            getattr(label, f"set_margin_{side}")(12)
+        label = margins(Gtk.Label(label=text, xalign=0, wrap=True, selectable=True,
+                                  wrap_mode=Pango.WrapMode.WORD_CHAR,
+                                  css_classes=["monospace", "caption"]), 12)
         row = Gtk.ListBoxRow(activatable=False, child=label)
         return row
 

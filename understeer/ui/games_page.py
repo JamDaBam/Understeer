@@ -1,13 +1,12 @@
 """The Games page: one tile per game with its cover and preset."""
 import logging
 import pathlib
-import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import config, games, steamgriddb, trash
 from ..i18n import _
-from . import cover_search
+from . import cover_search, layout, tasks
 from .live import CoverView
 from .names import cap_row, full_name_tip, label_factory, name_label, short
 from .selection import Selection
@@ -42,34 +41,21 @@ class GamesPage:
         log.info("%d games set up, cover downloads %s", len(self.games),
                  "on" if config.get_setting("download_covers", False) else "off")
 
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scroll, column = layout.scroll_page()
         column.add_css_class("games")
-        for side in ("top", "bottom", "start", "end"):
-            getattr(column, f"set_margin_{side}")(12)
         self.selection = Selection(
             _("Delete"), lambda: self.refresh(),
             lambda ids: self._remove_games(
                 [g for g in self.games if g["game"] in set(ids)]))
-        label = Gtk.Label(label=_("Games"), xalign=0, hexpand=True)
-        label.add_css_class("section-title")
-        title = Gtk.Box(spacing=12)
-        title.append(label)
         # Spaced as on the Presets page, so the buttons stay in place
-        buttons = Gtk.Box(spacing=6, valign=Gtk.Align.END)
+        buttons = Gtk.Box(spacing=6)
         buttons.append(self.window._trash_button("game"))
         buttons.append(self.selection.button)
-        title.append(buttons)
-        desc = Gtk.Label(
-            label=_("Give each game a preset. While Understeer is open, it "
-                    "applies the preset as soon as the game starts."),
-            xalign=0, wrap=True)
-        desc.add_css_class("dim-label")
-        desc.set_margin_start(6)
-        desc.set_margin_bottom(6)
-        self.flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
-                                homogeneous=True, min_children_per_line=2,
-                                max_children_per_line=8, column_spacing=12,
-                                row_spacing=12, valign=Gtk.Align.START)
+        layout.section(column, _("Games"),
+                       _("Give each game a preset. While Understeer is open, it "
+                         "applies the preset as soon as the game starts."), buttons)
+        self.flow = layout.tile_grid(2, 8)
+        column.append(self.flow)
 
         # Shown in the preferences, not on the page.
         options = self.options = Adw.PreferencesGroup(title=_("Covers"))
@@ -99,13 +85,6 @@ class GamesPage:
         self.key_row.add_suffix(get_key)
         options.add(self.key_row)
 
-        for w in (title, desc, self.flow):
-            column.append(w)
-        clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
-        clamp.set_child(column)
-        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
-                                    vexpand=True)
-        scroll.set_child(clamp)
         self.widget = self.selection.page(scroll)
         self.refresh()
 
@@ -140,7 +119,8 @@ class GamesPage:
     def refresh(self):
         self.flow.remove_all()
         self.selection.available([g["game"] for g in self.games])
-        add = self._add_tile()
+        add = layout.dashed_tile("list-add-symbolic", _("Add Game…"),
+                                 clicked=self._ask_game)
         add.set_sensitive(not self.selection.active)
         self.flow.append(add)
         # In the order of the menus, a preset in a folder as "Folder – Name";
@@ -153,23 +133,6 @@ class GamesPage:
         for game in self.games:
             self.flow.append(self.selection.wrap(
                 self._game_tile(game, presets), game["game"]))
-
-    def _add_tile(self):
-        button = Gtk.Button()
-        button.add_css_class("card")
-        button.add_css_class("tile")
-        button.add_css_class("new-preset")
-        button.connect("clicked", lambda b: self._ask_game())
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
-                        valign=Gtk.Align.CENTER)
-        plus = Gtk.Image.new_from_icon_name("list-add-symbolic")
-        plus.set_pixel_size(32)
-        plus.add_css_class("tile-icon")
-        plus.set_halign(Gtk.Align.CENTER)
-        inner.append(plus)
-        inner.append(Gtk.Label(label=_("Add Game…"), css_classes=["heading"]))
-        button.set_child(inner)
-        return button
 
     def _cover_file(self, game):
         """The picture to show: chosen by the user, else Steam's cover."""
@@ -256,10 +219,8 @@ class GamesPage:
 
     def _game_tile(self, game, presets):
         running = game["game"] in self.running
-        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        tile.add_css_class("card")
-        tile.add_css_class("tile")
-        tile.add_css_class("game-tile")
+        tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
+                       css_classes=["card", "tile", "game-tile"])
         if running:
             tile.add_css_class("running")
 
@@ -488,25 +449,23 @@ class GamesPage:
         key = config.get_setting(cover_search.KEY_SETTING)
 
         def work():
+            """(where from, path) of the cover, or None"""
             if appid:
                 path = games.download_cover(appid, config.COVER_DIR)
                 if path is not None:
-                    return "steam", path, None
+                    return "steam", path
             if not key:
-                return None, None, None
-            try:
-                url = steamgriddb.find_cover(game["name"], key, steam_appid=appid,
-                                             game_id=game.get("steamgriddb"))
-                if url is None:
-                    return None, None, None
-                suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
-                tmp = config.COVER_DIR / f"steamgriddb-{abs(hash(game_id))}{suffix}"
-                return "steamgriddb", steamgriddb.download(url, tmp), None
-            except steamgriddb.Error as e:
-                return None, None, e
+                return None
+            url = steamgriddb.find_cover(game["name"], key, steam_appid=appid,
+                                         game_id=game.get("steamgriddb"))
+            if url is None:
+                return None
+            suffix = pathlib.PurePosixPath(url).suffix.lower() or ".img"
+            tmp = config.COVER_DIR / f"steamgriddb-{abs(hash(game_id))}{suffix}"
+            return "steamgriddb", steamgriddb.download(url, tmp)
 
-        def done(result):
-            source, path, error = result
+        def done(result, error):
+            source, path = result or (None, None)
             self._downloading.discard(game_id)
             if error is not None:
                 log.warning("SteamGridDB cover for %s: %s", game["name"], error)
@@ -525,10 +484,8 @@ class GamesPage:
                 self._failed.add(game_id)
             self._report_search(game_id, found, error)
             self.refresh()
-            return False
 
-        threading.Thread(target=lambda: GLib.idle_add(done, work()),
-                         daemon=True).start()
+        tasks.in_thread(work, done, steamgriddb.Error)
 
     def _report_search(self, game_id, found, error=None):
         search = self._search
@@ -538,7 +495,7 @@ class GamesPage:
             search["found"] += 1
         else:
             search["missed"].append(game_id)
-        if error is not None and error.kind == "key":
+        if getattr(error, "kind", None) == "key":
             search["key_error"] = True
         if search["asked"] & self._downloading:
             return                              # still waiting for others

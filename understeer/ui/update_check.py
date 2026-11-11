@@ -6,7 +6,6 @@ hour, also when started often), and only after the user agreed once.
 """
 import logging
 import os
-import threading
 import time
 
 from gi.repository import Adw, GLib, Gtk
@@ -15,6 +14,7 @@ from .. import config, updates
 from .. import log as session_log
 from ..i18n import _
 from ..releases import plain_version
+from . import tasks
 
 log = logging.getLogger("understeer.window")
 
@@ -97,14 +97,7 @@ class UpdateCheckMixin:
             return
         config.set_setting("update_checked", time.time())
 
-        def work():
-            try:
-                latest, error = updates.fetch_latest(), None
-            except updates.Error as e:
-                latest, error = None, e
-            GLib.idle_add(lambda: self._update_found(latest, error) and False)
-
-        threading.Thread(target=work, daemon=True).start()
+        tasks.in_thread(updates.fetch_latest, self._update_found, updates.Error)
 
     def _update_found(self, latest, error):
         if error is not None:
@@ -175,16 +168,10 @@ class UpdateCheckMixin:
         self._show_update_banner()
         log.info("Updating %s to %s", appimage, latest["version"])
 
-        def work():
-            try:
-                updates.install(updates.download(latest["asset"], appimage),
-                                appimage)
-                error = None
-            except updates.Error as e:
-                error = e
-            GLib.idle_add(lambda: self._updated(error) and False)
-
-        threading.Thread(target=work, daemon=True).start()
+        tasks.in_thread(
+            lambda: updates.install(updates.download(latest["asset"], appimage),
+                                    appimage),
+            lambda _result, error: self._updated(error), updates.Error)
 
     def _updated(self, error):
         if error is None:
