@@ -50,6 +50,8 @@
                     <li xml:lang="de">Die Dialoge für Namen sind breiter und listen deine Ordner und Spiele zur Auswahl; ein fehlender Name wird im Dialog rot markiert</li>
                     <li>In a big window, e.g. maximized on a 4K screen, the theme previews in the preferences no longer stretch down the whole page</li>
                     <li xml:lang="de">In einem großen Fenster, z. B. maximiert auf einem 4K-Bildschirm, ziehen sich die Theme-Vorschauen in den Einstellungen nicht mehr über die ganze Seite</li>
+                    <li>A preset in a folder with a long name no longer makes the game tiles so wide that only one fits per row; the tile shows the preset's name, the list shows its folder too</li>
+                    <li xml:lang="de">Ein Preset in einem Ordner mit langem Namen macht die Spielkacheln nicht mehr so breit, dass nur eine pro Reihe passt; die Kachel zeigt den Namen des Presets, die Liste auch seinen Ordner</li>
                 </ul>
             </description>
         </release>

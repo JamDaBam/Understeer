@@ -19,6 +19,28 @@ def _steam_appid(game):
     return appid if kind == "steam" else None
 
 
+def _label_factory(texts=None):
+    """Rows of a Gtk.DropDown of strings, as labels; with texts (one per
+    row) short and ending in "…" if long, for the button."""
+    factory = Gtk.SignalListItemFactory()
+
+    def setup(_f, item):
+        label = Gtk.Label(xalign=0)
+        if texts is not None:
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_width_chars(4)
+            label.set_max_width_chars(12)
+        item.set_child(label)
+
+    def bind(_f, item):
+        item.get_child().set_label(item.get_item().get_string() if texts is None
+                                   else texts[item.get_position()])
+
+    factory.connect("setup", setup)
+    factory.connect("bind", bind)
+    return factory
+
+
 class GamesPage:
     """Builds and updates the Games page; `widget` is the page itself and
     `options` the cover settings shown in the preferences.
@@ -144,7 +166,7 @@ class GamesPage:
         self.flow.append(add)
         # In the order of the menus, a preset in a folder as "Folder – Name"
         presets = [(_("{folder} – {name}").format(folder=folder, name=name)
-                    if folder else name, path)
+                    if folder else name, path, name)
                    for folder, group in config.list_presets_by_folder()
                    for name, path in group]
         for game in self.games:
@@ -288,9 +310,14 @@ class GamesPage:
             head.append(rename)
         tile.append(head)
 
-        files = [path.name for _n, path in presets]
+        files = [path.name for _l, path, _n in presets]
         choose = Gtk.DropDown.new_from_strings(
-            [_("No Preset")] + [n for n, _p in presets])
+            [_("No Preset")] + [label for label, _p, _n in presets])
+        # The list shows "Folder – Name", the tile only the name, ending in
+        # "…" if long: else the longest would make every tile as wide
+        choose.set_factory(_label_factory(
+            [_("No Preset")] + [name for _l, _p, name in presets]))
+        choose.set_list_factory(_label_factory())
         choose.set_tooltip_text(_("Preset for this game"))
         if game["preset"] in files:
             choose.set_selected(files.index(game["preset"]) + 1)
