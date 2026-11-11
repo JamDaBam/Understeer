@@ -340,7 +340,6 @@ class CoverSearch:
         view.add_css_class("game-cover")
         button = Gtk.Button(child=view)
         button.add_css_class("flat")
-        button.add_css_class("cover-choice")
         if cover["author"]:
             button.set_tooltip_text(_("By {author}").format(author=cover["author"]))
         button.connect("clicked", lambda b: self._choose(cover, stack, found))

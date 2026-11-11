@@ -73,7 +73,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._toast_timer = 0
         self._toast_action = None   # what its button does
         self._live_timer = 0
-        self._status = ""
 
         self.model = None           # wheelbase model, e.g. "0EB7:0020"
         self.slot_names = {}        # slot number -> name chosen by the user

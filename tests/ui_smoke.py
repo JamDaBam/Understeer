@@ -9,9 +9,11 @@ exit code is the number of failures.
 import logging
 import os
 import pathlib
+import struct
 import xml.etree.ElementTree as ET
 import sys
 import traceback
+import zlib
 
 scratch = pathlib.Path(sys.argv[1])
 sys.argv = sys.argv[:1]
@@ -53,10 +55,10 @@ steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
-from understeer.ui import cover_search, theme  # noqa: E402
+from understeer.ui import cover_search, files, theme  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 failures, steps_done = [], []
 finished = []           # set once every step ran
@@ -81,6 +83,31 @@ sys.excepthook = lambda kind, value, tb: failures.append(
 def check(cond, what):
     if not cond:
         failures.append(f"check failed: {what}")
+
+
+class ChosenFile:
+    """Stands in for a file dialog: its user picks path at once."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def open(self, _parent, _cancellable, callback):
+        callback(self, None)
+
+    def open_finish(self, _result):
+        return Gio.File.new_for_path(str(self.path))
+
+    save, save_finish = open, open_finish
+
+
+def tiny_png():
+    """A picture of one pixel that GTK can show."""
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data)))
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00")) + chunk(b"IEND", b""))
 
 
 def find_row(widget, title):
@@ -828,6 +855,45 @@ def steps(win):
             config.delete_folder("Saved Into")
             win._set_active_preset(*before)
     yield "save as preset into a folder", save_as_into_folder
+
+    def file_dialogs():
+        """What happens once a file is chosen, for every file dialog."""
+        real = files.file_dialog
+        shared, exported = scratch / "shared.json", scratch / "by-dialog"
+        picture = scratch / "cover.png"
+        picture.write_bytes(tiny_png())
+        page = win.games_page
+        try:
+            files.file_dialog = lambda *a, **k: ChosenFile(shared)
+            win._export_preset(str(gt3))
+            check("understeer_preset" in shared.read_text(), "preset saved as file")
+            win._ask_import_preset()
+            d = win.get_visible_dialog()
+            check(isinstance(d, Adw.AlertDialog) and d.has_response("replace"),
+                  "preset file read: its name is taken")
+            close_dialogs(win)
+            files.file_dialog = lambda *a, **k: ChosenFile(exported)
+            win._ask_export()
+            check(exported.with_suffix(".zip").is_file(), ".zip added and written")
+            files.file_dialog = lambda *a, **k: ChosenFile(exported.with_suffix(".zip"))
+            win._ask_import()
+            d = win.get_visible_dialog()
+            check(isinstance(d, Adw.AlertDialog)
+                  and d.get_heading() == "Import from This File?", "export read")
+            close_dialogs(win)
+            page._add("dummy:cover", "Cover Test")
+            game = [g for g in page.games if g["game"] == "dummy:cover"][0]
+            files.file_dialog = lambda *a, **k: ChosenFile(picture)
+            page._choose_cover(game)
+            check(config.game_cover_path(game) is not None, "picture chosen for a game")
+            config.remove_game_cover(game)
+        finally:
+            files.file_dialog = real
+            close_dialogs(win)
+            page.games = [g for g in page.games if g["game"] != "dummy:cover"]
+            page._save()
+            page.refresh()
+    yield "file dialogs", file_dialogs
 
 
     def rename():

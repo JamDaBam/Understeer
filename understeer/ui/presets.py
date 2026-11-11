@@ -10,7 +10,7 @@ from ..i18n import _
 from ..names import free_name, menu_label
 from ..settings import (SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS, TABS, changes,
                         format_value)
-from . import layout
+from . import files, layout
 from .names import cap_row, full_name_tip, join_names, name_label, short
 from .selection import Selection
 
@@ -1000,32 +1000,23 @@ class PresetsMixin:
         self._notify(message.format(name=short(name)))
 
     @staticmethod
-    def _preset_filters():
-        presets = Gtk.FileFilter(name=_("Presets (JSON or text)"))
-        for pattern in ("*.json", "*.txt"):
-            presets.add_pattern(pattern)
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(presets)
-        return filters, presets
+    def _preset_dialog(title, **props):
+        """A file dialog for shared presets."""
+        return files.file_dialog(title, _("Presets (JSON or text)"),
+                                 ("*.json", "*.txt"), **props)
 
     def _export_preset(self, path):
         shared = self._shared(path)
         if shared is None:
             return
         name, values, folder = shared
-        filters, presets = self._preset_filters()
-        dialog = Gtk.FileDialog(title=_("Save Preset as File"), filters=filters,
-                                default_filter=presets,
-                                initial_name=pathlib.Path(path).name)
+        dialog = self._preset_dialog(_("Save Preset as File"),
+                                     initial_name=pathlib.Path(path).name)
 
         def chosen(d, result):
-            try:
-                file = d.save_finish(result)
-            except GLib.Error:
-                return                          # cancelled
-            dest = file.get_path() if file else None
+            dest = files.chosen_path(d.save_finish, result)
             if dest is None:
-                return
+                return                          # cancelled
             try:
                 config.write_file(pathlib.Path(dest),
                                   sharing.preset_json(name, values, folder))
@@ -1034,25 +1025,17 @@ class PresetsMixin:
                 return
             log.info("Preset %s saved as file", pathlib.Path(path).name)
             self._notify(_("Preset “{name}” saved as file").format(name=short(name)),
-                         _("Show Folder"),
-                         lambda: Gtk.FileLauncher.new(Gio.File.new_for_path(dest))
-                         .open_containing_folder(self, None, None))
+                         _("Show Folder"), lambda: files.show_in_folder(self, dest))
 
         dialog.save(self, None, chosen)
 
     def _ask_import_preset(self):
-        filters, presets = self._preset_filters()
-        dialog = Gtk.FileDialog(title=_("Import Presets"), filters=filters,
-                                default_filter=presets)
+        dialog = self._preset_dialog(_("Import Presets"))
 
         def chosen(d, result):
-            try:
-                file = d.open_finish(result)
-            except GLib.Error:
-                return                          # cancelled
-            source = file.get_path() if file else None
+            source = files.chosen_path(d.open_finish, result)
             if source is None:
-                return
+                return                          # cancelled
             source = pathlib.Path(source)
             try:
                 if source.stat().st_size > sharing.MAX_SIZE:

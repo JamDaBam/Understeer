@@ -1,11 +1,12 @@
 """Reporting a problem: a short description, the rest is filled in."""
 import logging
 
-from gi.repository import Adw, Gdk, Gio, Gtk, Pango
+from gi.repository import Adw, Gdk, Gtk, Pango
 
 from .. import log as session_log
 from .. import report
 from ..i18n import _
+from .files import show_in_folder
 from .layout import margins
 
 log = logging.getLogger("understeer.report")
@@ -90,9 +91,8 @@ class ReportDialog:
         folder.add_css_class("flat")
         folder.set_tooltip_text(_("Show the whole log file, e.g. to drag it "
                                   "into the issue"))
-        folder.connect("clicked", lambda b: Gtk.FileLauncher.new(
-            Gio.File.new_for_path(str(session_log.LOG_FILE)))
-            .open_containing_folder(window, None, None))
+        folder.connect("clicked", lambda b: show_in_folder(
+            window, session_log.LOG_FILE))
         self.log_row.add_suffix(folder)
         sent.add(self.log_row)
         column.append(sent)

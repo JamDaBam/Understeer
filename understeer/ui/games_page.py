@@ -6,7 +6,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import config, games, steamgriddb, trash
 from ..i18n import _
-from . import cover_search, layout, tasks
+from . import cover_search, files, layout, tasks
 from .live import CoverView
 from .names import cap_row, full_name_tip, label_factory, name_label, short
 from .selection import Selection
@@ -359,22 +359,15 @@ class GamesPage:
 
     # -- own pictures --------------------------------------------------------
     def _choose_cover(self, game):
-        images = Gtk.FileFilter(name=_("Pictures"))
-        images.add_pixbuf_formats()
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(images)
-        dialog = Gtk.FileDialog(title=_("Picture for {game}").format(game=short(game["name"])),
-                                filters=filters, default_filter=images)
+        dialog = files.file_dialog(
+            _("Picture for {game}").format(game=short(game["name"])),
+            _("Pictures"), pictures=True)
         dialog.open(self.window, None,
                     lambda d, result: self._cover_chosen(game, d, result))
 
     def _cover_chosen(self, game, dialog, result):
-        try:
-            file = dialog.open_finish(result)
-        except GLib.Error:
-            return                              # cancelled
-        path = file.get_path() if file else None
-        if path is not None:
+        path = files.chosen_path(dialog.open_finish, result)
+        if path is not None:                    # else cancelled
             self.set_cover(game, path)
 
     def set_cover(self, game, path, quiet=False):

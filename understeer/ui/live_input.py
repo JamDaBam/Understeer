@@ -27,7 +27,7 @@ class LiveInputMixin:
     def _build_live_strip(self):
         """Steering angle and pedals, always in view above the tabs."""
         self.live_strip = strip = Gtk.Box(spacing=18,
-                                          css_classes=["card", "tile", "live-tile"])
+                                          css_classes=["card", "tile"])
         steering = Gtk.Box(spacing=18, hexpand=True)
         self.wheel_view = WheelView("understeer-steering-symbolic")
         steering.append(self.wheel_view)
@@ -69,7 +69,7 @@ class LiveInputMixin:
                         "what it is. Max shows the highest value since the "
                         "last reset."), suffix=reset)
         tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
-                       css_classes=["card", "tile", "live-tile"])
+                       css_classes=["card", "tile"])
         self.axes_empty = Gtk.Label(xalign=0, wrap=True)
         self.axes_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
                                      homogeneous=True, min_children_per_line=2,
