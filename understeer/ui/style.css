@@ -300,3 +300,13 @@ button.theme-choice:checked {
 .theme-mini-accent {
   min-height: 3px;
 }
+
+/* "New" next to the versions an update brought, in What's New */
+.new-badge {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: bold;
+  font-size: 0.85em;
+}
