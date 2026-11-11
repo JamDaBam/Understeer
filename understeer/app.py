@@ -107,11 +107,19 @@ class TunerApplication(Adw.Application):
         return windows[0] if windows else None
 
     def _tray_presets(self):
-        """[(name, key, active)] for the tray menu."""
+        """The tray menu: (name, key, active) per preset, (folder,
+        [presets]) per folder."""
         win = self._main_window()
         active = win.active_preset if win is not None else None
-        return [(name, str(path), active is not None and path == active)
-                for name, path in config.list_presets()]
+        entries = []
+        for folder, group in config.list_presets_by_folder():
+            presets = [(name, str(path), active is not None and path == active)
+                       for name, path in group]
+            if folder is None:
+                entries.extend(presets)
+            else:
+                entries.append((folder, presets))
+        return entries
 
     def _tray_apply_preset(self, key):
         win = self._main_window()

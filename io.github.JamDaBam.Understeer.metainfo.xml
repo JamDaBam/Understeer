@@ -42,6 +42,8 @@
                 <ul>
                     <li>The tray menu lists your presets, the active one checked; a click applies it without opening the window, and a notification tells how it went. With unsaved changes, the window opens and asks first</li>
                     <li xml:lang="de">Das Tray-Menü zeigt deine Presets, das aktive mit Haken; ein Klick wendet es an, ohne das Fenster zu öffnen, und eine Benachrichtigung sagt, wie es lief. Bei ungespeicherten Änderungen öffnet sich das Fenster und fragt vorher</li>
+                    <li>Presets can be grouped in folders, e.g. several for one game: a folder button on each preset moves it, and Save as Preset suggests the folder of the active one. The Presets page shows a section per folder, the Presets menu and the tray menu a submenu</li>
+                    <li xml:lang="de">Presets lassen sich in Ordnern zusammenfassen, z. B. mehrere für ein Spiel: Ein Ordner-Knopf an jedem Preset verschiebt es, und „Als Preset speichern“ schlägt den Ordner des aktiven vor. Die Presets-Seite zeigt einen Abschnitt pro Ordner, das Presets-Menü und das Tray-Menü ein Untermenü</li>
                 </ul>
             </description>
         </release>

@@ -126,7 +126,11 @@ class GamesPage:
     def refresh(self):
         self.flow.remove_all()
         self.flow.append(self._add_tile())
-        presets = config.list_presets()
+        # In the order of the menus, a preset in a folder as "Folder – Name"
+        presets = [(_("{folder} – {name}").format(folder=folder, name=name)
+                    if folder else name, path)
+                   for folder, group in config.list_presets_by_folder()
+                   for name, path in group]
         for game in self.games:
             self.flow.append(self._game_tile(game, presets))
 

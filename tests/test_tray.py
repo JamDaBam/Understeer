@@ -264,3 +264,38 @@ def test_menu_without_presets(panel, item):
     spin(lambda: t.registered)
     _revision, (_root, _props, children) = layout(conn, t)
     assert [c[1].get("label") for c in children] == ["Open Understeer", None, "Quit"]
+
+
+def test_folders_are_submenus(panel, with_presets):
+    conn, _items = panel
+    t, state = with_presets
+    state["presets"] = [("Daily", "a", False),
+                        ("BeamNG", [("Drift", "b", True), ("Climb", "c", False)]),
+                        ("Rally", [("Stage", "d", False)])]
+    t.start()
+    spin(lambda: t.registered)
+    _revision, (_root, _props, children) = layout(conn, t)
+    top = [(c[1].get("label"), c[1].get("children-display"), c[1].get("toggle-state"))
+           for c in children]
+    assert top == [("Open", None, None), (None, None, None), ("Daily", None, 0),
+                   ("BeamNG", "submenu", 1), ("Rally", "submenu", 0),
+                   (None, None, None), ("Quit", None, None)]
+    beamng = children[3]
+    assert [(c[1]["label"], c[1]["toggle-state"]) for c in beamng[2]] == \
+        [("Drift", 1), ("Climb", 0)]
+    # The panel may ask for one submenu only
+    _revision, (folder_id, props, kids) = call(
+        conn, t.name, tray.MENU_PATH, "com.canonical.dbusmenu", "GetLayout",
+        GLib.Variant("(iias)", (beamng[0], -1, [])))
+    assert folder_id == beamng[0] and props["label"] == "BeamNG"
+    assert [k[1]["label"] for k in kids] == ["Drift", "Climb"]
+    # Only one level asked for: the children without theirs
+    _revision, (_root, _props, shallow) = call(
+        conn, t.name, tray.MENU_PATH, "com.canonical.dbusmenu", "GetLayout",
+        GLib.Variant("(iias)", (0, 1, [])))
+    assert all(c[2] == [] for c in shallow)
+    click(conn, t, beamng[2][1][0])
+    assert spin(lambda: state["applied"] == ["c"])
+    click(conn, t, beamng[0])               # the folder itself: nothing
+    spin(lambda: False, 0.2)
+    assert state["applied"] == ["c"]

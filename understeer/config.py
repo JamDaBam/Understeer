@@ -1,7 +1,10 @@
 """Presets and app settings in ~/.config/Understeer, without depending on GTK.
 
 Every *.json directly in CONFIG_DIR is a preset:
-    {"name": "BeamNG Drift", "values": {"FF": 55, "SEN": 540, ...}}
+    {"name": "BeamNG Drift", "folder": "BeamNG", "values": {"FF": 55, ...}}
+"folder" is optional: presets can be grouped in folders, one level deep.
+The folder is only a field in the file, so games keep their presets by
+file name and older versions just show all presets without folders.
 """
 import hashlib
 import json
@@ -222,18 +225,80 @@ def game_preset_path(game):
 # ---------------------------------------------------------------------------
 # Presets
 # ---------------------------------------------------------------------------
-def list_presets():
-    """[(name, path)] of all presets, sorted by file name."""
+MAX_FOLDER = 80             # longer folder names are cut
+KEEP = object()            # write_preset(): the folder stays
+
+
+def clean_folder(folder):
+    """A folder name as stored: one line of printable characters, or None
+    for no folder."""
+    if not isinstance(folder, str):
+        return None
+    folder = "".join(c for c in " ".join(folder.split()) if c.isprintable())
+    return folder[:MAX_FOLDER].strip() or None
+
+
+def _scan():
+    """[(name, path, folder)] of all presets, sorted by file name."""
     if not CONFIG_DIR.exists():
         return []
     result = []
     for f in sorted(CONFIG_DIR.glob("*.json")):
         try:
-            name = json.loads(f.read_text()).get("name", f.stem)
-        except (OSError, json.JSONDecodeError):
-            name = f.stem
-        result.append((name, f))
+            data = json.loads(f.read_text())
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            data = {}
+        name = data.get("name") if isinstance(data.get("name"), str) else f.stem
+        result.append((name, f, clean_folder(data.get("folder"))))
     return result
+
+
+def list_presets():
+    """[(name, path)] of all presets, sorted by file name."""
+    return [(name, path) for name, path, _folder in _scan()]
+
+
+def list_presets_by_folder():
+    """[(folder, [(name, path)])]: first the presets without a folder
+    (folder None, left out if there are none), then each folder by name."""
+    groups, spelled = {}, {}        # "BeamNG" and "beamng" are one folder
+    for name, path, folder in _scan():
+        key = folder.casefold() if folder is not None else None
+        spelled.setdefault(key, folder)
+        groups.setdefault(key, []).append((name, path))
+    keys = sorted(k for k in groups if k is not None)
+    return ([(None, groups[None])] if None in groups else []) + \
+        [(spelled[k], groups[k]) for k in keys]
+
+
+def list_folders():
+    """The names of all folders that hold presets, sorted."""
+    return [f for f, _presets in list_presets_by_folder() if f is not None]
+
+
+def existing_folder(folder, besides=None):
+    """folder cleaned, written as an existing folder of the same name is,
+    e.g. "beamng" as "BeamNG"; besides: a folder not to count."""
+    folder = clean_folder(folder)
+    if folder is None:
+        return None
+    skip = clean_folder(besides)
+    for known in list_folders():
+        if known.casefold() == folder.casefold() and (
+                skip is None or known.casefold() != skip.casefold()):
+            return known
+    return folder
+
+
+def preset_folder(path):
+    """The folder of the preset at path, or None."""
+    try:
+        data = json.loads(pathlib.Path(path).read_text())
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return clean_folder(data.get("folder")) if isinstance(data, dict) else None
 
 
 def preset_path(name):
@@ -247,9 +312,41 @@ def read_preset(path):
     return data.get("name", pathlib.Path(path).stem), data.get("values", {})
 
 
-def write_preset(path, name, values):
-    """Write a preset file; raises OSError."""
-    write_file(path, json.dumps({"name": name, "values": values}, indent=2))
+def write_preset(path, name, values, folder=KEEP):
+    """Write a preset file; raises OSError. folder: the folder to put it
+    in, None for none; left out, a preset written again stays in its
+    folder."""
+    if folder is KEEP:
+        folder = preset_folder(path)
+    data = {"name": name}
+    folder = clean_folder(folder)
+    if folder:
+        data["folder"] = folder
+    data["values"] = values
+    write_file(path, json.dumps(data, indent=2))
+
+
+def set_preset_folder(path, folder):
+    """Put a preset into folder (None: into no folder); raises OSError
+    or ValueError (bad file)."""
+    name, values = read_preset(path)
+    write_preset(path, name, values, existing_folder(folder))
+
+
+def rename_folder(old, new):
+    """Give a folder a new name (also another spelling, e.g. "beamng" to
+    "BeamNG"), or merge it into another one
+    (new None: the presets leave the folder). Returns how many presets
+    moved; raises OSError."""
+    old, new = clean_folder(old), existing_folder(new, besides=old)
+    moved = 0
+    for name, path, folder in _scan():
+        if folder is not None and old is not None and \
+                folder.casefold() == old.casefold() and folder != new:
+            _name, values = read_preset(path)
+            write_preset(path, name, values, new)
+            moved += 1
+    return moved
 
 
 def rename_preset(path, new_name):
@@ -264,7 +361,7 @@ def rename_preset(path, new_name):
     new_path = preset_path(new_name)
     if new_path != path and new_path.exists():
         raise FileExistsError(new_path.name)
-    write_preset(new_path, new_name, values)
+    write_preset(new_path, new_name, values, preset_folder(path))
     if new_path != path:
         path.unlink(missing_ok=True)
         games = load_games()

@@ -9,6 +9,7 @@ import json
 import re
 from collections import namedtuple
 
+from .config import clean_folder
 from .i18n import _
 from .settings import SETTINGS, SETTINGS_BY_ID, format_value
 
@@ -28,24 +29,29 @@ class Error(ValueError):
     """Not a preset; the message can be shown to the user."""
 
 
-def _data(name, values):
+def _data(name, values, folder=None):
     ordered = {s["id"]: values[s["id"]] for s in SETTINGS if s["id"] in values}
-    return {"understeer_preset": FORMAT, "name": name, "values": ordered}
+    data = {"understeer_preset": FORMAT, "name": name}
+    if clean_folder(folder):
+        data["folder"] = clean_folder(folder)
+    data["values"] = ordered
+    return data
 
 
-def preset_json(name, values):
+def preset_json(name, values, folder=None):
     """The preset as JSON, the same as an exported preset file."""
-    return json.dumps(_data(name, values), indent=2, ensure_ascii=False) + "\n"
+    return json.dumps(_data(name, values, folder), indent=2,
+                      ensure_ascii=False) + "\n"
 
 
-def preset_text(name, values):
+def preset_text(name, values, folder=None):
     """The values to read, then the JSON in a code block."""
     lines = [_("Understeer preset “{name}”").format(name=name)]
     for setting in SETTINGS:
         if setting["id"] in values:
             lines.append(f"{_(setting['label'])}: "
                          f"{format_value(setting, values[setting['id']])}")
-    data = json.dumps(_data(name, values), ensure_ascii=False)
+    data = json.dumps(_data(name, values, folder), ensure_ascii=False)
     return "\n".join(lines) + f"\n\n```json\n{data}\n```\n"
 
 
@@ -65,7 +71,8 @@ def clean_values(values):
     return {a: v for a, v in values.items() if _valid(a, v)}
 
 
-Found = namedtuple("Found", "name values version")
+# folder: the folder it was in when shared, or None
+Found = namedtuple("Found", "name values version folder", defaults=(None,))
 Result = namedtuple("Result", "presets skipped cut")
 
 
@@ -144,7 +151,8 @@ def find_presets(text, fallback_name=""):
                 cut += 1
                 continue
             versions[name] = versions.get(name, 0) + 1
-            presets.append(Found(name, values, versions[name]))
+            presets.append(Found(name, values, versions[name],
+                                 clean_folder(preset.get("folder"))))
     if not presets:
         if skipped:
             raise Error(_("The presets hold no settings Understeer knows."))
