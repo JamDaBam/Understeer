@@ -4,7 +4,7 @@ import json
 import logging
 import pathlib
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from .. import config, sharing
 from ..i18n import _
@@ -63,50 +63,80 @@ class PresetsMixin:
     def _rebuild_presets_list(self):
         while (child := self.presets_box.get_first_child()) is not None:
             self.presets_box.remove(child)
-        groups = config.list_presets_by_folder()
+        groups = config.list_presets_by_folder(empty=True)
         presets = [p for _f, group in groups for p in group]
         loose = groups[0][1] if groups and groups[0][0] is None else []
-        self.presets_flow = self._tile_grid()       # the loose ones
+        # The presets without a folder; dropping one here takes it out
+        self.presets_flow = self._tile_grid()
+        self.presets_flow.add_css_class("preset-drop")
+        self._drop_target(self.presets_flow, lambda path: self._drop_preset(path, None))
         self.presets_box.append(self.presets_flow)
         self.folder_flows = {}
 
-        new = Gtk.Button(action_name="win.save-preset")
-        new.add_css_class("card")
-        new.add_css_class("tile")
-        new.add_css_class("new-preset")
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
-                        valign=Gtk.Align.CENTER)
-        plus = Gtk.Image.new_from_icon_name("list-add-symbolic")
-        plus.set_pixel_size(32)
-        plus.add_css_class("tile-icon")
-        plus.set_halign(Gtk.Align.CENTER)
-        inner.append(plus)
-        inner.append(Gtk.Label(label=_("Save as Preset…"), css_classes=["heading"]))
-        if not presets:
-            hint = Gtk.Label(label=_("Saved presets appear here and in the "
-                                     "Presets menu at the top."),
-                             wrap=True, justify=Gtk.Justification.CENTER)
-            hint.add_css_class("dim-label")
-            inner.append(hint)
-        new.set_child(inner)
-        self.presets_flow.append(new)
-
+        self.presets_flow.append(self._dashed_tile(
+            "list-add-symbolic", _("Save as Preset…"),
+            None if presets else _("Saved presets appear here and in the "
+                                   "Presets menu at the top."),
+            action="win.save-preset"))
+        folder_tile = self._dashed_tile(
+            "folder-new-symbolic", _("New Folder…"),
+            _("Or drag a preset here"), clicked=lambda: self._ask_new_folder())
+        self._drop_target(folder_tile, self._ask_new_folder)
+        self.presets_flow.append(folder_tile)
         for name, path in loose:
             self.presets_flow.append(self._preset_tile(name, path))
         self.presets_flow.append(self._sim_defaults_tile())
         for folder, group in groups:
-            if folder is None:
-                continue
-            self.presets_box.append(self._folder_head(folder, group))
+            if folder is not None:
+                self.presets_box.append(self._folder_section(folder, group))
+
+    @staticmethod
+    def _dashed_tile(icon, title, hint=None, action=None, clicked=None):
+        """A dashed tile that makes something new."""
+        button = Gtk.Button(action_name=action)
+        if clicked:
+            button.connect("clicked", lambda b: clicked())
+        for css in ("card", "tile", "new-preset"):
+            button.add_css_class(css)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
+                        valign=Gtk.Align.CENTER)
+        image = Gtk.Image.new_from_icon_name(icon)
+        image.set_pixel_size(32)
+        image.add_css_class("tile-icon")
+        image.set_halign(Gtk.Align.CENTER)
+        inner.append(image)
+        inner.append(Gtk.Label(label=title, css_classes=["heading"]))
+        if hint:
+            label = Gtk.Label(label=hint, wrap=True,
+                              justify=Gtk.Justification.CENTER)
+            label.add_css_class("dim-label")
+            inner.append(label)
+        button.set_child(inner)
+        return button
+
+    def _folder_section(self, folder, group):
+        """A folder: its heading and its tiles; presets dropped on it go in."""
+        section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        section.add_css_class("preset-folder")
+        section.append(self._folder_head(folder, group))
+        if group:
             flow = self._tile_grid()
             for name, path in group:
                 flow.append(self._preset_tile(name, path))
+            section.append(flow)
             self.folder_flows[folder] = flow
-            self.presets_box.append(flow)
+        else:
+            empty = Gtk.Label(label=_("Drag presets here"), wrap=True)
+            empty.add_css_class("dim-label")
+            empty.add_css_class("folder-empty")
+            section.append(empty)
+            self.folder_flows[folder] = None
+        self._drop_target(section, lambda path: self._drop_preset(path, folder))
+        return section
 
     def _folder_head(self, folder, group):
-        """Heading of a folder: its name, how many presets, rename."""
-        head = Gtk.Box(spacing=8, margin_top=12, margin_start=6)
+        """Heading of a folder: its name, how many presets, rename, delete."""
+        head = Gtk.Box(spacing=8, margin_start=6)
         icon = Gtk.Image.new_from_icon_name("folder-symbolic")
         icon.add_css_class("dim-label")
         head.append(icon)
@@ -122,7 +152,58 @@ class PresetsMixin:
         rename.add_css_class("flat")
         rename.connect("clicked", lambda b: self._ask_rename_folder(folder))
         head.append(rename)
+        delete = Gtk.Button(icon_name="user-trash-symbolic",
+                            tooltip_text=_("Delete Folder"))
+        delete.add_css_class("flat")
+        delete.connect("clicked", lambda b: self._ask_delete_folder(folder, len(group)))
+        head.append(delete)
         return head
+
+    # -- dragging presets into folders ---------------------------------------
+    def _drag_source(self, tile, path):
+        """Let a preset tile be dragged, also when grabbed on a button."""
+        source = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
+        source.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        grab = {}
+
+        def prepare(src, x, y):
+            grab["at"] = (x, y)
+            return Gdk.ContentProvider.new_for_value(str(path))
+
+        def begin(src, _drag):
+            x, y = grab.get("at", (0, 0))
+            src.set_icon(Gtk.WidgetPaintable.new(tile), int(x), int(y))
+            tile.add_css_class("dragged")
+
+        source.connect("prepare", prepare)
+        source.connect("drag-begin", begin)
+        source.connect("drag-end", lambda *a: tile.remove_css_class("dragged"))
+        tile.add_controller(source)
+
+    @staticmethod
+    def _drop_target(widget, dropped):
+        """widget takes dragged presets: dropped(path) on a drop."""
+        target = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+
+        def drop(_target, value, _x, _y):
+            path = pathlib.Path(value) if isinstance(value, str) else None
+            if path is None or path.parent != config.CONFIG_DIR \
+                    or path.suffix != ".json" or not path.is_file():
+                return False
+            # After the drop has ended: the tiles are built again
+            GLib.idle_add(lambda: dropped(path) and False)
+            return True
+
+        target.connect("drop", drop)
+        widget.add_controller(target)
+
+    def _drop_preset(self, path, folder):
+        """A preset dropped into folder (None: out of any)."""
+        try:
+            name, _values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            name = pathlib.Path(path).stem
+        self._set_preset_folder(path, name, folder)
 
     def _preset_tile(self, name, path):
         """A tile of a saved preset with its buttons."""
@@ -157,11 +238,6 @@ class PresetsMixin:
         save_btn.set_tooltip_text(_("Save current settings to this preset"))
         save_btn.connect("clicked", lambda b, p=path:
                          self._confirm_overwrite(p))
-        group_btn = Gtk.Button(label=_("Group"))
-        group_btn.set_tooltip_text(_("Put this preset into a folder, e.g. "
-                                     "with others for the same game"))
-        group_btn.connect("clicked", lambda b, p=path, n=name:
-                          self._ask_preset_folder(p, n))
         info_btn = Gtk.Button(icon_name="help-about-symbolic",
                               tooltip_text=_("Show Values"))
         info_btn.add_css_class("flat")
@@ -177,12 +253,13 @@ class PresetsMixin:
                         self._confirm_delete_preset(p, n))
         # Apply on its own row: with the text buttons in one row, the
         # tiles would get too wide for two of them side by side.
-        for w in (save_btn, group_btn, info_btn, share_btn, del_btn):
+        for w in (save_btn, info_btn, share_btn, del_btn):
             buttons.append(w)
         save_btn.set_hexpand(True)
-        group_btn.set_hexpand(True)
         for w in (head, sub, apply_btn, buttons):
             tile.append(w)
+        tile.set_tooltip_text(_("Drag onto a folder to put it there"))
+        self._drag_source(tile, path)
         return tile
 
     @staticmethod
@@ -524,11 +601,12 @@ class PresetsMixin:
         return Adw.EntryRow(title=_("Folder (optional)"), text=folder or "",
                             activates_default=True)
 
-    def _folder_suggestions(self):
+    def _folder_suggestions(self, games_only=False):
         """Names to pick for a folder: the folders there are, then the
-        names of the games."""
-        names = config.list_folders()
-        seen = {n.casefold() for n in names}
+        names of the games; games_only: games without a folder yet."""
+        folders = config.list_folders()
+        names = [] if games_only else list(folders)
+        seen = {n.casefold() for n in folders}
         for game in getattr(self.games_page, "games", []):
             name = config.clean_folder(game.get("name"))
             if name and name.casefold() not in seen:
@@ -536,13 +614,13 @@ class PresetsMixin:
                 names.append(name)
         return names
 
-    def _with_suggestions(self, fields, folder_entry):
+    def _with_suggestions(self, fields, folder_entry, games_only=False):
         """A button in folder_entry that lists folder names to pick: the
         folders there are, then the names of the games."""
-        names = self._folder_suggestions()
+        names = self._folder_suggestions(games_only)
         if not names:
             return fields
-        folders = len(config.list_folders())
+        folders = 0 if games_only else len(config.list_folders())
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         for side in ("top", "bottom", "start", "end"):
             getattr(box, f"set_margin_{side}")(6)
@@ -567,36 +645,83 @@ class PresetsMixin:
         folder_entry.add_suffix(pick)
         return fields
 
-    def _ask_preset_folder(self, path, name):
-        """Put a preset into a folder, a new or an existing one."""
-        current = config.preset_folder(path)
+    def _ask_new_folder(self, path=None):
+        """Make a folder; path: a preset dropped on "New Folder", put in it."""
+        name = None
+        if path is not None:
+            try:
+                name, _values = self._read_preset(path)
+            except (OSError, json.JSONDecodeError):
+                name = pathlib.Path(path).stem
         fields = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         fields.add_css_class("boxed-list")
-        folder = self._folder_entry(current)
-        folder.set_title(_("Folder"))
-        fields.append(folder)
+        entry = self._folder_entry(None)
+        entry.set_title(_("Name"))
+        fields.append(entry)
         dialog = Adw.AlertDialog(
-            heading=_("Group “{name}”").format(name=name),
-            body=_("Type a new folder or pick one. A folder groups presets "
-                   "here and in the menus, e.g. several for one game."))
-        dialog.set_extra_child(self._with_suggestions(fields, folder))
+            heading=_("New Folder"),
+            body=_("“{name}” is put into it.").format(name=name) if name else
+            _("A folder groups presets here and in the menus, e.g. several "
+              "for one game. Drag presets onto it."))
+        dialog.set_extra_child(self._with_suggestions(fields, entry, games_only=True))
         dialog.add_response("cancel", _("Cancel"))
-        if current:
-            dialog.add_response("none", _("No Folder"))
-        dialog.add_response("move", _("Group"))
-        dialog.set_default_response("move")
+        dialog.add_response("create", _("Create"))
+        dialog.set_default_response("create")
         dialog.set_close_response("cancel")
-        dialog.set_response_appearance("move", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("create", Adw.ResponseAppearance.SUGGESTED)
 
         def on_response(d, response):
-            if response == "move":
-                self._set_preset_folder(path, name, folder.get_text())
-            elif response == "none":
-                self._set_preset_folder(path, name, None)
+            if response == "create":
+                self._new_folder(entry.get_text(), path, name)
 
         dialog.connect("response", on_response)
         dialog.present(self)
-        folder.grab_focus()
+        entry.grab_focus()
+
+    def _new_folder(self, folder, path=None, name=None):
+        folder = config.clean_folder(folder)
+        if folder is None:
+            self._error(_("No Name"), _("Enter a name for the folder."))
+            return
+        if path is not None:
+            config.add_folder(folder)
+            self._set_preset_folder(path, name, folder)
+            return
+        existed = folder.casefold() in {f.casefold() for f in config.list_folders()}
+        folder = config.add_folder(folder)
+        log.info("Folder %r made", folder)
+        self._presets_changed()
+        self._notify((_("Folder “{folder}” already exists") if existed else
+                      _("Folder “{folder}” made")).format(folder=folder))
+
+    def _ask_delete_folder(self, folder, count):
+        """Delete a folder; its presets stay. Asks only if it holds some."""
+        if not count:
+            self._delete_folder(folder)
+            return
+        dialog = Adw.AlertDialog(
+            heading=_("Delete Folder “{folder}”?").format(folder=folder),
+            body=_("The presets in it are kept and shown without a folder."))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("delete", _("Delete Folder"))
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.set_response_appearance("delete",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", lambda d, r: r == "delete"
+                       and self._delete_folder(folder))
+        dialog.present(self)
+
+    def _delete_folder(self, folder):
+        try:
+            moved = config.delete_folder(folder)
+        except (OSError, ValueError) as e:
+            self._error(_("Could not delete folder"), str(e))
+            self._presets_changed()
+            return
+        log.info("Folder %r deleted, %d presets taken out", folder, moved)
+        self._presets_changed()
+        self._notify(_("Folder “{folder}” deleted").format(folder=folder))
 
     def _set_preset_folder(self, path, name, folder):
         folder = config.existing_folder(folder)
