@@ -52,6 +52,16 @@
                     <li xml:lang="de">In einem großen Fenster, z. B. maximiert auf einem 4K-Bildschirm, ziehen sich die Theme-Vorschauen in den Einstellungen nicht mehr über die ganze Seite</li>
                     <li>Long names of presets, folders, games and slots end in “…” instead of making all tiles as wide, or the window, menus, the tray menu and messages wider than the screen; a tile shows up to two lines, and pointing at a cut name on a tile or folder shows it whole</li>
                     <li xml:lang="de">Lange Namen von Presets, Ordnern, Spielen und Slots enden mit „…“, statt alle Kacheln so breit zu machen oder das Fenster, Menüs, das Tray-Menü und Meldungen breiter als den Bildschirm; eine Kachel zeigt bis zu zwei Zeilen, und zeigt man auf einen gekürzten Namen auf einer Kachel oder an einem Ordner, erscheint er ganz</li>
+                    <li>The steering angle shows Auto and angles above 1080° as the wheelbase reports them, up to 2520° on direct drive wheelbases. Auto also works without a wheelbase, e.g. to save it in a preset, and a preset with Auto no longer sets 90°</li>
+                    <li xml:lang="de">Der Lenkwinkel zeigt „Auto“ und Winkel über 1080° so, wie die Wheelbase sie meldet, bei Direct-Drive-Wheelbases bis 2520°. „Auto“ geht auch ohne Wheelbase, z. B. um es in einem Preset zu speichern, und ein Preset mit „Auto“ stellt nicht mehr 90° ein</li>
+                    <li>Steam games with “&amp;” in their name show it in the list of Add Game</li>
+                    <li xml:lang="de">Steam-Spiele mit „&amp;“ im Namen zeigen ihn in der Liste von „Spiel hinzufügen“</li>
+                    <li>Importing an export shows its theme, accent colour, corners and tray icon right away, not only after a restart</li>
+                    <li xml:lang="de">Ein Import zeigt Theme, Akzentfarbe, Ecken und Tray-Symbol sofort, nicht erst nach einem Neustart</li>
+                    <li>Saving a preset under the name of an existing one puts it into the folder chosen in the dialog</li>
+                    <li xml:lang="de">Speichert man ein Preset unter dem Namen eines vorhandenen, kommt es in den im Dialog gewählten Ordner</li>
+                    <li>Unplugged pedals leave the live display instead of staying there frozen; a failed reset of the tuning slots and a damaged preset file are reported</li>
+                    <li xml:lang="de">Ausgesteckte Pedale verschwinden aus der Live-Anzeige, statt dort eingefroren stehen zu bleiben; ein fehlgeschlagenes Zurücksetzen der Tuning-Slots und eine beschädigte Preset-Datei werden gemeldet</li>
                 </ul>
             </description>
         </release>

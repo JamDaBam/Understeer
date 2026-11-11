@@ -53,7 +53,8 @@ steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
-from understeer.ui import cover_search  # noqa: E402
+from understeer.ui import cover_search, theme  # noqa: E402
+from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
@@ -62,7 +63,8 @@ finished = []           # set once every step ran
 STEP_MS = 300
 
 
-EXPECTED_ERRORS = {"Could not save: Disk full"}     # shown on purpose below
+EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
+                   "Could not load preset: Broken.json holds no preset"}
 
 
 class Collect(logging.Handler):
@@ -138,6 +140,34 @@ def steps(win):
     yield "change on the wheel base", changed_on_wheel_base
     yield "change followed", lambda: check(win.rows["SHO"].get() == 60,
                                            "control follows the wheel base")
+
+    def steering_auto():
+        (dev / "SEN").write_text("2530\n")     # how a CSL DD reports Auto
+        win._load_from_device()
+        sen = win.rows["SEN"]
+        check(sen.get() == 0 and sen.value_label.get_label() == "Auto",
+              f"Auto shown: {sen.get()} {sen.value_label.get_label()!r}")
+        check(win.angle_max == 2520 and sen.adj.get_upper() == 2520,
+              f"slider up to 2520°: {sen.adj.get_upper()}")
+        (dev / "SEN").write_text("2520\n")     # set on the wheelbase
+    yield "steering angle Auto", steering_auto
+    yield "angle above 1080", lambda: check(
+        win.rows["SEN"].get() == 2520
+        and win.rows["SEN"].value_label.get_label() == "2520°",
+        f"2520° shown: {win.rows['SEN'].value_label.get_label()!r}")
+
+    def auto_written():
+        win._set_setting("SEN", 0)             # the Auto button
+        win.flush_live()
+        check((dev / "SEN").read_text().strip() == "0", "Auto written as 0")
+        win._apply_values({"SEN": 1440})
+        check((dev / "SEN").read_text().strip() == "1440", "1440° written")
+        win._apply_values({"SEN": 0})          # a preset with Auto
+        check((dev / "SEN").read_text().strip() == "0" and win.rows["SEN"].get() == 0,
+              "Auto of a preset written as 0, not as 90°")
+        (dev / "SEN").write_text("900\n")
+        win._load_from_device()
+    yield "Auto written", auto_written
 
     def save_preset():
         path = config.preset_path("Test GT3")
@@ -723,6 +753,9 @@ def steps(win):
                     labels.append(section.get_item_attribute_value(j, "label").unpack())
             check(max(map(len, labels)) <= 60 and any(n.endswith("…") for n in labels),
                   f"menu entries cut: {max(map(len, labels))}")
+            win._set_preset_folder(long_path, name, folder)
+            moved = win._toast_text.get_label()
+            check(len(moved) <= 100 and moved.endswith("”"), f"names cut in message: {moved!r}")
             win._delete_presets([long_path])
             check(width(win._toast_text)[0] < 600, f"message short: {width(win._toast_text)}")
             win._on_toast_button(win._toast)            # undo
@@ -745,6 +778,45 @@ def steps(win):
             win._select_page("presets")
     yield "long names", long_names
 
+    def damaged_presets():
+        broken = config.CONFIG_DIR / "Broken.json"
+        broken.write_text("[1, 2]")
+        bad = config.preset_path("Bad Values")
+        bad.write_text('{"name": "Bad Values", "values": {"FF": "x", "SHO": 30}}')
+        before = (win.active_preset, win.active_values)
+        values = win._collect_values()
+        try:
+            win._presets_changed()
+            win._apply_preset(bad)
+            check(win.rows["SHO"].get() == 30, "the valid values of a damaged preset applied")
+            win._apply_preset(broken)
+            d = win.get_visible_dialog()
+            check(d is not None and d.get_heading() == "Could not load preset",
+                  "error shown for a file without a preset")
+        finally:
+            close_dialogs(win)
+            broken.unlink()
+            bad.unlink()
+            win._apply_values(values)
+            win._set_active_preset(*before)
+    yield "damaged presets", damaged_presets
+
+    def save_as_into_folder():
+        path = config.preset_path("Folder Test")
+        config.write_preset(path, "Folder Test", {"FF": 10})
+        before = (win.active_preset, win.active_values)
+        try:
+            win._save_preset("Folder Test", "Saved Into")
+            win.get_visible_dialog().emit("response", "overwrite")
+            check(config.preset_folder(path) == "Saved Into",
+                  f"saved over it into the folder chosen: {config.preset_folder(path)}")
+        finally:
+            close_dialogs(win)
+            path.unlink(missing_ok=True)
+            config.delete_folder("Saved Into")
+            win._set_active_preset(*before)
+    yield "save as preset into a folder", save_as_into_folder
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")
@@ -763,6 +835,9 @@ def steps(win):
             shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
             check(shown == {"SEN": 540, "SHO": 35},
                   f"values kept without a wheel base: {shown}")
+            win._set_setting("SEN", 0)                  # the Auto button
+            check(win.rows["SEN"].value_label.get_label() == "Auto",
+                  "Auto also without a wheelbase, e.g. for a preset")
         finally:
             win.device_path = path
             win.relocalize()
@@ -776,6 +851,31 @@ def steps(win):
         win._error("Could not save", "Disk full")
     yield "open dialogs", dialogs
     yield "close dialogs", lambda: close_dialogs(win)
+
+    def reset_failed():
+        real = window_module.write_values
+        window_module.write_values = lambda writes: list(writes)
+        try:
+            win._reset_slots()
+        finally:
+            window_module.write_values = real
+        check(win._toast_text.get_label() == "Could not reset the tuning slots",
+              f"failed reset told: {win._toast_text.get_label()!r}")
+    yield "reset failed", reset_failed
+
+    def steam_names():
+        from understeer import games
+        real = games.installed_games
+        games.installed_games = lambda: [("1213210", "Command & Conquer Remastered")]
+        try:
+            win.games_page._ask_game()
+        finally:
+            games.installed_games = real
+        texts = [w.get_text() for w in walk(win.get_visible_dialog())
+                 if isinstance(w, Gtk.Label)]
+        check("Command & Conquer Remastered" in texts, f"name with & shown: {texts}")
+    yield "Steam names with &", steam_names
+    yield "close the game list", lambda: close_dialogs(win)
 
     def live_input():
         # A wheel and pedals, as the input devices would report them.
@@ -1210,9 +1310,22 @@ def steps(win):
     # -- export, import, layout ---------------------------------------------
     def export_import():
         dest = scratch / "export.zip"
+        config.set_setting("theme", "carbon")
+        config.set_setting("background", True)
         counts = backup.export(dest)
+        config.set_setting("theme", None)
+        config.set_setting("background", None)
+        theme.apply()
+        application.update_tray()
         check(counts["presets"] == 1, f"export counts {counts}")
         win._import(backup.read(dest))
+        check(Adw.StyleManager.get_default().get_color_scheme()
+              == Adw.ColorScheme.FORCE_DARK, "imported theme shown right away")
+        check(application.tray.running, "tray icon of the import shown right away")
+        config.set_setting("theme", None)
+        config.set_setting("background", None)
+        theme.apply()
+        application.update_tray()
     yield "export/import", export_import
     yield "after import", lambda: check(config.preset_path("Renamed").is_file(),
                                         "preset still there after import")

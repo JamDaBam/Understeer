@@ -79,6 +79,17 @@ def test_model_id(folder, model):
     assert device.model_id(folder) == model
 
 
+@pytest.mark.parametrize("folder, expected", [
+    ("0003:0EB7:0020.0005", (2520, 2530)),      # CSL DD: Auto reads 2530
+    ("0003:0EB7:0007.0001", (2520, 2530)),      # Podium DD2
+    ("0003:0EB7:0E03.0001", (1080, 1090)),      # CSL Elite
+    ("0003:0EB7:0004.0001", (900, None)),       # ClubSport V2.5: no Auto
+    ("something-else", (1080, 1090)),           # the driver's default
+])
+def test_steering_range(folder, expected):
+    assert device.steering_range(folder) == expected
+
+
 # -- reading and writing ----------------------------------------------------
 def test_read_int(sysfs):
     d = sysfs("w", FF=" 70 ", BAD="abc")

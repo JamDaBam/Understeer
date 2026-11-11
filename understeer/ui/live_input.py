@@ -205,6 +205,10 @@ class LiveInputMixin:
             axis.peak = axis.fraction()
         self._update_inputs()
 
+    def _on_input_gone(self):
+        """Pedals (or the wheelbase) unplugged: their bars go."""
+        GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+
     def _on_input(self):
         # Wheels report up to 1000 updates per second; redraw at ~30 fps.
         if not self._input_timer:

@@ -1,6 +1,5 @@
 """Presets: the Presets view, the Presets menu, and saving, applying,
 renaming and deleting presets."""
-import json
 import logging
 import pathlib
 
@@ -222,7 +221,7 @@ class PresetsMixin:
         """A preset dropped into folder (None: out of any)."""
         try:
             name, _values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name = pathlib.Path(path).stem
         self._set_preset_folder(path, name, folder)
 
@@ -403,9 +402,11 @@ class PresetsMixin:
                 if r.row.get_sensitive()}
 
     def _read_preset(self, path):
-        """Return (name, values) of a preset file; raises on bad files."""
+        """Return (name, values) of a preset file: the settings shown here,
+        with valid values. Raises OSError or ValueError."""
         name, values = config.read_preset(path)
-        return name, {k: v for k, v in values.items() if k in self.rows}
+        return name, {k: v for k, v in sharing.clean_values(values).items()
+                      if k in self.rows}
 
     def _set_active_preset(self, path, values):
         self.active_preset = pathlib.Path(path) if path else None
@@ -418,7 +419,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             if self._in_background:
                 self.show_again()           # from the tray: show the error
             self._error(_("Could not load preset"), str(e))
@@ -443,7 +444,7 @@ class PresetsMixin:
             outcome, failed = self._apply_values(
                 values,
                 _("{game} started: preset “{name}” applied").format(
-                    game=game, name=name) if self.device_path else
+                    game=short(game), name=short(name)) if self.device_path else
                 _("{game} started: preset “{name}” is applied once the wheel "
                   "base is connected").format(game=short(game), name=short(name)),
                 _("{game} started: preset “{name}” loaded — click Apply to "
@@ -453,7 +454,7 @@ class PresetsMixin:
             outcome, failed = self._apply_values(
                 values, _("Preset “{name}” applied").format(name=short(name)),
                 _("Preset “{name}” loaded — click Apply to write it").format(
-                    name=name))
+                    name=short(name)))
             if self._in_background:         # chosen in the tray menu
                 self._notify_tray_preset(name, outcome, failed)
 
@@ -480,7 +481,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             self._error(_("Could not load preset"), str(e))
             return
         current = self._collect_values()
@@ -599,15 +600,18 @@ class PresetsMixin:
             entry, _("Enter a name for the preset."),
             self._suggestion_list(folder, _("Pick a Folder")))
 
-    def _save_preset(self, name, folder=None):
-        """folder: for a new preset; one saved again stays in its folder."""
+    def _save_preset(self, name, folder=config.KEEP):
+        """folder: the one entered, also for a preset of that name that is
+        replaced; left out, such a preset stays in its folder."""
         if not name:
             return                          # the dialog asks for one
         path = config.preset_path(name)
+        if folder is not config.KEEP:
+            folder = config.existing_folder(folder)
         if path.exists():
-            self._confirm_overwrite(path, new_name=name)
+            self._confirm_overwrite(path, new_name=name, folder=folder)
             return
-        if self._write_preset(path, name, config.existing_folder(folder)):
+        if self._write_preset(path, name, folder):
             self._notify(_("Preset “{name}” saved").format(name=short(name)))
 
     # -- folders ---------------------------------------------------------------
@@ -746,7 +750,7 @@ class PresetsMixin:
         if path is not None:
             try:
                 name, _values = self._read_preset(path)
-            except (OSError, json.JSONDecodeError):
+            except (OSError, ValueError):
                 name = pathlib.Path(path).stem
         entry = self._folder_entry(None)
         entry.set_title(_("Name"))
@@ -812,7 +816,7 @@ class PresetsMixin:
         log.info("Folder %r deleted with %d presets", folder, len(paths))
         self._delete_presets(paths, _(
             "Folder “{folder}” deleted. Presets deleted: {n}").format(
-                folder=folder, n=len(paths)))
+                folder=short(folder), n=len(paths)))
         try:
             config.delete_folder(folder)
         except OSError as e:
@@ -842,7 +846,7 @@ class PresetsMixin:
         log.info("Preset %s moved to folder %r", pathlib.Path(path).name, folder)
         self._presets_changed()
         self._notify(_("“{name}” moved to “{folder}”").format(
-            name=name, folder=folder) if folder else
+            name=short(name), folder=short(folder)) if folder else
             _("“{name}” is in no folder now").format(name=short(name)))
 
     def _ask_rename_folder(self, folder):
@@ -867,9 +871,9 @@ class PresetsMixin:
             return
         log.info("Folder %r renamed to %r (%d presets)", old, new, moved)
         self._presets_changed()
-        self._notify(_("Folder “{old}” renamed to “{new}”").format(old=old, new=new)
-                     if new else
-                     _("Presets taken out of folder “{old}”").format(old=old))
+        self._notify(_("Folder “{old}” renamed to “{new}”").format(
+                         old=short(old), new=short(new)) if new else
+                     _("Presets taken out of folder “{old}”").format(old=short(old)))
 
     def _write_preset(self, path, name, folder=config.KEEP):
         values = self._collect_values()
@@ -881,13 +885,14 @@ class PresetsMixin:
         self._set_active_preset(path, values)
         return True
 
-    def _confirm_overwrite(self, path, new_name=None):
+    def _confirm_overwrite(self, path, new_name=None, folder=config.KEEP):
         """Ask before replacing a preset file with the current settings,
-        showing what changes in it."""
+        showing what changes in it. folder: where it goes, as at
+        config.write_preset."""
         path = pathlib.Path(path)
         try:
             name, stored = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name, stored = path.stem, {}
         name = new_name or name
         diff = self._preset_diff(stored)
@@ -904,8 +909,8 @@ class PresetsMixin:
         dialog.set_close_response("cancel")
         dialog.set_response_appearance("overwrite",
                                        Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.connect("response", lambda d, r: self._overwrite_preset(path, name)
-                       if r == "overwrite" else None)
+        dialog.connect("response", lambda d, r: self._overwrite_preset(
+            path, name, folder) if r == "overwrite" else None)
         dialog.present(self)
 
     def confirm_quit(self, quit_now):
@@ -928,7 +933,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             name, _values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             name = path.stem
         self._ask_save_changes(
             lambda: self._apply_preset(path), f"apply {path.name}",
@@ -977,14 +982,14 @@ class PresetsMixin:
         if self.active_preset is not None:
             self._confirm_overwrite(self.active_preset)
 
-    def _overwrite_preset(self, path, name):
+    def _overwrite_preset(self, path, name, folder=config.KEEP):
         """Replace a preset with the current settings; offer undo."""
         try:
-            old_text = path.read_text()
+            old_text = path.read_text(encoding="utf-8")
             _n, old_values = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             old_text, old_values = None, {}
-        if not self._write_preset(path, name):
+        if not self._write_preset(path, name, folder):
             return
         def undo():
             try:
@@ -1004,7 +1009,7 @@ class PresetsMixin:
         path = pathlib.Path(path)
         try:
             return (*self._read_preset(path), config.preset_folder(path))
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, ValueError) as e:
             self._error(_("Could not load preset"), str(e))
             return None
 
@@ -1309,7 +1314,7 @@ class PresetsMixin:
             return
         try:
             _n, stored = self._read_preset(path)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             stored = {}
         same = stored == values
         diff = changes(stored, values)
@@ -1423,7 +1428,7 @@ class PresetsMixin:
         for path in paths:
             try:
                 name, _values = self._read_preset(path)
-            except (OSError, json.JSONDecodeError):
+            except (OSError, ValueError):
                 name = pathlib.Path(path).stem
             try:
                 items.append(trash.put_preset(path))

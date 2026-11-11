@@ -17,6 +17,10 @@ class SettingTile:
         self.on_change = on_change
         self.baseline = None
         self._silent = False
+        # Auto (value 0 of a setting with "auto") is no place on the
+        # slider: the slider then sits at its end and the value says Auto
+        self._auto = False
+        self._placing = False       # set() moves the slider, not the user
         kind = setting.get("kind", "slider")
 
         tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -108,7 +112,7 @@ class SettingTile:
                 # No fill from the left: 0 ("off") sits in the middle.
                 control.set_has_origin(False)
                 control.add_mark(0, Gtk.PositionType.BOTTOM, None)
-            self.adj.connect("value-changed", lambda *a: self._changed())
+            self.adj.connect("value-changed", lambda *a: self._slid())
         tile.append(control)
 
         self.row = tile
@@ -154,10 +158,15 @@ class SettingTile:
             return self.values[0]
         if hasattr(self, "combo"):
             return self.values[self.combo.get_selected()]
+        if self._auto:
+            return 0
         return int(round(self.adj.get_value()))
 
     def set(self, value, silent=True):
-        self._silent = silent
+        """Show value; a slider takes the nearest value it has. Unless
+        silent, on_change() follows if the value changed."""
+        before = self.get()
+        self._silent = self._placing = True
         try:
             if hasattr(self, "toggles"):
                 if value in self.values:
@@ -166,10 +175,22 @@ class SettingTile:
                 if value in self.values:
                     self.combo.set_selected(self.values.index(value))
             else:
-                self.adj.set_value(value)
+                self._auto = bool(self.setting.get("auto")) and value == 0
+                self.adj.set_value(self.adj.get_upper() if self._auto else value)
         finally:
-            self._silent = False
+            self._silent = self._placing = False
         self._update_label()
+        if not silent and self.get() != before:
+            self.on_change(self)
+
+    def set_upper(self, hi):
+        """The largest value the hardware takes, e.g. the steering angle
+        of the connected wheelbase; a larger value shown is cut to it."""
+        if not hasattr(self, "adj") or hi == self.adj.get_upper():
+            return
+        value = self.get()
+        self.adj.set_upper(hi)
+        self.set(value)
 
     def set_baseline(self, value):
         self.baseline = value
@@ -178,7 +199,6 @@ class SettingTile:
     def revert(self):
         if self.baseline is not None and self.baseline != self.get():
             self.set(self.baseline, silent=False)
-            self.on_change(self)
 
     def set_supported(self, supported):
         self.row.set_sensitive(supported)
@@ -188,6 +208,11 @@ class SettingTile:
         self._update_id_line()
 
     # -- internals ---------------------------------------------------------
+    def _slid(self):
+        if not self._placing:
+            self._auto = False          # moved by the user: a number again
+        self._changed()
+
     def _changed(self):
         self._update_label()
         if not self._silent:

@@ -45,6 +45,21 @@ def test_broken_and_old_presets(home):
         config.read_preset(cfg / "broken.json")
 
 
+@pytest.mark.parametrize("content", [
+    b"[1, 2]",                                  # JSON, but no preset
+    b'{"name": "X", "values": [1]}',
+    b'{"name": "\xff\xfe"}',                    # not UTF-8
+])
+def test_files_without_a_preset(home, content):
+    """Shown as a tile, but reading says what is wrong: a ValueError."""
+    cfg = config.CONFIG_DIR
+    cfg.mkdir(parents=True)
+    (cfg / "bad.json").write_bytes(content)
+    assert [path for _name, path in config.list_presets()] == [cfg / "bad.json"]
+    with pytest.raises(ValueError):
+        config.read_preset(cfg / "bad.json")
+
+
 def test_axis_roles_are_no_preset(home):
     assert config.load_axis_roles() == {}
     config.save_axis_roles({"Pedals:1": "brake"})

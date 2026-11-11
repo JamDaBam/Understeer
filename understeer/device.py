@@ -106,6 +106,28 @@ def wheel_info(device_path):
             if rim_id else None}
 
 
+# The steering angle (SEN) per wheelbase, as hid-fanatecff allows it
+# ("max_range" in its hid-ftec.c). Writing 0 sets the largest value; on
+# most wheelbases that is one step past the largest angle and stands for
+# Auto (AUT in the tuning menu of the wheelbase).
+DIRECT_DRIVE = {0x0006, 0x0007, 0x0020}     # Podium DD1, DD2, CSL DD
+UP_TO_900 = {0x0001, 0x0004, 0x0011, 0x0197}  # ClubSport V2, V2.5, CSR Elite, Porsche 911
+
+
+def steering_range(device_path):
+    """(largest steering angle, the value the driver reports for Auto or
+    None if the wheelbase has no Auto) of the wheelbase."""
+    try:
+        product = int(model_id(device_path).partition(":")[2], 16)
+    except ValueError:
+        product = None
+    if product in DIRECT_DRIVE:
+        return 2520, 2530
+    if product in UP_TO_900:
+        return 900, None
+    return 1080, 1090           # CSL Elite and the driver's default
+
+
 def find_rumble_path():
     matches = glob.glob(RUMBLE_GLOB)
     return matches[0] if matches else None
