@@ -1260,8 +1260,8 @@ msgid "OK"
 msgstr "OK"
 
 #: understeer/ui/presets.py:629
-msgid "Your preset already has the same settings. Add the shared one anyway, under a new name?"
-msgstr "Your preset already has the same settings. Add the shared one anyway, under a new name?"
+msgid "Your preset already has the same settings. Replace it anyway, or keep both?"
+msgstr "Your preset already has the same settings. Replace it anyway, or keep both?"
 
 #: understeer/ui/presets.py:632
 msgid "Replace your preset, or keep both? The shared preset has these settings:"
@@ -1279,47 +1279,47 @@ msgstr "“{name}” Already Exists"
 msgid "Keep Both"
 msgstr "Keep Both"
 
-#: understeer/ui/presets.py:645
+#: understeer/ui/presets.py:644
 msgid "Replace"
 msgstr "Replace"
 
-#: understeer/ui/presets.py:673
+#: understeer/ui/presets.py:672
 msgid "Preset “{name}” imported"
 msgstr "Preset “{name}” imported"
 
-#: understeer/ui/presets.py:679
+#: understeer/ui/presets.py:678
 msgid "Rename Preset"
 msgstr "Rename Preset"
 
-#: understeer/ui/presets.py:680
+#: understeer/ui/presets.py:679
 msgid "Games that use this preset keep it."
 msgstr "Games that use this preset keep it."
 
-#: understeer/ui/presets.py:705
+#: understeer/ui/presets.py:704
 msgid "Name Already Used"
 msgstr "Name Already Used"
 
-#: understeer/ui/presets.py:706
+#: understeer/ui/presets.py:705
 msgid "Another preset is already called “{name}”."
 msgstr "Another preset is already called “{name}”."
 
-#: understeer/ui/presets.py:710
+#: understeer/ui/presets.py:709
 msgid "Could not rename preset"
 msgstr "Could not rename preset"
 
-#: understeer/ui/presets.py:717
+#: understeer/ui/presets.py:716
 msgid "Preset renamed to “{name}”"
 msgstr "Preset renamed to “{name}”"
 
-#: understeer/ui/presets.py:721
+#: understeer/ui/presets.py:720
 msgid "Delete “{name}”?"
 msgstr "Delete “{name}”?"
 
-#: understeer/ui/presets.py:722
+#: understeer/ui/presets.py:721
 msgid "The preset file will be removed. This cannot be undone."
 msgstr "The preset file will be removed. This cannot be undone."
 
-#: understeer/ui/presets.py:733
+#: understeer/ui/presets.py:732
 msgid "Could not delete preset"
 msgstr "Could not delete preset"
 

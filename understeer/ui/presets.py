@@ -626,8 +626,8 @@ class PresetsMixin:
         same = stored == values
         diff = changes(stored, values)
         if same:
-            body = _("Your preset already has the same settings. Add the "
-                     "shared one anyway, under a new name?")
+            body = _("Your preset already has the same settings. Replace it "
+                     "anyway, or keep both?")
         elif diff:
             body = _("Replace your preset, or keep both? The shared preset "
                      "has these settings:")
@@ -641,10 +641,9 @@ class PresetsMixin:
                 dialog.set_prefer_wide_layout(True)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("keep", _("Keep Both"))
-        if not same:
-            dialog.add_response("replace", _("Replace"))
-            dialog.set_response_appearance("replace",
-                                           Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.add_response("replace", _("Replace"))
+        dialog.set_response_appearance("replace",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_close_response("cancel")
         dialog.set_default_response("keep")
 
