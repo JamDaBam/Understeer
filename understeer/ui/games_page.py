@@ -30,9 +30,10 @@ class GamesPage:
         self.window = window
         self.games = config.load_games()
         self.running = set()
+        self.replaced = False       # the window made a new page (language, import)
         self._downloading = set()   # ids of games whose cover is being fetched
         self._failed = set()        # ... or that had no cover online
-        self._search = None         # [asked, found] of a search the user started
+        self._search = None         # counts of a search the user started
         roots = games.steam_roots()
         log.info("Steam installations: %s", ", ".join(map(str, roots)) or "none")
         for root in roots:
@@ -462,13 +463,19 @@ class GamesPage:
             self._downloading.discard(game_id)
             if error is not None:
                 log.warning("SteamGridDB cover for %s: %s", game["name"], error)
+            shown = False
             if source == "steamgriddb":
-                if game in self.games and self._cover_file(game) is None:
-                    self.set_cover(game, str(path), quiet=True)
+                # Not from a page the window has replaced: its games are
+                # old, saving them would undo what changed since
+                if not self.replaced and game in self.games \
+                        and self._cover_file(game) is None:
+                    shown = self.set_cover(game, str(path), quiet=True)
                 try:
                     path.unlink()
                 except OSError:
                     pass
+            if self.replaced:
+                return
             found = source is not None and self._cover_file(game) is not None
             if found:
                 log.info("Downloaded cover for %s from %s", game["name"], source)
@@ -476,7 +483,8 @@ class GamesPage:
                 log.info("No cover online for %s", game["name"])
                 self._failed.add(game_id)
             self._report_search(game_id, found, error)
-            self.refresh()
+            if not shown:                       # set_cover() showed it already
+                self.refresh()
 
         tasks.in_thread(work, done, steamgriddb.Error)
 

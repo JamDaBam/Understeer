@@ -109,7 +109,8 @@ def wheel_info(device_path):
 # The steering angle (SEN) per wheelbase, as hid-fanatecff allows it
 # ("max_range" in its hid-ftec.c). Writing 0 sets the largest value; on
 # most wheelbases that is one step past the largest angle and stands for
-# Auto (AUT in the tuning menu of the wheelbase).
+# Auto (AUT in the tuning menu of the wheelbase). The others get their
+# largest angle.
 DIRECT_DRIVE = {0x0006, 0x0007, 0x0020}     # Podium DD1, DD2, CSL DD
 UP_TO_900 = {0x0001, 0x0004, 0x0011, 0x0197}  # ClubSport V2, V2.5, CSR Elite, Porsche 911
 

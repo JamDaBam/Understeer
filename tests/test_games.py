@@ -356,6 +356,23 @@ def test_custom_cover(home, tmp_path, monkeypatch):
     assert "cover" not in game and not new_path.exists()
 
 
+def test_old_cover_stays_if_the_new_one_cannot_be_saved(home, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "CUSTOM_COVER_DIR", home / "covers")
+    game = {"game": "process:game", "name": "Diablo II", "preset": None, "auto": True}
+    first = tmp_path / "first.png"
+    first.write_bytes(png(600, 900))
+    path = config.set_game_cover(game, first)
+    other = tmp_path / "other.jpg"
+    other.write_bytes(jpeg(600, 900))
+
+    def disk_full(_path, _data):
+        raise OSError("disk full")
+    monkeypatch.setattr(config, "write_file", disk_full)
+    with pytest.raises(OSError):
+        config.set_game_cover(game, other)
+    assert config.game_cover_path(game) == path     # still the old picture
+
+
 # -- starts and stops -----------------------------------------------------------
 class Clock:
     def __init__(self):

@@ -582,16 +582,16 @@ class PresetsMixin:
             entry, _("Enter a name for the preset."),
             self._suggestion_list(folder, _("Pick a Folder")))
 
-    def _save_preset(self, name, folder=config.KEEP):
-        """folder: the one entered, also for a preset of that name that is
-        replaced; left out, such a preset stays in its folder."""
+    def _save_preset(self, name, folder=None):
+        """folder: the one entered. A preset of that name is replaced and
+        moves there; with none entered it stays in its folder."""
         if not name:
             return                          # the dialog asks for one
         path = config.preset_path(name)
-        if folder is not config.KEEP:
-            folder = config.existing_folder(folder)
+        folder = config.existing_folder(folder)
         if path.exists():
-            self._confirm_overwrite(path, new_name=name, folder=folder)
+            self._confirm_overwrite(path, new_name=name,
+                                    folder=folder or config.KEEP)
             return
         if self._write_preset(path, name, folder):
             self._notify(_("Preset “{name}” saved").format(name=short(name)))
@@ -762,8 +762,9 @@ class PresetsMixin:
         if not count:
             self._delete_folder(folder)
             return
-        files = {p.name for name, p in dict(config.list_presets_by_folder(
-            empty=True)).get(folder, [])}
+        paths = [p for _n, p in dict(config.list_presets_by_folder(
+            empty=True)).get(folder, [])]
+        files = {p.name for p in paths}
         body = _("Presets in it: {n}. Keep them, shown without a folder, or "
                  "delete them too? Deleted presets go to the trash.").format(n=count)
         body += self._games_note(files)
@@ -781,24 +782,10 @@ class PresetsMixin:
             if response == "keep":
                 self._delete_folder(folder)
             elif response == "all":
-                self._delete_folder_with_presets(folder)
+                self._delete_presets(paths, folder=folder)
 
         dialog.connect("response", on_response)
         dialog.present(self)
-
-    def _delete_folder_with_presets(self, folder):
-        """Its presets go to the bin; Undo there brings back the folder too."""
-        paths = [p for _n, p in dict(config.list_presets_by_folder(
-            empty=True)).get(folder, [])]
-        log.info("Folder %r deleted with %d presets", folder, len(paths))
-        self._delete_presets(paths, _(
-            "Folder “{folder}” deleted. Presets deleted: {n}").format(
-                folder=short(folder), n=len(paths)))
-        try:
-            config.delete_folder(folder)
-        except OSError as e:
-            self._error(_("Could not delete folder"), str(e))
-        self._presets_changed()
 
     def _delete_folder(self, folder):
         try:
@@ -1302,11 +1289,8 @@ class PresetsMixin:
     def _write_imported(self, path, name, values, folder=None):
         """folder: the shared one; without, a replaced preset keeps its own."""
         try:
-            if folder:
-                config.write_preset(path, name, values,
-                                    config.existing_folder(folder))
-            else:
-                config.write_preset(path, name, values)
+            config.write_preset(path, name, values, config.existing_folder(folder)
+                                if folder else config.KEEP)
         except OSError as e:
             self._error(_("Could not save preset"), str(e))
             return False
@@ -1372,9 +1356,11 @@ class PresetsMixin:
         return "\n\n" + _("Used by: {games}. Without their preset, these games "
                            "get none applied.").format(games=join_names(games))
 
-    def _delete_presets(self, paths, text=None):
+    def _delete_presets(self, paths, folder=None):
         """Put presets in the bin; the message offers Undo, and they stay
-        in the bin (the Trash button) for trash.KEEP_DAYS days."""
+        in the bin (the Trash button) for trash.KEEP_DAYS days. folder:
+        their folder, deleted with them if all of them went; Undo brings
+        it back too."""
         items, names, files = [], [], set()
         for path in paths:
             name = self._preset_name(path)
@@ -1389,12 +1375,25 @@ class PresetsMixin:
                 self.active_preset, self.active_values = None, {}
         if not items:
             return
+        if folder is not None and len(items) == len(paths):
+            try:
+                config.delete_folder(folder)
+                log.info("Folder %r deleted with %d presets", folder, len(items))
+            except OSError as e:
+                self._error(_("Could not delete folder"), str(e))
+                folder = None
+        else:
+            folder = None
         self._presets_changed()
         self._trash_changed()
         games = self._games_using(files)
-        text = text or (_("“{name}” deleted").format(name=short(names[0]))
-                        if len(names) == 1 else
-                        _("Presets deleted: {n}").format(n=len(names)))
+        if folder is not None:
+            text = _("Folder “{folder}” deleted. Presets deleted: {n}").format(
+                folder=short(folder), n=len(names))
+        elif len(names) == 1:
+            text = _("“{name}” deleted").format(name=short(names[0]))
+        else:
+            text = _("Presets deleted: {n}").format(n=len(names))
         if games:
             text += " · " + _("Used by: {games}").format(games=join_names(games))
 

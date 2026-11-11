@@ -57,6 +57,7 @@ steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
 from understeer.ui import cover_search, files, theme  # noqa: E402
+from understeer.ui.setting_tile import SettingTile  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
@@ -67,7 +68,8 @@ STEP_MS = 300
 
 
 EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
-                   "Could not load preset: Broken.json holds no preset"}
+                   "Could not load preset: Broken.json holds no preset",
+                   "Could not delete preset: Disk full"}
 
 
 class Collect(logging.Handler):
@@ -850,6 +852,10 @@ def steps(win):
             win.get_visible_dialog().emit("response", "overwrite")
             check(config.preset_folder(path) == "Saved Into",
                   f"saved over it into the folder chosen: {config.preset_folder(path)}")
+            win._save_preset("Folder Test", "")
+            win.get_visible_dialog().emit("response", "overwrite")
+            check(config.preset_folder(path) == "Saved Into",
+                  "no folder entered: saved over it where it is")
         finally:
             close_dialogs(win)
             path.unlink(missing_ok=True)
@@ -905,6 +911,7 @@ def steps(win):
         kept = {f: f.read_bytes() if f.exists() else None
                 for f in (config.APP_SETTINGS_FILE, config.AXES_FILE,
                           config.SLOT_NAMES_FILE, config.SLOT_COUNTS_FILE)}
+        old_page = win.games_page
         try:
             data = config.load_json(config.APP_SETTINGS_FILE, {})
             data.update({"theme": ["carbon"], "accent": {"a": 1}, "color_scheme": 5,
@@ -922,6 +929,8 @@ def steps(win):
             check(win.slot_names == {1: "Race"} and win.slot_count == 15,
                   f"usable slot names kept: {win.slot_names} {win.slot_count}")
             check(win.games_page.key_row.get_text() == "", "a key that is no text is none")
+            check(old_page.replaced and not win.games_page.replaced,
+                  "the Games page before the rebuild no longer saves")
         finally:
             for f, content in kept.items():
                 if content is None:
@@ -942,6 +951,49 @@ def steps(win):
         trash.empty()
         win._trash_changed()
     yield "delete a file that is no UTF-8", not_utf8
+
+    def folder_partly_deleted():
+        """Delete with Presets, but one can't go: its folder stays."""
+        first, second = config.preset_path("Part A"), config.preset_path("Part B")
+        config.write_preset(first, "Part A", {"FF": 10}, "Partly")
+        config.write_preset(second, "Part B", {"FF": 20}, "Partly")
+        win._presets_changed()
+        real = trash.put_preset
+
+        def fail_second(path):
+            if pathlib.Path(path) == second:
+                raise OSError("Disk full")
+            return real(path)
+        trash.put_preset = fail_second
+        try:
+            win._delete_presets([first, second], folder="Partly")
+            check(config.preset_folder(second) == "Partly"
+                  and "Partly" in config.list_folders(),
+                  "the folder stays with the preset that could not be deleted")
+            check(win._toast_text.get_label() == "“Part A” deleted",
+                  f"told what was deleted: {win._toast_text.get_label()!r}")
+        finally:
+            trash.put_preset = real
+            close_dialogs(win)
+            second.unlink(missing_ok=True)
+            config.delete_folder("Partly")
+            trash.empty()
+            win._presets_changed()
+            win._trash_changed()
+    yield "folder deleted in part", folder_partly_deleted
+
+    def no_auto():
+        """A wheelbase without Auto (e.g. ClubSport V2.5) takes its largest
+        angle for it."""
+        tile = SettingTile(win.rows["SEN"].setting, lambda t: None)
+        tile.set_upper(900, has_auto=False)
+        tile.set(0)
+        check(tile.get() == 900 and tile.value_label.get_label() == "900°",
+              f"largest angle instead of Auto: {tile.value_label.get_label()!r}")
+        tile.set_upper(2520, has_auto=True)
+        tile.set(0)
+        check(tile.get() == 0 and tile.value_label.get_label() == "Auto", "Auto with it")
+    yield "wheelbase without Auto", no_auto
 
     def file_dialogs():
         """What happens once a file is chosen, for every file dialog."""

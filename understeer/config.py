@@ -205,11 +205,17 @@ def set_game_cover(game, source):
     """Copy the picture at source for game; returns its path. Raises OSError."""
     suffix = pathlib.Path(source).suffix.lower() or ".img"
     name = hashlib.sha1(game["game"].encode()).hexdigest()[:16] + suffix
-    data = pathlib.Path(source).read_bytes()
-    remove_game_cover(game)
-    write_file(CUSTOM_COVER_DIR / name, data)
+    path = CUSTOM_COVER_DIR / name
+    old = game_cover_path(game)
+    # The old picture goes only once the new one is there
+    write_file(path, pathlib.Path(source).read_bytes())
     game["cover"] = name
-    return CUSTOM_COVER_DIR / name
+    if old is not None and old != path:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return path
 
 
 def remove_game_cover(game):

@@ -702,7 +702,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         else:
             self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
         if "SEN" in self.rows:
-            self.rows["SEN"].set_upper(self.angle_max)
+            # Without a wheelbase Auto can be chosen, e.g. for a preset
+            self.rows["SEN"].set_upper(self.angle_max, not self.device_path
+                                       or self.angle_auto is not None)
 
     def _read_value(self, attr_id):
         """A setting from the wheelbase as the app shows it: Auto of the
@@ -1254,6 +1256,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     # -----------------------------------------------------------------------
 
     def _build_games_page(self):
+        old = getattr(self, "games_page", None)
+        if old is not None:
+            old.replaced = True     # its cover downloads end without saving
         self.games_page = GamesPage(self)
         return self.games_page.widget
 
