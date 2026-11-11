@@ -44,6 +44,8 @@
                     <li xml:lang="de">Das AppImage kann auf GitHub nach neuen Versionen suchen, beim Start und dann stündlich, und zeigt dann oben einen Hinweis, bis du aktualisierst; vorher fragt es einmal, ob es suchen darf</li>
                     <li>From that note, the AppImage updates itself with one click: it downloads the new version, checks it against GitHub's checksum, replaces itself and restarts</li>
                     <li xml:lang="de">Über diesen Hinweis aktualisiert sich das AppImage mit einem Klick selbst: Es lädt die neue Version, prüft sie mit der Prüfsumme von GitHub, ersetzt sich und startet neu</li>
+                    <li>The AppImage no longer runs Python code from the folder it was started in, e.g. a folder named understeer there</li>
+                    <li xml:lang="de">Das AppImage führt keinen Python-Code mehr aus dem Ordner aus, aus dem es gestartet wurde, z. B. einen dort liegenden Ordner namens understeer</li>
                 </ul>
             </description>
         </release>

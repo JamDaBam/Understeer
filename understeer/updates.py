@@ -176,6 +176,9 @@ def restart_command(appimage, pid, environ=os.environ):
 def restart(appimage):
     """Start appimage again after this process has quit."""
     argv, env = restart_command(appimage, os.getpid())
+    # From the home folder, like from the desktop, not from where this one
+    # was started
     subprocess.Popen(argv, env=env, start_new_session=True,
+                     cwd=os.path.expanduser("~"),
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL)

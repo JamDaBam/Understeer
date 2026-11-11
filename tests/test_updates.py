@@ -214,3 +214,11 @@ def test_fetch_latest_offline(monkeypatch):
     monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
     with pytest.raises(updates.Error):
         updates.fetch_latest()
+
+
+def test_restart_from_home(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(updates.subprocess, "Popen",
+                        lambda argv, **kw: seen.update(kw))
+    updates.restart("/home/a/Understeer.AppImage")
+    assert seen["cwd"] == os.path.expanduser("~") and seen["start_new_session"]
