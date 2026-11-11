@@ -34,7 +34,7 @@ The AppImage uses Python 3 with PyGObject, GTK 4 and Libadwaita 1.5 or newer fro
 
 Download `Understeer-<version>-x86_64.AppImage` from the [latest release](https://github.com/JamDaBam/Understeer/releases/latest), make it executable (`chmod +x Understeer-*-x86_64.AppImage`) and run it.
 
-The AppImage contains embedded update information, so AppImage managers such as [Gear Lever](https://github.com/mijorus/gearlever) detect new releases automatically.
+The AppImage contains embedded update information, so AppImage managers such as [Gear Lever](https://github.com/mijorus/gearlever) detect new releases automatically. Understeer itself can also look for new versions (it asks once; *Preferences → General → Look for New Versions*): at start and every hour it asks GitHub for the newest version number and shows a note at the top when there is a newer one.
 
 ## Hardware Permissions
 

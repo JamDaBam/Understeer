@@ -22,6 +22,7 @@ from .games_page import GamesPage
 from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PreferencesMixin
 from .presets import PresetsMixin
+from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
 
@@ -39,7 +40,7 @@ TOAST_BUTTON_MS = 5000  # ... with a button such as Undo, to have time to click
 log = logging.getLogger("understeer.window")
 
 
-class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
+class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, UpdateCheckMixin,
                   Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -93,6 +94,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self._games_watch = GLib.timeout_add(GAMES_WATCH_MS, self._check_games)
         GLib.idle_add(lambda: self._check_games() and False)
         GLib.idle_add(lambda: self._announce_update() and False)
+        GLib.idle_add(lambda: self._start_update_check() and False)
         self.connect("close-request", self._on_close)
 
     def flush_live(self):
@@ -216,6 +218,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             self._load_from_device()
         self.present()
         GLib.idle_add(lambda: self._show_news() and False)   # after an update
+        GLib.idle_add(lambda: self._start_update_check() and False)
 
     # -----------------------------------------------------------------------
     # Layout
@@ -283,6 +286,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self.banner = Adw.Banner()
         self.banner.connect("button-clicked", lambda b: self._on_banner_button())
         content_view.add_top_bar(self.banner)
+        self._build_update_banner(content_view)
 
         self.views = Adw.ViewStack()
         content_view.set_content(self.views)
