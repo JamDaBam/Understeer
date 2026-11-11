@@ -44,6 +44,14 @@
                     <li xml:lang="de">Understeer kann im Hintergrund weiterlaufen, mit einem Symbol in der Systemleiste, damit die Presets deiner Spiele angewendet werden, ohne es vorher zu öffnen; es kann auch bei der Anmeldung starten</li>
                     <li>The preferences show the wheel base, the steering wheel on it and their firmware (with hid-fanatecff from October 2026)</li>
                     <li xml:lang="de">Die Einstellungen zeigen die Wheelbase, das Lenkrad darauf und ihre Firmware (mit hid-fanatecff ab Oktober 2026)</li>
+                    <li>Before a preset is overwritten, also from the Presets menu, Understeer lists every setting that changes in it, e.g. Force Feedback Strength 70 % → 85 %</li>
+                    <li xml:lang="de">Bevor ein Preset überschrieben wird, auch über das Presets-Menü, zeigt Understeer jede Einstellung, die sich darin ändert, z. B. Force-Feedback-Stärke 70 % → 85 %</li>
+                    <li>When you quit or apply a preset with unsaved changes to the active preset, Understeer asks whether to save them into it</li>
+                    <li xml:lang="de">Beim Beenden oder Anwenden eines Presets mit ungespeicherten Änderungen am aktiven Preset fragt Understeer, ob sie darin gespeichert werden sollen</li>
+                    <li>Changing the language right after switching pages in the preferences no longer makes Understeer crash now and then</li>
+                    <li xml:lang="de">Ein Sprachwechsel direkt nach dem Wechsel der Seite in den Einstellungen lässt Understeer nicht mehr ab und zu abstürzen</li>
+                    <li>Without a wheel base connected, changing the language no longer resets the shown values</li>
+                    <li xml:lang="de">Ohne angeschlossene Wheelbase setzt ein Sprachwechsel die angezeigten Werte nicht mehr zurück</li>
                     <li>After an update, Understeer says so once and shows what is new</li>
                     <li xml:lang="de">Nach einem Update weist Understeer einmal darauf hin und zeigt, was neu ist</li>
                     <li>The About dialog shows the changes of the installed version</li>

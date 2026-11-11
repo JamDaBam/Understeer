@@ -8,7 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config
 from ..i18n import _
-from ..settings import SIM_DEFAULTS
+from ..settings import SIM_DEFAULTS, changes
 
 log = logging.getLogger("understeer.window")
 
@@ -69,7 +69,7 @@ class PresetsMixin:
             buttons = Gtk.Box(spacing=6)
             apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
-            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
+            apply_btn.connect("clicked", lambda b, p=path: self._ask_apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
@@ -152,18 +152,24 @@ class PresetsMixin:
 
     def _preset_diff(self, stored):
         """[(attr id, stored value or None, current value)] that differ."""
-        return [(a, stored.get(a), v) for a, v in self._collect_values().items()
-                if stored.get(a) != v]
+        return changes(stored, self._collect_values())
+
+    def _unsaved_preset_changes(self):
+        """The diff of the active preset if it has unsaved changes, else [].
+
+        Only settings stored in the preset count; older presets may hold
+        just a few values."""
+        if self.active_preset is None:
+            return []
+        diff = self._preset_diff(self.active_values)
+        return diff if any(old is not None for _a, old, _v in diff) else []
 
     def _update_preset_indicator(self):
         if self.active_preset is None:
             self.preset_button.set_label(_("Presets"))
             self.update_action.set_enabled(False)
             return
-        # Only settings stored in the preset count; older presets may hold
-        # just a few values.
-        modified = any(old is not None
-                       for _a, old, _v in self._preset_diff(self.active_values))
+        modified = bool(self._unsaved_preset_changes())
         name = self._active_name()
         self.preset_button.set_label(f"{name} •" if modified else name)
         self.preset_button.set_tooltip_text(
@@ -211,6 +217,32 @@ class PresetsMixin:
                 _("Preset “{name}” loaded — click Apply to write it").format(
                     name=name))
 
+    def _changes_list(self, diff):
+        """Setting, before → after in aligned columns; scrolls when long."""
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        for attr_id, old, new in diff:
+            row = self.rows[attr_id]
+            item = Adw.ActionRow(title=_(row.setting["label"]))
+            values = Gtk.Box(spacing=8)
+            # Columns of the same width line up from row to row; long values
+            # (paddle mode) wrap within theirs.
+            before = row.format(old) if old is not None else "—"
+            for text, xalign in ((before, 1), (row.format(new), 0)):
+                values.append(Gtk.Label(label=text, xalign=xalign, wrap=True,
+                                        width_chars=17, max_width_chars=17,
+                                        css_classes=["numeric"]))
+            values.insert_child_after(Gtk.Label(label="→", css_classes=["dim-label"]),
+                                      values.get_first_child())
+            values.get_last_child().add_css_class("heading")
+            item.add_suffix(values)
+            listbox.append(item)
+        scroll = Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
+                                    max_content_height=420,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_size_request(560, -1)
+        return scroll
+
     def _ask_preset_name(self):
         entry = Gtk.Entry(placeholder_text=_("e.g. BeamNG Drift"),
                           activates_default=True)
@@ -251,51 +283,109 @@ class PresetsMixin:
         self._set_active_preset(path, values)
         return True
 
-    def _describe_diff(self, diff, limit=6):
-        lines = []
-        for attr_id, old, new in diff[:limit]:
-            row = self.rows[attr_id]
-            before = row.format(old) if old is not None else "—"
-            lines.append(f"{_(row.setting['label'])}: {before} → {row.format(new)}")
-        if len(diff) > limit:
-            lines.append(_("and {n} more").format(n=len(diff) - limit))
-        return "\n".join(lines)
-
     def _confirm_overwrite(self, path, new_name=None):
-        """Ask before replacing a preset file with the current settings."""
+        """Ask before replacing a preset file with the current settings,
+        showing what changes in it."""
+        path = pathlib.Path(path)
         try:
             name, stored = self._read_preset(path)
         except (OSError, json.JSONDecodeError):
             name, stored = path.stem, {}
         name = new_name or name
         diff = self._preset_diff(stored)
-        body = (_("Settings that change:") + "\n" + self._describe_diff(diff)
-                if diff else _("The preset already matches the current "
-                               "settings."))
+        body = (_("Settings that change:") if diff else
+                _("The preset already matches the current settings."))
         dialog = Adw.AlertDialog(
             heading=_("Overwrite “{name}”?").format(name=name), body=body)
+        if diff:
+            dialog.set_extra_child(self._changes_list(diff))
+            if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
+                dialog.set_prefer_wide_layout(True)
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("overwrite", _("Overwrite"))
+        dialog.set_close_response("cancel")
         dialog.set_response_appearance("overwrite",
                                        Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", lambda d, r: self._overwrite_preset(path, name)
+                       if r == "overwrite" else None)
+        dialog.present(self)
+
+    def confirm_quit(self, quit_now):
+        """Call quit_now(), but first offer to save unsaved changes of the
+        active preset. The wheel base keeps its settings either way."""
+        if self._shut_down or not self._unsaved_preset_changes():
+            if self._save_dialog is None:
+                quit_now()
+            return
+        if self._in_background:
+            self.show_again()               # also reads the wheel base again
+        self._ask_save_changes(
+            quit_now, "quit",
+            _("These settings differ from the preset. The wheel base "
+              "keeps them either way."))
+
+    def _ask_apply_preset(self, path):
+        """Apply a preset chosen by the user; first offer to save unsaved
+        changes of the active preset, applying would lose them."""
+        path = pathlib.Path(path)
+        try:
+            name, _values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            name = path.stem
+        self._ask_save_changes(
+            lambda: self._apply_preset(path), f"apply {path.name}",
+            _("These settings differ from the preset. Then “{name}” is "
+              "applied.").format(name=name))
+
+    def _ask_save_changes(self, then, what, body):
+        """Offer to save unsaved changes of the active preset into it,
+        then call then(). Calls it right away without such changes."""
+        if self._save_dialog is not None:
+            return                          # already asking
+        diff = self._unsaved_preset_changes()
+        if not diff:
+            then()
+            return
+        path, name = self.active_preset, self._active_name()
+        dialog = Adw.AlertDialog(
+            heading=_("Save Changes to “{name}”?").format(name=name), body=body)
+        dialog.set_extra_child(self._changes_list(diff))
+        if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
+            dialog.set_prefer_wide_layout(True)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("discard", _("Don't Save"))
+        dialog.add_response("save", _("Save"))
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("save")
+        dialog.set_response_appearance("discard",
+                                       Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
 
         def on_response(d, response):
-            if response == "overwrite" and self._write_preset(path, name):
-                self._notify(_("Preset “{name}” saved").format(name=name))
+            self._save_dialog = None
+            log.info("Unsaved changes to preset %s before %s: %s",
+                     path.name, what, response)
+            if response == "save" and not self._write_preset(path, name):
+                return                      # the error is shown
+            if response in ("save", "discard"):
+                then()
 
         dialog.connect("response", on_response)
+        self._save_dialog = dialog
         dialog.present(self)
 
     def _update_active_preset(self):
-        """Save to the active preset without asking; offer undo instead."""
-        path = self.active_preset
-        if path is None:
-            return
+        """Save to the active preset, after showing what changes in it."""
+        if self.active_preset is not None:
+            self._confirm_overwrite(self.active_preset)
+
+    def _overwrite_preset(self, path, name):
+        """Replace a preset with the current settings; offer undo."""
         try:
             old_text = path.read_text()
-            name, old_values = self._read_preset(path)
+            _n, old_values = self._read_preset(path)
         except (OSError, json.JSONDecodeError):
-            old_text, name, old_values = None, self._active_name(), {}
+            old_text, old_values = None, {}
         if not self._write_preset(path, name):
             return
         def undo():
@@ -306,7 +396,7 @@ class PresetsMixin:
                 return
             self._set_active_preset(path, old_values)
 
-        self._notify(_("Saved to “{name}”").format(name=name),
+        self._notify(_("Preset “{name}” saved").format(name=name),
                      _("Undo") if old_text is not None else None, undo)
 
     def _ask_rename_preset(self, path, name):

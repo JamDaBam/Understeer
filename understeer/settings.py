@@ -155,3 +155,12 @@ def format_value(setting, v):
         return _("Auto")
     unit = setting.get("unit", "")
     return f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()
+
+
+def changes(before, after):
+    """[(attr id, value before or None, value after)] for the settings in
+    after that differ from before, in the order of SETTINGS."""
+    order = {s["id"]: i for i, s in enumerate(SETTINGS)}
+    return sorted(((a, before.get(a), v) for a, v in after.items()
+                   if before.get(a) != v),
+                  key=lambda c: order.get(c[0], len(order)))

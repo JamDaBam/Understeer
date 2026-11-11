@@ -105,6 +105,24 @@ def close_dialogs(win):
         d.force_close()
 
 
+def walk(widget):
+    """The widget and everything inside it."""
+    if widget is None:
+        return
+    yield widget
+    child = widget.get_first_child()
+    while child is not None:
+        yield from walk(child)
+        child = child.get_next_sibling()
+
+
+def r_suffix(row):
+    """Text of the labels in an Adw.ActionRow besides its title."""
+    return " ".join(w.get_label() for w in walk(row)
+                    if isinstance(w, Gtk.Label) and w.get_label() not in
+                    (row.get_title(), row.get_subtitle(), ""))
+
+
 def steps(win):
     """Each step runs on its own main loop turn, so the UI can settle."""
     yield "start", lambda: check(win.device_path is not None, "fake wheel base found")
@@ -134,16 +152,139 @@ def steps(win):
         check(win.update_action.get_enabled(), "update action enabled after change")
         check(win.preset_button.get_label() == "Test GT3 •",
               f"modified marker: {win.preset_button.get_label()!r}")
-        win._update_active_preset()
+        win.activate_action("win.update-preset", None)
+    yield "save to the active preset", modify_and_update
+
+    def update_confirmed():
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog), "changes shown before saving")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        check(lines == ["Wheel Vibration: 60 % → 40 %"], f"changes listed: {lines}")
+        _n, vals = config.read_preset(win.active_preset)
+        check(vals.get("SHO") == 60, "nothing saved before confirming")
+        d.emit("response", "overwrite")
+        d.force_close()
         _n, vals = config.read_preset(win.active_preset)
         check(vals.get("SHO") == 40, "preset updated")
-    yield "update preset", modify_and_update
+    yield "preset updated", update_confirmed
+
+    application = win.get_application()
+    quits = []
+
+    def ask_on_quit():
+        application._quit_now = lambda: quits.append(True)   # stay running
+        win.rows["SHO"].set(20, silent=False)
+        win.flush_live()
+        application.activate_action("quit", None)
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and not quits,
+              "asked before quitting with unsaved preset changes")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        check(lines == ["Wheel Vibration: 40 % → 20 %"], f"quit changes: {lines}")
+        application.activate_action("quit", None)
+        check(win.get_visible_dialog() is d, "asked only once")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(not quits, "cancel keeps running")
+    yield "quit with unsaved changes", ask_on_quit
+
+    def quit_without_saving():
+        win.close()                         # ✕ without background mode
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and win.get_visible(),
+              "closing the window asks too")
+        if not isinstance(d, Adw.AlertDialog):
+            return
+        d.emit("response", "discard")
+        d.force_close()
+        _n, vals = config.read_preset(win.active_preset)
+        check(quits and vals.get("SHO") == 40, "quit, preset left as it was")
+        check((dev / "SHO").read_text().strip() == "20",
+              "wheel base keeps the changed value")
+    yield "quit without saving", quit_without_saving
+
+    def quit_and_save():
+        quits.clear()
+        application.activate_action("quit", None)
+        d = win.get_visible_dialog()
+        if isinstance(d, Adw.AlertDialog):
+            d.emit("response", "save")
+            d.force_close()
+        _n, vals = config.read_preset(win.active_preset)
+        check(quits and vals.get("SHO") == 20, "saved, then quit")
+        quits.clear()
+        application.activate_action("quit", None)
+        check(quits and win.get_visible_dialog() is None,
+              "no question without unsaved changes")
+        win.rows["SHO"].set(40, silent=False)       # as the next steps expect
+        win.flush_live()
+        win._write_preset(win.active_preset, "Test GT3")
+        del application._quit_now
+    yield "quit and save", quit_and_save
+
+    gt3, rally = config.preset_path("Test GT3"), config.preset_path("Test Rally")
+
+    def answer(response):
+        """Answer the save question; the changes it listed."""
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog), f"asked to save ({response})")
+        if not isinstance(d, Adw.AlertDialog):
+            return []
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        d.emit("response", response)
+        d.force_close()
+        return lines
+
+    def switch_cancelled():
+        config.write_preset(rally, "Test Rally", {"FF": 60, "SHO": 90})
+        win._presets_changed()
+        win._apply_values({"FF": 70, "SHO": 80})
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(rally)))
+        check((dev / "SHO").read_text().strip() == "80", "nothing applied while asking")
+        lines = answer("cancel")
+        check("Wheel Vibration: 40 % → 80 %" in lines, f"switch changes: {lines}")
+        check(win.active_preset == gt3 and (dev / "SHO").read_text().strip() == "80",
+              "cancel keeps the changes")
+    yield "switch preset with unsaved changes", switch_cancelled
+
+    def switch_saved():
+        win._ask_apply_preset(rally)            # the Apply button of a tile
+        answer("save")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 80, "changes saved into the old preset")
+        check(win.active_preset == rally and (dev / "SHO").read_text().strip() == "90",
+              "then the other preset applied")
+    yield "switch and save", switch_saved
+
+    def switch_discarded():
+        win._apply_values({"SHO": 30})
+        win._ask_apply_preset(gt3)
+        answer("discard")
+        _n, vals = config.read_preset(rally)
+        check(vals.get("SHO") == 90, "old preset left as it was")
+        check(win.active_preset == gt3 and (dev / "SHO").read_text().strip() == "80",
+              "switched without saving")
+        win._apply_values({"FF": 70, "SHO": 40})  # as the next steps expect
+        win._write_preset(gt3, "Test GT3")
+    yield "switch without saving", switch_discarded
 
     def apply_preset():
-        win._apply_values({"FF": 70, "SHO": 80})
-        win._apply_preset(config.preset_path("Test GT3"))
-        check((dev / "SHO").read_text().strip() == "40", "preset applied to device")
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(rally)))
+        check(win.get_visible_dialog() is None, "no question without changes")
+        check((dev / "SHO").read_text().strip() == "90", "preset applied to device")
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(gt3)))
+        check((dev / "SHO").read_text().strip() == "40", "and back")
+        rally.unlink()
+        win._presets_changed()
     yield "apply preset", apply_preset
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")
@@ -152,6 +293,20 @@ def steps(win):
         check(win.preset_button.get_label().startswith("Renamed"),
               f"preset button shows new name: {win.preset_button.get_label()!r}")
     yield "rename preset", rename
+
+    def rebuilt_without_wheel_base():
+        # Nothing to read the values from again after the window is rebuilt
+        path, win.device_path = win.device_path, None
+        try:
+            win._apply_values({"SEN": 540, "SHO": 35})
+            win.relocalize()
+            shown = {a: win.rows[a].get() for a in ("SEN", "SHO")}
+            check(shown == {"SEN": 540, "SHO": 35},
+                  f"values kept without a wheel base: {shown}")
+        finally:
+            win.device_path = path
+            win.relocalize()
+    yield "rebuilt without wheel base", rebuilt_without_wheel_base
 
     def dialogs():
         win._ask_preset_name()
@@ -195,6 +350,16 @@ def steps(win):
         check(win._prefs_open(), "prefs still open after language change"),
         check(win.prefs.get_visible_page_name() == "wheelbase",
               f"prefs page kept: {win.prefs.get_visible_page_name()}"))
+
+    # Another page chosen right before the language changes: replacing the
+    # pages then made Libadwaita crash now and then.
+    for i in range(16):
+        yield f"page and language {i}", lambda i=i: (
+            win._show_preferences(("general", "wheelbase", "games", "data")[i % 4]),
+            win._set_language("en" if i % 2 else "de"))
+    yield "prefs after many changes", lambda: check(
+        win.prefs.get_visible_page_name() == "data" and win._prefs_open(),
+        f"prefs page kept: {win.prefs.get_visible_page_name()}")
 
     def toast_in_prefs():
         before = win._toast
@@ -389,6 +554,8 @@ def main():
         def next_step():
             try:
                 name, fn = next(it)
+                if os.environ.get("SMOKE_TRACE"):
+                    print("step:", name, file=sys.stderr, flush=True)
             except StopIteration:
                 finished.append(True)
                 application.quit()

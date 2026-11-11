@@ -2,7 +2,7 @@ import pytest
 
 from understeer import i18n
 from understeer.settings import (ADVANCED_GROUPS, SETTINGS, SETTINGS_BY_ID, SIM_DEFAULTS,
-                                 TABS, format_value)
+                                 TABS, changes, format_value)
 
 
 def test_ids_are_unique():
@@ -62,3 +62,12 @@ def test_format_value_translated(monkeypatch):
 
 def test_advanced_groups_exist():
     assert ADVANCED_GROUPS <= {s["group"] for s in SETTINGS}
+
+
+def test_changes_in_settings_order():
+    before = {"SEN": 900, "FF": 70, "DPR": 10}
+    after = {"DPR": 0, "FF": 85, "SEN": 900, "SHO": 40}
+    # unchanged SEN left out; SHO missing before; ordered as in SETTINGS
+    assert changes(before, after) == [("FF", 70, 85), ("DPR", 10, 0),
+                                      ("SHO", None, 40)]
+    assert changes(after, after) == []
