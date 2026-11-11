@@ -69,7 +69,7 @@ class PresetsMixin:
             buttons = Gtk.Box(spacing=6)
             apply_btn = Gtk.Button(label=_("Apply"))
             apply_btn.add_css_class("suggested-action")
-            apply_btn.connect("clicked", lambda b, p=path: self._apply_preset(p))
+            apply_btn.connect("clicked", lambda b, p=path: self._ask_apply_preset(p))
             save_btn = Gtk.Button(label=_("Save Here"))
             save_btn.set_tooltip_text(_("Save current settings to this preset"))
             save_btn.connect("clicked", lambda b, p=path:
@@ -313,22 +313,42 @@ class PresetsMixin:
     def confirm_quit(self, quit_now):
         """Call quit_now(), but first offer to save unsaved changes of the
         active preset. The wheel base keeps its settings either way."""
-        if self._quit_dialog is not None:
-            return                          # already asking
         if self._shut_down or not self._unsaved_preset_changes():
-            quit_now()
+            if self._save_dialog is None:
+                quit_now()
             return
         if self._in_background:
             self.show_again()               # also reads the wheel base again
+        self._ask_save_changes(
+            quit_now, "quit",
+            _("These settings differ from the preset. The wheel base "
+              "keeps them either way."))
+
+    def _ask_apply_preset(self, path):
+        """Apply a preset chosen by the user; first offer to save unsaved
+        changes of the active preset, applying would lose them."""
+        path = pathlib.Path(path)
+        try:
+            name, _values = self._read_preset(path)
+        except (OSError, json.JSONDecodeError):
+            name = path.stem
+        self._ask_save_changes(
+            lambda: self._apply_preset(path), f"apply {path.name}",
+            _("These settings differ from the preset. Then “{name}” is "
+              "applied.").format(name=name))
+
+    def _ask_save_changes(self, then, what, body):
+        """Offer to save unsaved changes of the active preset into it,
+        then call then(). Calls it right away without such changes."""
+        if self._save_dialog is not None:
+            return                          # already asking
         diff = self._unsaved_preset_changes()
         if not diff:
-            quit_now()
+            then()
             return
         path, name = self.active_preset, self._active_name()
         dialog = Adw.AlertDialog(
-            heading=_("Save Changes to “{name}”?").format(name=name),
-            body=_("These settings differ from the preset. The wheel base "
-                   "keeps them either way."))
+            heading=_("Save Changes to “{name}”?").format(name=name), body=body)
         dialog.set_extra_child(self._changes_list(diff))
         if hasattr(dialog, "set_prefer_wide_layout"):         # Libadwaita 1.6
             dialog.set_prefer_wide_layout(True)
@@ -342,16 +362,16 @@ class PresetsMixin:
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
 
         def on_response(d, response):
-            self._quit_dialog = None
-            log.info("Quit with unsaved changes to preset %s: %s",
-                     path.name, response)
+            self._save_dialog = None
+            log.info("Unsaved changes to preset %s before %s: %s",
+                     path.name, what, response)
             if response == "save" and not self._write_preset(path, name):
-                return                      # the error is shown; stay open
+                return                      # the error is shown
             if response in ("save", "discard"):
-                quit_now()
+                then()
 
         dialog.connect("response", on_response)
-        self._quit_dialog = dialog
+        self._save_dialog = dialog
         dialog.present(self)
 
     def _update_active_preset(self):

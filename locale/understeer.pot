@@ -1127,55 +1127,59 @@ msgstr ""
 msgid "Overwrite"
 msgstr ""
 
-#: understeer/ui/presets.py:329
-msgid "Save Changes to “{name}”?"
-msgstr ""
-
-#: understeer/ui/presets.py:330
+#: understeer/ui/presets.py:324
 msgid "These settings differ from the preset. The wheel base keeps them either way."
 msgstr ""
 
-#: understeer/ui/presets.py:336
+#: understeer/ui/presets.py:337
+msgid "These settings differ from the preset. Then “{name}” is applied."
+msgstr ""
+
+#: understeer/ui/presets.py:351
+msgid "Save Changes to “{name}”?"
+msgstr ""
+
+#: understeer/ui/presets.py:356
 msgid "Don't Save"
 msgstr ""
 
-#: understeer/ui/presets.py:380
+#: understeer/ui/presets.py:400
 msgid "Undo"
 msgstr ""
 
-#: understeer/ui/presets.py:385
+#: understeer/ui/presets.py:405
 msgid "Rename Preset"
 msgstr ""
 
-#: understeer/ui/presets.py:386
+#: understeer/ui/presets.py:406
 msgid "Games that use this preset keep it."
 msgstr ""
 
-#: understeer/ui/presets.py:411
+#: understeer/ui/presets.py:431
 msgid "Name Already Used"
 msgstr ""
 
-#: understeer/ui/presets.py:412
+#: understeer/ui/presets.py:432
 msgid "Another preset is already called “{name}”."
 msgstr ""
 
-#: understeer/ui/presets.py:416
+#: understeer/ui/presets.py:436
 msgid "Could not rename preset"
 msgstr ""
 
-#: understeer/ui/presets.py:423
+#: understeer/ui/presets.py:443
 msgid "Preset renamed to “{name}”"
 msgstr ""
 
-#: understeer/ui/presets.py:427
+#: understeer/ui/presets.py:447
 msgid "Delete “{name}”?"
 msgstr ""
 
-#: understeer/ui/presets.py:428
+#: understeer/ui/presets.py:448
 msgid "The preset file will be removed. This cannot be undone."
 msgstr ""
 
-#: understeer/ui/presets.py:439
+#: understeer/ui/presets.py:459
 msgid "Could not delete preset"
 msgstr ""
 

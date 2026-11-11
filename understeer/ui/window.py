@@ -51,7 +51,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self.wheel = {}          # see device.wheel_info()
         self._in_background = False     # window hidden, still watching games
         self._shut_down = False
-        self._quit_dialog = None        # asking to save before quitting
+        self._save_dialog = None        # asking to save the active preset
 
         self.rows = {}           # attr id -> SettingTile
         self.pending = {}        # attr id -> value waiting to be written
@@ -549,7 +549,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
-        add("apply-preset", lambda a, p: self._apply_preset(p.get_string()),
+        add("apply-preset", lambda a, p: self._ask_apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",

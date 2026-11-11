@@ -228,12 +228,61 @@ def steps(win):
         del application._quit_now
     yield "quit and save", quit_and_save
 
-    def apply_preset():
+    gt3, rally = config.preset_path("Test GT3"), config.preset_path("Test Rally")
+
+    def answer(response):
+        """Answer the save question; the changes it listed."""
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog), f"asked to save ({response})")
+        if not isinstance(d, Adw.AlertDialog):
+            return []
+        lines = [f"{r.get_title()}: {r_suffix(r)}" for r in walk(d.get_extra_child())
+                 if isinstance(r, Adw.ActionRow)]
+        d.emit("response", response)
+        d.force_close()
+        return lines
+
+    def switch_cancelled():
+        config.write_preset(rally, "Test Rally", {"FF": 60, "SHO": 90})
+        win._presets_changed()
         win._apply_values({"FF": 70, "SHO": 80})
-        win.activate_action("win.apply-preset", GLib.Variant.new_string(
-            str(config.preset_path("Test GT3"))))
-        check((dev / "SHO").read_text().strip() == "40", "preset applied to device")
-        check(win.get_visible_dialog() is None, "applied without asking")
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(rally)))
+        check((dev / "SHO").read_text().strip() == "80", "nothing applied while asking")
+        lines = answer("cancel")
+        check("Wheel Vibration: 40 % → 80 %" in lines, f"switch changes: {lines}")
+        check(win.active_preset == gt3 and (dev / "SHO").read_text().strip() == "80",
+              "cancel keeps the changes")
+    yield "switch preset with unsaved changes", switch_cancelled
+
+    def switch_saved():
+        win._ask_apply_preset(rally)            # the Apply button of a tile
+        answer("save")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 80, "changes saved into the old preset")
+        check(win.active_preset == rally and (dev / "SHO").read_text().strip() == "90",
+              "then the other preset applied")
+    yield "switch and save", switch_saved
+
+    def switch_discarded():
+        win._apply_values({"SHO": 30})
+        win._ask_apply_preset(gt3)
+        answer("discard")
+        _n, vals = config.read_preset(rally)
+        check(vals.get("SHO") == 90, "old preset left as it was")
+        check(win.active_preset == gt3 and (dev / "SHO").read_text().strip() == "80",
+              "switched without saving")
+        win._apply_values({"FF": 70, "SHO": 40})  # as the next steps expect
+        win._write_preset(gt3, "Test GT3")
+    yield "switch without saving", switch_discarded
+
+    def apply_preset():
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(rally)))
+        check(win.get_visible_dialog() is None, "no question without changes")
+        check((dev / "SHO").read_text().strip() == "90", "preset applied to device")
+        win.activate_action("win.apply-preset", GLib.Variant.new_string(str(gt3)))
+        check((dev / "SHO").read_text().strip() == "40", "and back")
+        rally.unlink()
+        win._presets_changed()
     yield "apply preset", apply_preset
 
 
