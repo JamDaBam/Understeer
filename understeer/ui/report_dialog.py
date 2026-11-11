@@ -26,9 +26,9 @@ class ReportDialog:
         self.system = report.system_info(window.report_details())
         self.log = report.log_excerpt()
 
-        # As tall as its content, so nothing needs scrolling at first; the
-        # buttons sit in a bar below and stay in view.
-        self.dialog = Adw.Dialog(content_width=640, title=_("Report a Problem"))
+        # As big as the other big dialogs (window.fit_dialog); the content
+        # scrolls, the buttons sit in a bar below and stay in view.
+        self.dialog = Adw.Dialog(title=_("Report a Problem"))
         view = Adw.ToolbarView()
         view.add_top_bar(Adw.HeaderBar())
         self.toasts = Adw.ToastOverlay()
@@ -115,6 +115,7 @@ class ReportDialog:
         bar.append(send)
         view.add_bottom_bar(bar)
 
+        window.fit_dialog(self.dialog)
         self.dialog.present(window)
         # Start where the user has to type.
         if title:

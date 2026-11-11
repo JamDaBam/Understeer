@@ -660,16 +660,21 @@ def steps(win):
         check(config.get_setting("last_version") == newest, "remembered then"),
         close_dialogs(win))
 
+    def same_size(d):
+        return (d.get_content_width(), d.get_content_height()) == win._dialog_size()
+
     def from_menu():
         win.activate_action("win.whats-new", None)
         d = news_shown()
         lines = news_lines(d) if d else []
         check(lines[:1] == [f"Understeer {newest}"], f"menu shows this version: {lines[:1]}")
         close_dialogs(win)
+        check(d is not None and same_size(d), "what's new as big as the others")
         win._show_about()
     yield "what's new from the menu", from_menu
     yield "about", lambda: (
         check(isinstance(win.get_visible_dialog(), Adw.AboutDialog), "About shown"),
+        check(same_size(win.get_visible_dialog()), "About as big as the others"),
         check(win.get_visible_dialog().get_release_notes_version() == newest,
               "About has the notes of this version"),
         win.get_visible_dialog().close())
