@@ -551,6 +551,14 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
         add("apply-preset", lambda a, p: self._ask_apply_preset(p.get_string()),
             GLib.VariantType.new("s"))
+        for name, cb in (
+                ("export-preset", self._export_preset),
+                ("copy-preset-text", lambda p: self._copy_preset(p, False)),
+                ("copy-preset-json", lambda p: self._copy_preset(p, True))):
+            add(name, lambda a, p, cb=cb: cb(p.get_string()),
+                GLib.VariantType.new("s"))
+        add("import-preset", lambda *a: self._ask_import_preset())
+        add("paste-preset", lambda *a: self._ask_paste_preset())
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())

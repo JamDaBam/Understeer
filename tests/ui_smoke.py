@@ -52,7 +52,7 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
-from understeer import app, background, backup, config, inputs, releases, log as session_log  # noqa: E402
+from understeer import app, background, backup, config, inputs, releases, sharing, log as session_log  # noqa: E402
 from understeer.ui import cover_search  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
@@ -284,6 +284,161 @@ def steps(win):
         rally.unlink()
         win._presets_changed()
     yield "apply preset", apply_preset
+
+    clip = []
+    copy = config.preset_path("Test GT3 (2)")
+
+    def read_clipboard():
+        clip.clear()
+        win.get_clipboard().read_text_async(
+            None, lambda c, r: clip.append(c.read_text_finish(r)))
+
+    def share_as_text():
+        win.activate_action("win.copy-preset-text",
+                            GLib.Variant.new_string(str(gt3)))
+        read_clipboard()
+    yield "share as text", share_as_text
+
+    def import_shared_text():
+        text = clip[0] if clip else ""
+        check(text.startswith("Understeer preset “Test GT3”\n")
+              and "\nWheel Vibration: 40 %\n" in text, f"shared text: {text!r}")
+        win._import_preset(text)
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and d.has_response("replace")
+              and d.has_response("keep"), "same preset: replace or keep both")
+        answer("replace")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 40, "replaced by the same values")
+        win._import_preset(text.replace('"SHO": 40', '"SHO": 70'))
+        lines = answer("keep")
+        check(lines == ["Wheel Vibration: 40 % → 70 %"], f"import changes: {lines}")
+        _n, vals = config.read_preset(copy)
+        check(vals.get("SHO") == 70, "kept both")
+        win._import_preset("no preset here")
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_heading() == "No Preset Found", "not a preset")
+        close_dialogs(win)
+    yield "import shared text", import_shared_text
+
+    def share_as_json():
+        win.activate_action("win.copy-preset-json",
+                            GLib.Variant.new_string(str(copy)))
+        copy.unlink()
+        win._presets_changed()
+        win.activate_action("win.paste-preset", None)
+    yield "share as JSON and paste", share_as_json
+
+    def text_view(d):
+        return next((w for w in walk(d) if isinstance(w, Gtk.TextView)), None)
+
+    def add_button(d):
+        return next(w for w in walk(d) if isinstance(w, Gtk.Button)
+                    and "suggested-action" in w.get_css_classes())
+
+    def paste_dialog():
+        d = win.get_visible_dialog()
+        check(d is not None and text_view(d) is not None, "paste dialog shown")
+        if d is None or text_view(d) is None:
+            return
+        check(not isinstance(d, Adw.AlertDialog),
+              "no window handle around the text field")
+        buffer = text_view(d).get_buffer()
+        pasted = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False)
+        check('"Test GT3 (2)"' in pasted, f"preset taken from the clipboard: {pasted!r}")
+        check(not config.preset_path("Test GT3 (2)").exists(),
+              "nothing added before confirming")
+        buffer.set_text("rm -rf ~")
+        check(not add_button(d).get_sensitive(), "no preset: can't add")
+        buffer.set_text(pasted)
+        check(add_button(d).get_sensitive(), "preset: can add")
+        add_button(d).emit("clicked")
+        d.force_close()
+    yield "paste dialog", paste_dialog
+
+    def private_clipboard():
+        win.get_clipboard().set("my secret")
+    yield "other text on the clipboard", private_clipboard
+
+    def not_shown():
+        win.activate_action("win.paste-preset", None)
+    yield "paste again", not_shown
+
+    def private_kept():
+        d = win.get_visible_dialog()
+        view = text_view(d) if d is not None else None
+        buffer = view.get_buffer() if view else None
+        check(buffer is not None and buffer.get_char_count() == 0,
+              "other clipboard text is not shown")
+        close_dialogs(win)
+        name = "<b>Bold</b> & My_Preset"
+        win._import_preset(sharing.preset_json(name, {"FF": 33}))
+        tiles = [w.get_label() for w in walk(win.presets_flow)
+                 if isinstance(w, Gtk.Label) and "preset-name" in w.get_css_classes()]
+        check(name in tiles, f"name shown as plain text: {tiles}")
+        config.preset_path(name).unlink()
+        win._presets_changed()
+    yield "clipboard stays private", private_kept
+
+    def paste_thread():
+        thread = ("Hi, my presets:\n" + sharing.preset_text("Thread A", {"FF": 11})
+                  + "\n> quoted: " + sharing.preset_json("Thread A", {"FF": 11})
+                  + "\nand " + sharing.preset_json("Test GT3", {"SHO": 5}))
+        win._ask_paste_preset(thread)
+        d = win.get_visible_dialog()
+        rows = [w for w in walk(d) if isinstance(w, Adw.ExpanderRow)]
+        check([r.get_title() for r in rows] == ["Thread A", "Test GT3"],
+              f"presets found in the thread: {[r.get_title() for r in rows]}")
+        check(add_button(d).get_label() == "Add (2)",
+              f"add label: {add_button(d).get_label()!r}")
+        boxes = [w for w in walk(d) if isinstance(w, Gtk.CheckButton)]
+        boxes[1].set_active(False)
+        check(add_button(d).get_label() == "Add (1)", "only the checked ones")
+        add_button(d).emit("clicked")
+        d.force_close()
+        _n, vals = config.read_preset(config.preset_path("Thread A"))
+        check(vals == {"FF": 11}, f"thread preset added: {vals}")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 40, "unchecked preset left out")
+        check(win.get_visible_dialog() is None, "nothing to ask")
+        config.preset_path("Thread A").unlink()
+        win._presets_changed()
+    yield "paste a thread", paste_thread
+
+    def one_after_another():
+        win._import_presets([sharing.Found("Test GT3", {"SHO": 5}, 1),
+                             sharing.Found("Test GT3", {"SHO": 6}, 2)])
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_response_label("cancel") == "Skip", "skip offered")
+        answer("cancel")
+        answer("keep")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 40, "skipped one left out")
+        third = config.preset_path("Test GT3 (3)")     # (2) is there already
+        _n, vals = config.read_preset(third)
+        check(vals == {"SHO": 6}, f"next one asked and kept: {vals}")
+        third.unlink()
+        win._presets_changed()
+    yield "names taken, one after another", one_after_another
+
+    def pasted():
+        _n, vals = config.read_preset(copy)
+        check(vals.get("SHO") == 70, "pasted preset added")
+        names = [n for n, _p in config.list_presets()]
+        check("Test GT3 (2)" in names, f"pasted preset listed: {names}")
+        text = sharing.preset_json("Test GT3", {"SHO": 10})
+        win._import_preset(text)
+        answer("replace")
+        _n, vals = config.read_preset(gt3)
+        check(vals == {"SHO": 10}, f"replaced: {vals}")
+        check(win.preset_button.get_label() == "Test GT3 •",
+              "replaced active preset differs from the settings")
+        win._write_preset(gt3, "Test GT3")      # as the next steps expect
+        copy.unlink()
+        win._presets_changed()
+    yield "pasted", pasted
 
 
     def rename():
