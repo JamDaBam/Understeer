@@ -242,12 +242,13 @@ class PresetsMixin:
         self._rebuild_preset_menu()
         self._rebuild_presets_list()
         if game:
-            self._apply_values(
+            outcome, failed = self._apply_values(
                 values,
                 _("{game} started: preset “{name}” applied").format(
                     game=game, name=name),
                 _("{game} started: preset “{name}” loaded — click Apply to "
                   "write it").format(game=game, name=name))
+            self._notify_game_preset(game, name, outcome, failed)
         else:
             self._apply_values(
                 values, _("Preset “{name}” applied").format(name=name),
@@ -308,6 +309,26 @@ class PresetsMixin:
         dialog.set_child(toolbar)
         log.info("Showing the values of preset %s", path.name)
         dialog.present(self)
+
+    def _notify_game_preset(self, game, name, outcome, failed):
+        """While the window is closed, tell with a notification of the
+        desktop what became of the preset of a game that started."""
+        if not self._in_background or not config.get_setting(
+                "game_notifications", True):
+            return
+        bodies = {
+            "written": _("Preset “{name}” applied."),
+            "pending": _("Preset “{name}” loaded, but not written: open "
+                         "Understeer and click Apply."),
+            "failed": _("Preset “{name}” could not be written completely. "
+                        "Failed: {names}"),
+            "no device": _("Preset “{name}” not applied: no wheel base is "
+                           "connected."),
+        }
+        log.info("Notification for %s: preset %s %s", game, name, outcome)
+        self._desktop_notify(
+            "game-preset", _("{game} started").format(game=game),
+            bodies[outcome].format(name=name, names=", ".join(failed)))
 
     def _changes_list(self, diff):
         """Setting, before → after in aligned columns; scrolls when long."""
