@@ -256,7 +256,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.slot_dropdown.set_factory(label_factory(chars=16))
         self.slot_dropdown.set_list_factory(label_factory(in_list=True))
         self.slot_dropdown.set_tooltip_text(
-            _("Tuning slot on the wheel base that is being edited"))
+            _("Tuning slot on the wheelbase that is being edited"))
         self._slot_handler = self.slot_dropdown.connect(
             "notify::selected", lambda *a: self._on_slot_selected())
         header.pack_start(self.slot_dropdown)
@@ -513,7 +513,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                       self._set_setting(setting["id"], v))
             box.append(b)
         auto = Gtk.Button(label=_("Auto"))
-        auto.set_tooltip_text(_("Use the maximum range of the wheel base"))
+        auto.set_tooltip_text(_("Use the maximum range of the wheelbase"))
         auto.connect("clicked", lambda b: self._set_setting(setting["id"], 0))
         box.append(auto)
         return box
@@ -548,11 +548,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             return True
 
         about.connect("activate-link", on_link)
+        by = _("{name} by {author}")
         about.add_acknowledgement_section(_("Started as a fork of"), [
-            "SimPower (FanatecLinux) by BenryBoi "
-            "https://github.com/BenryBoi/FanatecLinux"])
+            by.format(name="SimPower (FanatecLinux)", author="BenryBoi")
+            + " https://github.com/BenryBoi/FanatecLinux"])
         about.add_acknowledgement_section(_("Kernel driver"), [
-            "hid-fanatecff by gotzl https://github.com/gotzl/hid-fanatecff"])
+            by.format(name="hid-fanatecff", author="gotzl")
+            + " https://github.com/gotzl/hid-fanatecff"])
         about.present(self)
 
     def _announce_update(self):
@@ -828,7 +830,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def _update_banner(self):
         if not self.device_path:
             self.banner.set_title(
-                _("No Fanatec wheel base found. Check that it is switched on "
+                _("No Fanatec wheelbase found. Check that it is switched on "
                   "and the hid-fanatecff driver is loaded."))
             self.banner.set_button_label(_("Retry"))
             self.banner.set_revealed(True)
@@ -942,9 +944,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._detect_device()
         if self.device_path:
             if not self._apply_running_game_preset():
-                self._notify(_("Wheel base connected"))
+                self._notify(_("Wheelbase connected"))
         elif had_device:
-            self._notify(_("Wheel base disconnected"))
+            self._notify(_("Wheelbase disconnected"))
         return True
 
     def _attr_file(self, attr_id):
@@ -1168,9 +1170,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._load_from_device()
             name = short(self._slot_label(slot))
             self._notify(
-                _("Slot changed on the wheel base: {name}. Unapplied changes "
+                _("Slot changed on the wheelbase: {name}. Unapplied changes "
                   "were discarded.").format(name=name) if discarded else
-                _("Slot changed on the wheel base: {name}").format(name=name))
+                _("Slot changed on the wheelbase: {name}").format(name=name))
             return GLib.SOURCE_CONTINUE
         if self.pending:            # don't overwrite changes waiting for Apply
             return GLib.SOURCE_CONTINUE
@@ -1248,7 +1250,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if write_values({self._attr_file("SLOT"): slot}):
             self._notify(
                 _("The driver can only switch to slots 1–{n}. Choose this "
-                  "slot on the wheel base.").format(n=SLOTS)
+                  "slot on the wheelbase.").format(n=SLOTS)
                 if slot > SLOTS else _("Could not switch slot"))
             self._show_device_slot()        # back to the slot that is active
             return
@@ -1322,7 +1324,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             return
         dialog = Adw.AlertDialog(
             heading=_("Reset All Tuning Slots?"),
-            body=_("All tuning slots stored on the wheel base will be "
+            body=_("All tuning slots stored on the wheelbase will be "
                    "cleared. This cannot be undone."))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("reset", _("Reset"))
@@ -1336,7 +1338,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         path = self._attr_file("RESET")
         if not os.path.exists(path):
             self._error(_("Not Available"),
-                        _("This wheel base does not support resetting."))
+                        _("This wheelbase does not support resetting."))
         elif write_values({path: 1}):
             self._notify(_("Could not reset the tuning slots"))
         else:
@@ -1361,12 +1363,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                                                     Adw.get_minor_version(),
                                                     Adw.get_micro_version()))]
         if self.device_path:
-            details += [("Wheel base", f"{model_id(self.device_path)} "
+            details += [("Wheelbase", f"{model_id(self.device_path)} "
                          f"({'writable' if self.writable else 'no write access'})"),
                         ("Wheel", self._wheel_text()),
                         ("Access", describe_access(self.device_path))]
         else:
-            details.append(("Wheel base", "not found"))
+            details.append(("Wheelbase", "not found"))
         steering = self.inputs.steering_axis()
         details.append(("Input", "{} axes, steering {}{}".format(
             len(self.inputs.axes), "found" if steering else "not found",
