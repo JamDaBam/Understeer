@@ -25,7 +25,9 @@ cp -r icons/hicolor AppDir/usr/share/understeer/icons/
 cat << 'EOF' > AppDir/usr/bin/understeer
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
-PYTHONPATH="$HERE/../share/understeer${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m understeer "$@"
+# PYTHONSAFEPATH: don't look for modules in the current folder first, so an
+# "understeer" folder there (e.g. a git checkout) can't take our place.
+PYTHONSAFEPATH=1 PYTHONPATH="$HERE/../share/understeer${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m understeer "$@"
 EOF
 chmod +x AppDir/usr/bin/understeer
 

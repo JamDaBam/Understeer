@@ -2,7 +2,7 @@
 import pathlib
 import sys
 
-from . import DATA_DIR, background, config, games, i18n, log, releases
+from . import DATA_DIR, background, config, games, i18n, log, releases, updates
 from .ui.window import TunerWindow  # also selects the GTK version
 from .i18n import _
 from .ui import theme
@@ -101,14 +101,21 @@ class TunerApplication(Adw.Application):
         else:
             self.activate()
 
-    def quit_all(self):
+    def quit_all(self, restart=None):
         """Quit for real, also when running in the background; first
-        offers to save unsaved changes of the active preset."""
+        offers to save unsaved changes of the active preset. restart: an
+        AppImage to start once this one has ended, after an update."""
+        def quit_now():
+            if restart:
+                log.log.info("Restarting %s", restart)
+                updates.restart(restart)
+            self._quit_now()
+
         windows = [w for w in self.get_windows() if hasattr(w, "confirm_quit")]
         if windows:
-            windows[0].confirm_quit(self._quit_now)
+            windows[0].confirm_quit(quit_now)
         else:
-            self._quit_now()
+            quit_now()
 
     def _quit_now(self):
         for win in self.get_windows():

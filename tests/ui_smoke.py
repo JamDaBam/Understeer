@@ -698,13 +698,17 @@ def steps(win):
         close_dialogs(win))
 
     # -- new versions on GitHub (only the AppImage looks) --------------------
-    fetched = []
+    fetched, restarted = [], []
+    image = scratch / "Understeer.AppImage"
 
     def ask_update_check():
         check(not win.update_banner.get_revealed(), "no update banner from git")
-        os.environ["APPIMAGE"] = str(scratch / "Understeer.AppImage")
+        image.write_bytes(b"old AppImage")
+        os.environ["APPIMAGE"] = str(image)
         updates.fetch_latest = lambda: fetched.append(1) or {
-            "version": "99.0.0", "url": updates.RELEASES_URL + "/tag/v99.0.0"}
+            "version": "99.0.0", "url": updates.RELEASES_URL + "/tag/v99.0.0",
+            "asset": {"url": updates.DOWNLOAD_URL + "v99.0.0/x", "sha256": "0" * 64,
+                      "size": 3}}
         win._start_update_check()
         d = win.get_visible_dialog()
         check(isinstance(d, Adw.AlertDialog)
@@ -721,7 +725,33 @@ def steps(win):
               f"update banner: {win.update_banner.get_title()!r}"),
         win._start_update_check(),
         check(fetched == [1] and win.get_visible_dialog() is None,
-              "not asked or fetched again within the hour"))
+              "not asked or fetched again within the hour"),
+        check(win.update_banner.get_button_label() == "Update Now",
+              f"can update itself: {win.update_banner.get_button_label()!r}"))
+
+    def update_itself():
+        def download(asset, appimage, **_kw):
+            new = scratch / "downloaded.AppImage"
+            new.write_bytes(b"new AppImage")
+            return str(new)
+        updates.download = download
+        win.update_banner.emit("button-clicked")
+        check("Updating" in win.update_banner.get_title(), "updating shown")
+    yield "update itself", update_itself
+
+    def update_installed():
+        check(image.read_bytes() == b"new AppImage", "AppImage replaced")
+        check(os.access(image, os.X_OK), "new AppImage can run")
+        check(win.update_banner.get_button_label() == "Restart",
+              f"restart offered: {win.update_banner.get_title()!r}")
+        updates.restart = restarted.append
+        quits.clear()
+        application._quit_now = lambda: quits.append(True)   # stay running
+        win.update_banner.emit("button-clicked")
+        check(restarted == [str(image)] and quits, "restarted after quitting")
+        del application._quit_now
+        win._update_state = None
+    yield "update installed", update_installed
 
     def update_check_off():
         win._show_preferences("general")
