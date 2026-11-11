@@ -518,12 +518,12 @@ def steps(win):
             entry = [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0]
             hint = [w for w in walk(d) if isinstance(w, Gtk.Label)
                     and "error" in w.get_css_classes()][0]
-            check(not d.ok_button.get_sensitive() and not hint.get_visible(),
+            check(not d.ok_button.get_sensitive() and not hint.get_opacity(),
                   "no name yet: Create off, no red hint")
             entry.set_text("x")
             check(d.ok_button.get_sensitive(), "Create on with a name")
             entry.set_text("  ")
-            check(not d.ok_button.get_sensitive() and hint.get_visible()
+            check(not d.ok_button.get_sensitive() and hint.get_opacity() == 1
                   and "error" in entry.get_css_classes(), "emptied: red hint")
             d.force_close()
             win._new_folder(" Rally ")

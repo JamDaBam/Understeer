@@ -622,7 +622,8 @@ class PresetsMixin:
         near.append(fields)
         column.append(near)
         if name_row is not None:
-            hint = Gtk.Label(label=message, wrap=True, xalign=0, visible=False,
+            # Its place is kept while hidden, so nothing moves when it shows
+            hint = Gtk.Label(label=message, wrap=True, xalign=0, opacity=0,
                              margin_start=12)
             hint.add_css_class("error")
             hint.add_css_class("caption")
@@ -631,7 +632,7 @@ class PresetsMixin:
             def changed(*_args):
                 empty = not name_row.get_text().strip()
                 ok.set_sensitive(not empty)
-                hint.set_visible(empty)
+                hint.set_opacity(1 if empty else 0)
                 if empty:
                     name_row.add_css_class("error")
                 else:
