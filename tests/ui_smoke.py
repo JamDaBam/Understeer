@@ -532,9 +532,27 @@ def steps(win):
             d.force_close()
             check(config.preset_folder(drift) == "Stage", "new folder with the preset")
             win._ask_delete_folder("Stage", 1)
-            answer("delete")
+            answer("keep")
             check(config.preset_folder(drift) is None and "Stage" not in win.folder_flows,
                   "folder deleted, preset kept")
+            # Deleted with its presets, then undone
+            config.write_preset(config.preset_path("Gone F"), "Gone F", {"FF": 30}, "Trash")
+            win._presets_changed()
+            win._set_active_preset(config.preset_path("Gone F"), {"FF": 30})
+            win._ask_delete_folder("Trash", 1)
+            d = win.get_visible_dialog()
+            check(d.get_response_label("all") == "Delete with Presets",
+                  "delete with presets offered")
+            answer("all")
+            check(not config.preset_path("Gone F").exists()
+                  and "Trash" not in win.folder_flows, "folder and preset deleted")
+            check(win.active_preset is None, "deleted preset no longer active")
+            win._on_toast_button(win._toast)       # Undo
+            check(config.preset_folder(config.preset_path("Gone F")) == "Trash",
+                  "undone: preset back in its folder")
+            config.preset_path("Gone F").unlink()
+            config.delete_folder("Trash")
+            win._presets_changed()
             win._ask_delete_folder("Rally", 0)
             check("Rally" not in win.folder_flows, "empty folder deleted without asking")
             win._drop_preset(drift, "BeamNG")

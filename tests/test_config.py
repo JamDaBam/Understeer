@@ -291,3 +291,35 @@ def test_empty_folders_are_kept(home):
     assert config.get_setting("preset_folders") is None
     config.set_setting("preset_folders", "nonsense")
     assert config.list_folders() == []
+
+
+def test_delete_folder_with_presets(home):
+    drift, climb, daily = (config.preset_path(n) for n in ("Drift", "Climb", "Daily"))
+    config.write_preset(drift, "Drift", {"FF": 55}, "BeamNG")
+    config.write_preset(climb, "Climb", {"FF": 60}, "BeamNG")
+    config.write_preset(daily, "Daily", {"FF": 50})
+    before = {p: p.read_bytes() for p in (drift, climb)}
+    deleted, error = config.delete_folder_with_presets("beamng")
+    assert error is None and dict(deleted) == before
+    assert not drift.exists() and not climb.exists() and daily.exists()
+    assert config.list_folders() == []
+    config.restore_presets(deleted, "BeamNG")
+    assert {p: p.read_bytes() for p in (drift, climb)} == before
+    assert config.list_folders() == ["BeamNG"]
+    assert config.delete_folder_with_presets("") == ([], None)
+
+
+def test_delete_folder_with_presets_stops_on_error(home, monkeypatch):
+    for n in ("A", "B"):
+        config.write_preset(config.preset_path(n), n, {"FF": 50}, "X")
+    real = config.pathlib.Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        if self.name == "B.json":
+            raise PermissionError("read-only")
+        return real(self, *args, **kwargs)
+    monkeypatch.setattr(config.pathlib.Path, "unlink", unlink)
+    deleted, error = config.delete_folder_with_presets("X")
+    assert [p.name for p, _c in deleted] == ["A.json"]
+    assert isinstance(error, PermissionError)
+    assert config.list_folders() == ["X"]           # B is still in it

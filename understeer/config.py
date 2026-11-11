@@ -392,6 +392,37 @@ def rename_folder(old, new):
     return moved
 
 
+def delete_folder_with_presets(folder):
+    """Remove a folder and delete its presets. Returns ([(path, file
+    content)] of the deleted ones, to put back with restore_presets(),
+    and the OSError that stopped it or None)."""
+    folder = clean_folder(folder)
+    if folder is None:
+        return [], None
+    deleted = []
+    for _name, path, in_folder in _scan():
+        if in_folder is None or in_folder.casefold() != folder.casefold():
+            continue
+        try:
+            content = path.read_bytes()
+            path.unlink()
+        except OSError as e:
+            return deleted, e
+        deleted.append((path, content))
+    _keep_folders([k for k in _kept_folders()
+                   if k.casefold() != folder.casefold()])
+    return deleted, None
+
+
+def restore_presets(deleted, folder=None):
+    """Write presets deleted by delete_folder_with_presets() again and
+    keep their folder; raises OSError."""
+    if folder:
+        add_folder(folder, respell=False)
+    for path, content in deleted:
+        write_file(path, content)
+
+
 def delete_folder(folder):
     """Remove a folder; its presets stay, without a folder. Returns how
     many presets were in it; raises OSError."""

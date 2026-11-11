@@ -700,22 +700,61 @@ class PresetsMixin:
                       _("Folder “{folder}” made")).format(folder=folder))
 
     def _ask_delete_folder(self, folder, count):
-        """Delete a folder; its presets stay. Asks only if it holds some."""
+        """Delete a folder, keeping its presets or with them. Asks only if
+        it holds some."""
         if not count:
             self._delete_folder(folder)
             return
+        files = {p.name for name, p in dict(config.list_presets_by_folder(
+            empty=True)).get(folder, [])}
+        games = [g["name"] for g in getattr(self.games_page, "games", [])
+                 if g.get("preset") in files]
+        body = _("Presets in it: {n}. Keep them, shown without a folder, or "
+                 "delete them too? Deleting can be undone right after.").format(n=count)
+        if games:
+            body += "\n\n" + _("Used by: {games}. Without their preset, these "
+                                "games get none applied.").format(
+                                    games=", ".join(games))
         dialog = Adw.AlertDialog(
             heading=_("Delete Folder “{folder}”?").format(folder=folder),
-            body=_("The presets in it are kept and shown without a folder."))
+            body=body)
         dialog.add_response("cancel", _("Cancel"))
-        dialog.add_response("delete", _("Delete Folder"))
-        dialog.set_default_response("cancel")
+        dialog.add_response("keep", _("Keep Presets"))
+        dialog.add_response("all", _("Delete with Presets"))
+        dialog.set_default_response("keep")
         dialog.set_close_response("cancel")
-        dialog.set_response_appearance("delete",
-                                       Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.connect("response", lambda d, r: r == "delete"
-                       and self._delete_folder(folder))
+        dialog.set_response_appearance("all", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, response):
+            if response == "keep":
+                self._delete_folder(folder)
+            elif response == "all":
+                self._delete_folder_with_presets(folder)
+
+        dialog.connect("response", on_response)
         dialog.present(self)
+
+    def _delete_folder_with_presets(self, folder):
+        deleted, error = config.delete_folder_with_presets(folder)
+        log.info("Folder %r deleted with %d presets%s", folder, len(deleted),
+                 f", stopped: {error}" if error else "")
+        paths = {path for path, _content in deleted}
+        if self.active_preset in paths:
+            self.active_preset, self.active_values = None, {}
+        self._presets_changed()
+        if error is not None:
+            self._error(_("Could not delete folder"), str(error))
+
+        def undo():
+            try:
+                config.restore_presets(deleted, folder)
+            except OSError as e:
+                self._error(_("Could not restore presets"), str(e))
+            log.info("Folder %r with %d presets restored", folder, len(deleted))
+            self._presets_changed()
+
+        self._notify(_("Folder “{folder}” deleted. Presets deleted: {n}").format(
+            folder=folder, n=len(deleted)), _("Undo"), undo)
 
     def _delete_folder(self, folder):
         try:

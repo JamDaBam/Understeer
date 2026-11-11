@@ -40,8 +40,8 @@
         <release version="1.12.0" date="2026-11-11">
             <description>
                 <ul>
-                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name; its presets are kept</li>
-                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst; seine Presets bleiben erhalten</li>
+                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name, keeping its presets or with them (which can be undone right after)</li>
+                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst, wahlweise mit seinen Presets (gleich danach rückgängig zu machen) oder ohne</li>
                 </ul>
             </description>
         </release>
