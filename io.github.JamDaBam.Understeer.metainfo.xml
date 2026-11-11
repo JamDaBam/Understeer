@@ -49,35 +49,49 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <release version="1.12.0" date="2026-11-11">
+        <release version="2.0.0" date="2026-11-11">
             <description>
+                <p>Understeer 2.0: presets and games work the same way, nothing you delete is gone at once, and the steering angle goes as far as your wheelbase does.</p>
+                <p xml:lang="de">Understeer 2.0: Presets und Spiele funktionieren gleich, beim Löschen ist nichts sofort weg, und der Lenkwinkel reicht so weit wie deine Wheelbase.</p>
                 <ul>
-                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name, keeping its presets or with them</li>
-                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst, wahlweise mit seinen Presets oder ohne</li>
                     <li>Presets and games look and work the same: a pencil next to the name renames them (games too, now), a ⋮ menu holds the rarer actions, and Select lets you choose several tiles and delete them at once</li>
                     <li xml:lang="de">Presets und Spiele sehen gleich aus und funktionieren gleich: Der Stift neben dem Namen benennt sie um (jetzt auch Spiele), ein ⋮-Menü enthält die selteneren Aktionen, und „Auswählen“ wählt mehrere Kacheln, um sie auf einmal zu löschen</li>
                     <li>Deleted presets and games go to a trash and stay there for 30 days, opened with Trash next to Select on their page; the message after deleting offers Undo for 10 seconds</li>
                     <li xml:lang="de">Gelöschte Presets und Spiele kommen in einen Papierkorb und bleiben dort 30 Tage, zu öffnen mit „Papierkorb“ neben „Auswählen“ auf ihrer Seite; die Meldung nach dem Löschen bietet 10 Sekunden lang „Rückgängig“</li>
+                    <li>Drag presets onto a folder to put them there, or onto Without Folder to take them out; Group is gone. New Folder makes a folder, also by dropping a preset on it, and a folder stays until you delete it with the bin next to its name, keeping its presets or with them</li>
+                    <li xml:lang="de">Ziehe Presets auf einen Ordner, um sie dort abzulegen, oder auf „Ohne Ordner“, um sie herauszunehmen; „Gruppieren“ entfällt. „Neuer Ordner“ legt einen Ordner an, auch wenn du ein Preset darauf ziehst, und ein Ordner bleibt, bis du ihn mit dem Papierkorb neben seinem Namen löschst, wahlweise mit seinen Presets oder ohne</li>
+                    <li>The steering angle goes up to 2520° on direct drive wheelbases and shows Auto as the wheelbase reports it. Auto can also be chosen without a wheelbase, e.g. to save it in a preset</li>
+                    <li xml:lang="de">Der Lenkwinkel reicht bei Direct-Drive-Wheelbases bis 2520° und zeigt „Auto“ so, wie die Wheelbase es meldet. „Auto“ lässt sich auch ohne Wheelbase wählen, z. B. um es in einem Preset zu speichern</li>
+                    <li>Settings the wheelbase keeps in steps of ten only (steering angle, vibration, force, spring and damper effects, effect intensity, brake force) move in such steps, so the value shown is the one on the wheelbase</li>
+                    <li xml:lang="de">Einstellungen, die die Wheelbase nur in Zehnerschritten speichert (Lenkwinkel, Vibration, Kraft-, Feder- und Dämpfer-Effekte, Effekt-Intensität, Bremskraft), bewegen sich in diesen Schritten, so dass der angezeigte Wert der auf der Wheelbase ist</li>
+                    <li>Long names of presets, folders, games and slots end in “…” instead of making tiles, menus and messages wider; pointing at a cut name on a tile or folder shows it whole</li>
+                    <li xml:lang="de">Lange Namen von Presets, Ordnern, Spielen und Slots enden mit „…“, statt Kacheln, Menüs und Meldungen breiter zu machen; zeigt man auf einen gekürzten Namen auf einer Kachel oder an einem Ordner, erscheint er ganz</li>
                     <li>The dialogs for names are wider and list your folders and games to pick from; a missing name is marked red in the dialog</li>
                     <li xml:lang="de">Die Dialoge für Namen sind breiter und listen deine Ordner und Spiele zur Auswahl; ein fehlender Name wird im Dialog rot markiert</li>
-                    <li>In a big window, e.g. maximized on a 4K screen, the theme previews in the preferences no longer stretch down the whole page</li>
-                    <li xml:lang="de">In einem großen Fenster, z. B. maximiert auf einem 4K-Bildschirm, ziehen sich die Theme-Vorschauen in den Einstellungen nicht mehr über die ganze Seite</li>
-                    <li>Long names of presets, folders, games and slots end in “…” instead of making all tiles as wide, or the window, menus, the tray menu and messages wider than the screen; a tile shows up to two lines, and pointing at a cut name on a tile or folder shows it whole</li>
-                    <li xml:lang="de">Lange Namen von Presets, Ordnern, Spielen und Slots enden mit „…“, statt alle Kacheln so breit zu machen oder das Fenster, Menüs, das Tray-Menü und Meldungen breiter als den Bildschirm; eine Kachel zeigt bis zu zwei Zeilen, und zeigt man auf einen gekürzten Namen auf einer Kachel oder an einem Ordner, erscheint er ganz</li>
-                    <li>The steering angle shows Auto and angles above 1080° as the wheelbase reports them, up to 2520° on direct drive wheelbases. Auto also works without a wheelbase, e.g. to save it in a preset, and a preset with Auto no longer sets 90°</li>
-                    <li xml:lang="de">Der Lenkwinkel zeigt „Auto“ und Winkel über 1080° so, wie die Wheelbase sie meldet, bei Direct-Drive-Wheelbases bis 2520°. „Auto“ geht auch ohne Wheelbase, z. B. um es in einem Preset zu speichern, und ein Preset mit „Auto“ stellt nicht mehr 90° ein</li>
-                    <li>Settings the wheelbase keeps in steps of ten only (steering angle, vibration, force, spring and damper effects, effect intensity, brake force) move in such steps, so the value shown is the one on the wheelbase, not e.g. 2356° for 2350°</li>
-                    <li xml:lang="de">Einstellungen, die die Wheelbase nur in Zehnerschritten speichert (Lenkwinkel, Vibration, Kraft-, Feder- und Dämpfer-Effekte, Effekt-Intensität, Bremskraft), bewegen sich in diesen Schritten, so dass der angezeigte Wert der auf der Wheelbase ist, nicht etwa 2356° für 2350°</li>
-                    <li>Steam games with “&amp;” in their name show it in the list of Add Game</li>
-                    <li xml:lang="de">Steam-Spiele mit „&amp;“ im Namen zeigen ihn in der Liste von „Spiel hinzufügen“</li>
-                    <li>Importing an export shows its theme, accent colour, corners and tray icon right away, not only after a restart</li>
-                    <li xml:lang="de">Ein Import zeigt Theme, Akzentfarbe, Ecken und Tray-Symbol sofort, nicht erst nach einem Neustart</li>
-                    <li>Saving a preset under the name of an existing one puts it into the folder chosen in the dialog</li>
-                    <li xml:lang="de">Speichert man ein Preset unter dem Namen eines vorhandenen, kommt es in den im Dialog gewählten Ordner</li>
-                    <li>Unplugged pedals leave the live display instead of staying there frozen; a failed reset of the tuning slots and a damaged preset file are reported</li>
-                    <li xml:lang="de">Ausgesteckte Pedale verschwinden aus der Live-Anzeige, statt dort eingefroren stehen zu bleiben; ein fehlgeschlagenes Zurücksetzen der Tuning-Slots und eine beschädigte Preset-Datei werden gemeldet</li>
                     <li>The texts say wheelbase everywhere, the German translation uses the same word for the same thing throughout, and dates look the same in the trash and in What's New</li>
                     <li xml:lang="de">Die Texte sagen überall „Wheelbase“, die deutsche Übersetzung nutzt durchgehend dasselbe Wort für dieselbe Sache, und Datumsangaben sehen im Papierkorb und in den Neuigkeiten gleich aus</li>
+                </ul>
+                <p>Fixed:</p>
+                <p xml:lang="de">Behoben:</p>
+                <ul>
+                    <li>A preset with Auto as its steering angle set 90°, and Auto or an angle above 1080° set on the wheelbase was shown as 1080°</li>
+                    <li xml:lang="de">Ein Preset mit „Auto“ als Lenkwinkel stellte 90° ein, und „Auto“ oder ein Winkel über 1080° an der Wheelbase wurde als 1080° angezeigt</li>
+                    <li>Without write permissions, changes waiting for Apply were lost when the window was opened, e.g. the preset of a game that started in the background; Discard, and a preset the wheelbase already matched, left changes to apply</li>
+                    <li xml:lang="de">Ohne Schreibrechte gingen Änderungen, die auf „Übernehmen“ warteten, beim Öffnen des Fensters verloren, z. B. das Preset eines im Hintergrund gestarteten Spiels; „Verwerfen“ und ein Preset, dem die Wheelbase schon entsprach, ließen Änderungen zum Übernehmen übrig</li>
+                    <li>Steam games with “&amp;” in their name had no name in the list of Add Game</li>
+                    <li xml:lang="de">Steam-Spiele mit „&amp;“ im Namen standen ohne Namen in der Liste von „Spiel hinzufügen“</li>
+                    <li>An import shows its theme, accent colour, corners and tray icon right away, not only after a restart</li>
+                    <li xml:lang="de">Ein Import zeigt Theme, Akzentfarbe, Ecken und Tray-Symbol sofort, nicht erst nach einem Neustart</li>
+                    <li>Saving a preset under the name of an existing one puts it into the folder entered in the dialog</li>
+                    <li xml:lang="de">Speichert man ein Preset unter dem Namen eines vorhandenen, kommt es in den im Dialog eingetragenen Ordner</li>
+                    <li>Unplugged pedals leave the live display instead of staying there frozen</li>
+                    <li xml:lang="de">Ausgesteckte Pedale verschwinden aus der Live-Anzeige, statt dort eingefroren stehen zu bleiben</li>
+                    <li>A failed reset of the tuning slots and a damaged preset file are reported; such a file can be deleted, and damaged settings no longer keep Understeer from starting</li>
+                    <li xml:lang="de">Ein fehlgeschlagenes Zurücksetzen der Tuning-Slots und eine beschädigte Preset-Datei werden gemeldet; so eine Datei lässt sich löschen, und beschädigte Einstellungen hindern Understeer nicht mehr am Start</li>
+                    <li>Deleting a folder with its presets keeps the folder if one of them could not be deleted</li>
+                    <li xml:lang="de">Beim Löschen eines Ordners mit seinen Presets bleibt der Ordner, wenn sich eines davon nicht löschen ließ</li>
+                    <li>In a big window, e.g. maximized on a 4K screen, the theme previews in the preferences no longer stretch down the whole page</li>
+                    <li xml:lang="de">In einem großen Fenster, z. B. maximiert auf einem 4K-Bildschirm, ziehen sich die Theme-Vorschauen in den Einstellungen nicht mehr über die ganze Seite</li>
                 </ul>
             </description>
         </release>
