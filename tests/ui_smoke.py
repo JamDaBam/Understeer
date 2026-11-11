@@ -801,6 +801,22 @@ def steps(win):
             win._set_active_preset(*before)
     yield "damaged presets", damaged_presets
 
+    def save_as_into_folder():
+        path = config.preset_path("Folder Test")
+        config.write_preset(path, "Folder Test", {"FF": 10})
+        before = (win.active_preset, win.active_values)
+        try:
+            win._save_preset("Folder Test", "Saved Into")
+            win.get_visible_dialog().emit("response", "overwrite")
+            check(config.preset_folder(path) == "Saved Into",
+                  f"saved over it into the folder chosen: {config.preset_folder(path)}")
+        finally:
+            close_dialogs(win)
+            path.unlink(missing_ok=True)
+            config.delete_folder("Saved Into")
+            win._set_active_preset(*before)
+    yield "save as preset into a folder", save_as_into_folder
+
 
     def rename():
         win._rename_preset(config.preset_path("Test GT3"), "Test GT3", "Renamed")

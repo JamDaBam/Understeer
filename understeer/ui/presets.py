@@ -600,15 +600,18 @@ class PresetsMixin:
             entry, _("Enter a name for the preset."),
             self._suggestion_list(folder, _("Pick a Folder")))
 
-    def _save_preset(self, name, folder=None):
-        """folder: for a new preset; one saved again stays in its folder."""
+    def _save_preset(self, name, folder=config.KEEP):
+        """folder: the one entered, also for a preset of that name that is
+        replaced; left out, such a preset stays in its folder."""
         if not name:
             return                          # the dialog asks for one
         path = config.preset_path(name)
+        if folder is not config.KEEP:
+            folder = config.existing_folder(folder)
         if path.exists():
-            self._confirm_overwrite(path, new_name=name)
+            self._confirm_overwrite(path, new_name=name, folder=folder)
             return
-        if self._write_preset(path, name, config.existing_folder(folder)):
+        if self._write_preset(path, name, folder):
             self._notify(_("Preset “{name}” saved").format(name=short(name)))
 
     # -- folders ---------------------------------------------------------------
@@ -882,9 +885,10 @@ class PresetsMixin:
         self._set_active_preset(path, values)
         return True
 
-    def _confirm_overwrite(self, path, new_name=None):
+    def _confirm_overwrite(self, path, new_name=None, folder=config.KEEP):
         """Ask before replacing a preset file with the current settings,
-        showing what changes in it."""
+        showing what changes in it. folder: where it goes, as at
+        config.write_preset."""
         path = pathlib.Path(path)
         try:
             name, stored = self._read_preset(path)
@@ -905,8 +909,8 @@ class PresetsMixin:
         dialog.set_close_response("cancel")
         dialog.set_response_appearance("overwrite",
                                        Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.connect("response", lambda d, r: self._overwrite_preset(path, name)
-                       if r == "overwrite" else None)
+        dialog.connect("response", lambda d, r: self._overwrite_preset(
+            path, name, folder) if r == "overwrite" else None)
         dialog.present(self)
 
     def confirm_quit(self, quit_now):
@@ -978,14 +982,14 @@ class PresetsMixin:
         if self.active_preset is not None:
             self._confirm_overwrite(self.active_preset)
 
-    def _overwrite_preset(self, path, name):
+    def _overwrite_preset(self, path, name, folder=config.KEEP):
         """Replace a preset with the current settings; offer undo."""
         try:
-            old_text = path.read_text()
+            old_text = path.read_text(encoding="utf-8")
             _n, old_values = self._read_preset(path)
         except (OSError, ValueError):
             old_text, old_values = None, {}
-        if not self._write_preset(path, name):
+        if not self._write_preset(path, name, folder):
             return
         def undo():
             try:
