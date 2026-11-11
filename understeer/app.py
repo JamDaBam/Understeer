@@ -157,10 +157,10 @@ def main():
     GLib.set_application_name("Understeer")
     log.setup()
     config.migrate_config()
-    i18n.set_language(config.get_setting("language"))
+    i18n.set_language(config.get_text("language"))
     versions = toolkit_versions()
     log.log.info("GTK %s, Libadwaita %s, language %s, layout %s",
                  versions["GTK"], versions["Libadwaita"],
-                 config.get_setting("language") or "system",
-                 config.get_setting("layout") or "full")
+                 config.get_text("language") or "system",
+                 config.get_text("layout") or "full")
     return TunerApplication().run(sys.argv)

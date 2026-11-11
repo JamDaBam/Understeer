@@ -19,6 +19,11 @@ MAX_COVERS = 36         # more is hard to choose from
 THUMB_THREADS = 4
 
 
+def saved_key():
+    """The user's SteamGridDB API key, "" if none is saved."""
+    return config.get_text(KEY_SETTING) or ""
+
+
 def in_thread(work, done):
     """Run a SteamGridDB request in a thread, see tasks.in_thread()."""
     tasks.in_thread(work, done, steamgriddb.Error)
@@ -70,7 +75,7 @@ class KeyRow:
         """Show the saved key, e.g. after the other key row saved one."""
         self._stop_timer()
         self._loading = True
-        self.row.set_text(config.get_setting(KEY_SETTING) or "")
+        self.row.set_text(saved_key())
         self._loading = False
         self.row.remove_css_class("error")
 
@@ -95,7 +100,7 @@ class KeyRow:
         """Save the entered key now, if it differs from the saved one."""
         self._stop_timer()
         key = self.row.get_text().strip()
-        if key == (config.get_setting(KEY_SETTING) or ""):
+        if key == saved_key():
             return
         self._check_id += 1
         if not key:
@@ -143,7 +148,7 @@ class CoverSearch:
         self.dialog.set_child(self.nav)
         # replace, not add: added pages stay in the view for good, and the
         # next page with the same tag (e.g. after a refused key) clashes.
-        if config.get_setting(KEY_SETTING):
+        if saved_key():
             self.nav.replace([self._search_page()])
         else:
             self.nav.replace([self._key_page()])
@@ -266,7 +271,7 @@ class CoverSearch:
                               _("Enter the name of the game"))
             return
         self.search_stack.set_visible_child_name("busy")
-        key = config.get_setting(KEY_SETTING)
+        key = saved_key()
 
         def done(found, error):
             if self._closed or search_id != self._search_id:
@@ -311,7 +316,7 @@ class CoverSearch:
         stack.set_visible_child_name("busy")
         title = found["name"] + (f" ({found['year']})" if found["year"] else "")
         page = self._page(title, stack, f"covers-{found['id']}", self._progress())
-        key = config.get_setting(KEY_SETTING)
+        key = saved_key()
 
         def done(covers, error):
             if self._closed:

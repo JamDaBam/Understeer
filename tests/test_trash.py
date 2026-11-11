@@ -88,3 +88,13 @@ def test_broken_items_are_skipped(home):
     (home / "trash" / "x.json").write_text("{nope")
     (home / "trash" / "y.json").write_text(json.dumps({"kind": "other"}))
     assert trash.items() == []
+
+
+def test_file_that_is_no_utf8_can_be_deleted(home):
+    """It holds no preset, but shows up as one and must go like one."""
+    path = home / "Latin.json"
+    home.mkdir(parents=True)
+    path.write_bytes('{"name": "N\xfcrburgring", "values": {"FF": 50}}'.encode("latin-1"))
+    item = trash.put_preset(path)
+    assert not path.exists()
+    assert [entry["id"] for entry in trash.items()] == [item]

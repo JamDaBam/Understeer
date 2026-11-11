@@ -106,6 +106,19 @@ def test_broken_slot_count(home):
     assert config.load_slot_count("0EB7:0020") == 0
 
 
+def test_settings_changed_by_hand(home):
+    """What a file holds after a slip of the hand must not stop the app."""
+    settings = config.APP_SETTINGS_FILE.parent
+    settings.mkdir(parents=True)
+    config.APP_SETTINGS_FILE.write_text('{"theme": ["carbon"], "language": "de"}')
+    assert config.get_text("theme") is None and config.get_text("language") == "de"
+    assert config.get_text("missing") is None
+    config.SLOT_NAMES_FILE.write_text('{"0EB7:0020": {"\u00b2": "x", "1": "A", "2": 5}}')
+    assert config.load_slot_names("0EB7:0020") == {1: "A"}
+    config.AXES_FILE.write_text('{"Pedals:1": ["x"], "Pedals:2": "brake"}')
+    assert config.load_axis_roles() == {"Pedals:2": "brake"}
+
+
 def test_app_settings(home):
     assert config.get_setting("language") is None
     assert config.get_setting("layout", "full") == "full"

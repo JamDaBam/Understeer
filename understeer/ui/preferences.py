@@ -63,7 +63,7 @@ class PreferencesMixin:
         appearance.add(layout_row)
 
         languages = [None] + i18n.available_languages()
-        current = config.get_setting("language")
+        current = config.get_text("language")
         language_row = Adw.ComboRow(title=_("Language"))
         language_row.set_model(Gtk.StringList.new(
             [_("System language")] + [i18n.language_name(c) for c in languages[1:]]))
@@ -357,12 +357,12 @@ class PreferencesMixin:
             return
         # Show what was imported: language, look, layout, the tray icon,
         # presets, games, names.
-        i18n.set_language(config.get_setting("language"))
+        i18n.set_language(config.get_text("language"))
         theme.apply()
         app = self.get_application()
         if app is not None:
             app.update_tray()
-        layout = config.get_setting("layout")
+        layout = config.get_text("layout")
         self.layout = layout if layout in LAYOUTS else "full"
         self._apply_layout()
         self.axis_roles = config.load_axis_roles()

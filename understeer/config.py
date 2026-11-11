@@ -86,7 +86,8 @@ def migrate_config():
 
 
 def load_axis_roles():
-    return _read_json(AXES_FILE)
+    """{axis key: role} as the user assigned them."""
+    return {k: v for k, v in _read_json(AXES_FILE).items() if isinstance(v, str)}
 
 
 def save_axis_roles(roles):
@@ -99,7 +100,7 @@ def load_slot_names(model):
     if not isinstance(names, dict):
         return {}
     return {int(k): v.strip() for k, v in names.items()
-            if k.isdigit() and isinstance(v, str) and v.strip()}
+            if k.isdecimal() and isinstance(v, str) and v.strip()}
 
 
 def save_slot_name(model, slot, name):
@@ -134,6 +135,13 @@ def get_setting(key, default=None):
     """App setting such as "language" or "layout" from settings/app.json."""
     value = _read_json(APP_SETTINGS_FILE).get(key)
     return default if value is None else value
+
+
+def get_text(key):
+    """An app setting that is text, such as "theme"; None if it is unset
+    or something else, e.g. in a file changed by hand."""
+    value = get_setting(key)
+    return value if isinstance(value, str) else None
 
 
 def set_setting(key, value):

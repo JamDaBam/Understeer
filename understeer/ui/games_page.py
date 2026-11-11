@@ -402,7 +402,7 @@ class GamesPage:
     @staticmethod
     def _can_download(game):
         """Steam games always; others only through SteamGridDB."""
-        return bool(_steam_appid(game) or config.get_setting(cover_search.KEY_SETTING))
+        return bool(_steam_appid(game) or cover_search.saved_key())
 
     def search_covers(self, which=None):
         """Download missing covers and report the result.
@@ -439,7 +439,7 @@ class GamesPage:
             return
         self._downloading.add(game_id)
         appid = _steam_appid(game)
-        key = config.get_setting(cover_search.KEY_SETTING)
+        key = cover_search.saved_key()
 
         def work():
             """(where from, path) of the cover, or None"""
@@ -508,7 +508,7 @@ class GamesPage:
                      _("Found {found} of {n} covers").format(found=found_n, n=total)]
         if search["skipped"]:
             parts.append(_("Games not on Steam need a SteamGridDB API key."))
-        if missed and config.get_setting(cover_search.KEY_SETTING):
+        if missed and cover_search.saved_key():
             # Names that didn't match exactly: let the user pick them
             parts.append(_("Choose the others on SteamGridDB?") if found_n
                          else _("Choose on SteamGridDB?"))
@@ -595,7 +595,7 @@ class GamesPage:
         linked.set_visible(False)
         name_row.add_suffix(linked)
         state = {"timer": 0, "search": 0, "setting": False}
-        key = config.get_setting(cover_search.KEY_SETTING)
+        key = cover_search.saved_key()
         if not key:
             return box
 

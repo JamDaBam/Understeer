@@ -16,6 +16,12 @@ def test_parse_po_escapes():
     assert catalog == {'a\nb "c"': "x\ty\\z"}
 
 
+def test_parse_po_backslash_before_a_letter():
+    """A backslash followed by n is no line break: C:\\new in the file."""
+    catalog = i18n.parse_po('msgid "path"\nmsgstr "C:\\\\new\\\\table"\n')
+    assert catalog == {"path": "C:\\new\\table"}
+
+
 def test_parse_po_skips_untranslated():
     assert i18n.parse_po('msgid "Steering"\nmsgstr ""\n') == {}
 

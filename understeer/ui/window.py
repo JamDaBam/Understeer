@@ -52,7 +52,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         super().__init__(**kwargs)
         self.set_title("Understeer")
         self.set_default_size(1060, 780)
-        layout = config.get_setting("layout")
+        layout = config.get_text("layout")
         self.layout = layout if layout in LAYOUTS else "full"
 
         self.device_path = find_device_path()
@@ -521,7 +521,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         window is opened if Understeer started in the background. It only
         counts as seen once it was shown."""
         current = releases.plain_version(session_log.version())
-        last = config.get_setting("last_version")
+        last = config.get_text("last_version")
         used = getattr(self.get_application(), "used_before", True)
         if releases.should_announce(current, last, used):
             log.info("Updated from %s to %s", last or "an older version", current)
@@ -715,8 +715,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def _load_slot_names(self):
         self.model = model_id(self.device_path) if self.device_path else None
         self.slot_names = config.load_slot_names(self.model) if self.model else {}
-        self.slot_count = max(SLOTS, config.load_slot_count(self.model)
-                              if self.model else 0)
+        self.slot_count = min(MAX_SLOT, max(SLOTS, config.load_slot_count(
+            self.model) if self.model else 0))
         self._show_slot_name_rows()
         self._filling_slot_names = True
         try:
@@ -1341,5 +1341,5 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                         "available, " + ("writable" if os.access(self.rumble_path, os.W_OK)
                                          else "not writable")))
         details.append(("Language / layout", "{} / {}".format(
-            config.get_setting("language") or "system", self.layout)))
+            config.get_text("language") or "system", self.layout)))
         return details

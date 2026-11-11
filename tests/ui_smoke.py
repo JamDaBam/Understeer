@@ -6,6 +6,7 @@ goes to the network: SteamGridDB is replaced. Every uncaught exception,
 every ERROR log line and every failed check counts as a failure; the
 exit code is the number of failures.
 """
+import json
 import logging
 import os
 import pathlib
@@ -897,6 +898,50 @@ def steps(win):
             win._set_active_preset(*before)
     yield "no write access", no_write_access
     yield "window open again", lambda: check(win.get_visible(), "window shown")
+
+    def damaged_settings():
+        """Settings changed by hand or from a damaged export: the window
+        is still built, with what can be used of them."""
+        kept = {f: f.read_bytes() if f.exists() else None
+                for f in (config.APP_SETTINGS_FILE, config.AXES_FILE,
+                          config.SLOT_NAMES_FILE, config.SLOT_COUNTS_FILE)}
+        try:
+            data = config.load_json(config.APP_SETTINGS_FILE, {})
+            data.update({"theme": ["carbon"], "accent": {"a": 1}, "color_scheme": 5,
+                         "steamgriddb_key": 123, "last_version": 7, "layout": [],
+                         "language": {"de": 1}})
+            config.APP_SETTINGS_FILE.write_text(json.dumps(data))
+            config.AXES_FILE.write_text('{"FANATEC Pedals:1": ["x"]}')
+            config.SLOT_NAMES_FILE.write_text(
+                '{"0EB7:0020": {"\u00b2": "x", "1": "Race"}}')
+            config.SLOT_COUNTS_FILE.write_text('{"0EB7:0020": 1000000}')
+            theme.apply()
+            win.axis_roles = config.load_axis_roles()
+            win.relocalize()
+            win._announce_update()
+            check(win.slot_names == {1: "Race"} and win.slot_count == 15,
+                  f"usable slot names kept: {win.slot_names} {win.slot_count}")
+            check(win.games_page.key_row.get_text() == "", "a key that is no text is none")
+        finally:
+            for f, content in kept.items():
+                if content is None:
+                    f.unlink(missing_ok=True)
+                else:
+                    f.write_bytes(content)
+            theme.apply()
+            win.axis_roles = config.load_axis_roles()
+            win.relocalize()
+    yield "damaged settings", damaged_settings
+
+    def not_utf8():
+        bad = config.CONFIG_DIR / "Latin.json"
+        bad.write_bytes(b'{"name": "N\xfcrburgring", "values": {"FF": 50}}')
+        win._presets_changed()
+        win._delete_presets([bad])
+        check(not bad.exists(), "a preset file that is no UTF-8 can be deleted")
+        trash.empty()
+        win._trash_changed()
+    yield "delete a file that is no UTF-8", not_utf8
 
     def file_dialogs():
         """What happens once a file is chosen, for every file dialog."""

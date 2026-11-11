@@ -45,7 +45,8 @@ def put_preset(path):
     """Move the preset file at path into the bin; returns the item's id.
     Raises OSError."""
     path = pathlib.Path(path)
-    content = path.read_text(encoding="utf-8")
+    # A file that is no UTF-8 holds no preset, but must go all the same
+    content = path.read_text(encoding="utf-8", errors="replace")
     try:
         data = json.loads(content)
     except json.JSONDecodeError:
