@@ -30,6 +30,9 @@ WATCH_MS = 250       # how often to look for changes made on the wheel base
 PLUG_TICKS = 4       # ... and every 4th time (1 s) for a wheel base plugged in or out
 INPUT_SETTLE_MS = 2000  # udev may give access to a new input device a bit later
 GAMES_WATCH_MS = 2000   # how often to look for started games
+DIALOG_MIN_WIDTH = 720  # big dialogs: About, What's New, Preferences, ...
+DIALOG_MIN_HEIGHT = 680
+DIALOG_MAX_WIDTH = 1000
 TOAST_MS = 3000         # how long a message stays
 TOAST_BUTTON_MS = 5000  # ... with a button such as Undo, to have time to click
 
@@ -516,7 +519,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         notes = releases.notes(version, i18n.current_language())
         if notes:                   # "What's New" of the installed version
             props.update(release_notes=notes, release_notes_version=version)
-        about = Adw.AboutDialog(**props)
+        about = self.fit_dialog(Adw.AboutDialog(**props))
         about.add_acknowledgement_section(_("Started as a fork of"), [
             "SimPower (FanatecLinux) by BenryBoi "
             "https://github.com/BenryBoi/FanatecLinux"])
@@ -548,13 +551,21 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
         self._show_whats_new(versions)
         config.set_setting("last_version", versions[0])
 
-    def _dialog_size(self, min_width, min_height, max_width):
-        """A size for a big dialog: grows with the window, so it is easy
-        to read on a big screen. Libadwaita shrinks it in a small window."""
+    def _dialog_size(self):
+        """The size of every big dialog: the same for all, growing with the
+        window, so they are easy to read on a big screen. Libadwaita
+        shrinks them in a small window."""
         width = self.get_width() or self.get_default_size()[0]
         height = self.get_height() or self.get_default_size()[1]
-        return (max(min_width, min(max_width, int(width * 0.7))),
-                max(min_height, int(height * 0.85)))
+        return (max(DIALOG_MIN_WIDTH, min(DIALOG_MAX_WIDTH, int(width * 0.7))),
+                max(DIALOG_MIN_HEIGHT, int(height * 0.85)))
+
+    def fit_dialog(self, dialog):
+        """Give a big dialog the size of _dialog_size(), before showing it."""
+        width, height = self._dialog_size()
+        dialog.set_content_width(width)
+        dialog.set_content_height(height)
+        return dialog
 
     def _show_whats_new(self, versions=None):
         """The notes of versions (newest first) in a big dialog; by default
@@ -586,9 +597,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin,
                     line.append(Gtk.Label(label=text, xalign=0, wrap=True,
                                           hexpand=True))
                     column.append(line)
-        width, height = self._dialog_size(560, 560, 900)
-        dialog = Adw.Dialog(title=_("What's New"), content_width=width,
-                            content_height=height)
+        dialog = self.fit_dialog(Adw.Dialog(title=_("What's New")))
         clamp = Adw.Clamp(child=column, maximum_size=820)
         scroll = Gtk.ScrolledWindow(child=clamp,
                                     hscrollbar_policy=Gtk.PolicyType.NEVER)

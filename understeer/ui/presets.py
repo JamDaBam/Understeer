@@ -280,8 +280,7 @@ class PresetsMixin:
             return
         current = self._collect_values()
         differ = {a for a, v in values.items() if a in current and current[a] != v}
-        width, height = self._dialog_size(520, 600, 760)
-        dialog = Adw.Dialog(title=name, content_width=width, content_height=height)
+        dialog = self.fit_dialog(Adw.Dialog(title=name))
         apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
 
@@ -660,9 +659,7 @@ class PresetsMixin:
         click to select a word would maximize the window."""
         # Big: a pasted thread and the presets found in it should be easy
         # to read. Libadwaita makes it smaller in a small window.
-        width, height = self._dialog_size(720, 640, 1100)
-        dialog = Adw.Dialog(title=_("Paste Presets"), content_width=width,
-                            content_height=height)
+        dialog = self.fit_dialog(Adw.Dialog(title=_("Paste Presets")))
         cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda b: dialog.close())
         add = Gtk.Button(label=_("Add Preset"))

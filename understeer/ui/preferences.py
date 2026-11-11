@@ -41,7 +41,7 @@ class PreferencesMixin:
         prefs = getattr(self, "prefs", None)
         if prefs is None:
             self.prefs = prefs = Adw.PreferencesDialog(
-                content_width=720, content_height=680, search_enabled=False)
+                search_enabled=False)     # sized by fit_dialog when shown
             # A key typed just before closing counts without Enter.
             prefs.connect("closed", lambda d: self.games_page.key_entry.flush())
             self._prefs_pages = {}
@@ -255,6 +255,7 @@ class PreferencesMixin:
     def _show_preferences(self, page=None):
         if page:
             self.prefs.set_visible_page_name(page)
+        self.fit_dialog(self.prefs)
         self.prefs.present(self)
         self.prefs.set_focus(None)      # don't start typing in a slot name
 

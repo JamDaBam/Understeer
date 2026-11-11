@@ -37,6 +37,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="1.9.2" date="2026-11-11">
+            <description>
+                <ul>
+                    <li>All big windows, such as About, the preferences and reporting a problem, now have the same size and grow with the main window</li>
+                    <li xml:lang="de">Alle großen Fenster, etwa Über Understeer, die Einstellungen und Problem melden, haben jetzt dieselbe Größe und wachsen mit dem Hauptfenster mit</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.9.1" date="2026-11-11">
             <description>
                 <ul>

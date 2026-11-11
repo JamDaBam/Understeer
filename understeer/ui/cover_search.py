@@ -139,8 +139,7 @@ class CoverSearch:
         self._search_id = 0         # ignores answers of older searches
         self._closed = False
         self.key_row = None
-        self.dialog = Adw.Dialog(content_width=600, content_height=680,
-                                 title=_("Cover from SteamGridDB"))
+        self.dialog = Adw.Dialog(title=_("Cover from SteamGridDB"))
         self.dialog.connect("closed", self._on_close)
         self.nav = Adw.NavigationView()
         self.dialog.set_child(self.nav)
@@ -150,6 +149,7 @@ class CoverSearch:
             self.nav.replace([self._search_page()])
         else:
             self.nav.replace([self._key_page()])
+        games_page.window.fit_dialog(self.dialog)
         self.dialog.present(games_page.window)
 
     def _on_close(self, _dialog):
