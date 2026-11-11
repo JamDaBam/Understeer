@@ -260,22 +260,57 @@ def list_presets():
     return [(name, path) for name, path, _folder in _scan()]
 
 
-def list_presets_by_folder():
+def _kept_folders():
+    """Folders the user made, kept also while empty (setting
+    "preset_folders")."""
+    kept = get_setting("preset_folders", [])
+    if not isinstance(kept, list):
+        return []
+    names, seen = [], set()
+    for folder in map(clean_folder, kept):
+        if folder is not None and folder.casefold() not in seen:
+            seen.add(folder.casefold())
+            names.append(folder)
+    return names
+
+
+def _keep_folders(names):
+    set_setting("preset_folders", sorted(names, key=str.casefold) or None)
+
+
+def add_folder(folder, respell=True):
+    """Keep folder, also while no preset is in it. Returns its name as
+    stored: with respell, an existing folder's spelling. None: no name."""
+    folder = existing_folder(folder) if respell else clean_folder(folder)
+    if folder is not None:
+        kept = _kept_folders()
+        if folder.casefold() not in {k.casefold() for k in kept}:
+            _keep_folders(kept + [folder])
+    return folder
+
+
+def list_presets_by_folder(empty=False):
     """[(folder, [(name, path)])]: first the presets without a folder
-    (folder None, left out if there are none), then each folder by name."""
+    (folder None, left out if there are none), then each folder by name;
+    with empty, also the kept folders without presets."""
     groups, spelled = {}, {}        # "BeamNG" and "beamng" are one folder
     for name, path, folder in _scan():
         key = folder.casefold() if folder is not None else None
         spelled.setdefault(key, folder)
         groups.setdefault(key, []).append((name, path))
+    if empty:
+        for folder in _kept_folders():
+            spelled.setdefault(folder.casefold(), folder)
+            groups.setdefault(folder.casefold(), [])
     keys = sorted(k for k in groups if k is not None)
     return ([(None, groups[None])] if None in groups else []) + \
         [(spelled[k], groups[k]) for k in keys]
 
 
 def list_folders():
-    """The names of all folders that hold presets, sorted."""
-    return [f for f, _presets in list_presets_by_folder() if f is not None]
+    """The names of all folders, also empty ones, sorted."""
+    return [f for f, _presets in list_presets_by_folder(empty=True)
+            if f is not None]
 
 
 def existing_folder(folder, besides=None):
@@ -318,6 +353,8 @@ def write_preset(path, name, values, folder=KEEP):
     folder."""
     if folder is KEEP:
         folder = preset_folder(path)
+    elif clean_folder(folder):
+        add_folder(folder, respell=False)   # kept once the preset leaves
     data = {"name": name}
     folder = clean_folder(folder)
     if folder:
@@ -335,18 +372,61 @@ def set_preset_folder(path, folder):
 
 def rename_folder(old, new):
     """Give a folder a new name (also another spelling, e.g. "beamng" to
-    "BeamNG"), or merge it into another one
-    (new None: the presets leave the folder). Returns how many presets
-    moved; raises OSError."""
+    "BeamNG"), or merge it into another one (new None: the presets leave
+    the folder, which is gone then). Returns how many presets moved;
+    raises OSError."""
     old, new = clean_folder(old), existing_folder(new, besides=old)
+    if old is None:
+        return 0
+    kept = [k for k in _kept_folders() if k.casefold() != old.casefold()]
+    if new is not None and new.casefold() not in {k.casefold() for k in kept}:
+        kept.append(new)
+    _keep_folders(kept)
     moved = 0
     for name, path, folder in _scan():
-        if folder is not None and old is not None and \
-                folder.casefold() == old.casefold() and folder != new:
+        if folder is not None and folder.casefold() == old.casefold() \
+                and folder != new:
             _name, values = read_preset(path)
             write_preset(path, name, values, new)
             moved += 1
     return moved
+
+
+def delete_folder_with_presets(folder):
+    """Remove a folder and delete its presets. Returns ([(path, file
+    content)] of the deleted ones, to put back with restore_presets(),
+    and the OSError that stopped it or None)."""
+    folder = clean_folder(folder)
+    if folder is None:
+        return [], None
+    deleted = []
+    for _name, path, in_folder in _scan():
+        if in_folder is None or in_folder.casefold() != folder.casefold():
+            continue
+        try:
+            content = path.read_bytes()
+            path.unlink()
+        except OSError as e:
+            return deleted, e
+        deleted.append((path, content))
+    _keep_folders([k for k in _kept_folders()
+                   if k.casefold() != folder.casefold()])
+    return deleted, None
+
+
+def restore_presets(deleted, folder=None):
+    """Write presets deleted by delete_folder_with_presets() again and
+    keep their folder; raises OSError."""
+    if folder:
+        add_folder(folder, respell=False)
+    for path, content in deleted:
+        write_file(path, content)
+
+
+def delete_folder(folder):
+    """Remove a folder; its presets stay, without a folder. Returns how
+    many presets were in it; raises OSError."""
+    return rename_folder(folder, None)
 
 
 def rename_preset(path, new_name):

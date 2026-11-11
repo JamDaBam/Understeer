@@ -166,6 +166,7 @@ class Tray:
         self._revision = 1
         self._preset_keys = {}  # menu id -> key, of the menu last given out
         self._folder_ids = []   # submenus in it
+        self._id_of = {}        # ("preset", key) or ("folder", name): id
         self._ids = []          # registration ids to undo in stop()
         self._owner = self._watch = 0
         self.name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -297,6 +298,15 @@ class Tray:
         GLib.idle_add(lambda: self.on_activate(token) and False)
 
     # -- the menu ------------------------------------------------------------
+    def _stable_id(self, what):
+        """The menu id of a preset or folder: the same while Understeer
+        runs and never given to anything else. KDE keeps an item by its id
+        and changes only the properties sent, so an id that was a preset
+        and then a folder stayed a choice without a submenu."""
+        if what not in self._id_of:
+            self._id_of[what] = self.FIRST_PRESET + len(self._id_of)
+        return self._id_of[what]
+
     @staticmethod
     def _label(text):
         # "_" marks a mnemonic in dbusmenu labels, "__" is a "_"
@@ -321,13 +331,13 @@ class Tray:
         except Exception:                   # never break the whole menu
             log.exception("Presets for the tray menu not readable")
             entries = []
-        next_id = self.FIRST_PRESET
 
         def add_preset(parent, name, key, active):
-            nonlocal next_id
-            item_id, next_id = next_id, next_id + 1
+            item_id = self._stable_id(("preset", key))
             keys[item_id] = key
-            items[item_id] = {"label": self._label(name), **self._toggle(active)}
+            items[item_id] = {"label": self._label(name),
+                              "children-display": GLib.Variant("s", ""),
+                              **self._toggle(active)}
             children[parent].append(item_id)
 
         for entry in entries:
@@ -335,7 +345,7 @@ class Tray:
                 add_preset(0, *entry)
                 continue
             folder, presets = entry             # a folder: a submenu
-            folder_id, next_id = next_id, next_id + 1
+            folder_id = self._stable_id(("folder", folder.casefold()))
             children[0].append(folder_id)
             children[folder_id] = []
             for preset in presets:
@@ -344,7 +354,8 @@ class Tray:
             # of a submenu
             items[folder_id] = {
                 "label": self._label(folder),
-                "children-display": GLib.Variant("s", "submenu")}
+                "children-display": GLib.Variant("s", "submenu"),
+                "toggle-type": GLib.Variant("s", "")}
         if entries:
             items[4] = {"type": GLib.Variant("s", "separator")}
             children[0].append(4)
@@ -361,8 +372,8 @@ class Tray:
         def node(item_id, depth):
             kids = children.get(item_id, [])
             props = dict(items[item_id])
-            if item_id and not kids:
-                props.pop("children-display", None)
+            if item_id and not kids and "toggle-type" not in props:
+                props.pop("children-display", None)     # e.g. Open, Quit
             below = [] if depth == 0 else [
                 GLib.Variant("(ia{sv}av)", node(k, depth - 1)) for k in kids]
             return (item_id, props, below)

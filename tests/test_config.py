@@ -189,7 +189,8 @@ def test_write_preset_raises(home, monkeypatch):
 def test_presets_by_folder(home):
     config.write_preset(config.preset_path("Daily"), "Daily", {"FF": 50})
     config.write_preset(config.preset_path("Drift"), "Drift", {"FF": 55}, "BeamNG")
-    config.write_preset(config.preset_path("Climb"), "Climb", {"FF": 60}, "beamng ")
+    config.preset_path("Climb").write_text(json.dumps(        # by hand or older
+        {"name": "Climb", "folder": "beamng ", "values": {"FF": 60}}))
     config.write_preset(config.preset_path("Stage"), "Stage", {"FF": 70}, "Assetto")
     path = config.preset_path
     # "beamng" is the same folder as "BeamNG"; the spelling of the first
@@ -263,3 +264,62 @@ def test_odd_folder_in_file(home):
     (cfg / "a.json").write_text(json.dumps({"name": "A", "folder": ["x"], "values": {}}))
     (cfg / "b.json").write_text(json.dumps(["not", "a", "preset"]))
     assert [f for f, _g in config.list_presets_by_folder()] == [None]
+
+
+def test_empty_folders_are_kept(home):
+    drift = config.preset_path("Drift")
+    config.write_preset(drift, "Drift", {"FF": 55}, "BeamNG")
+    assert config.add_folder(" Rally ") == "Rally"
+    assert config.add_folder("beamng") == "BeamNG"
+    assert config.add_folder("") is None
+    assert config.list_folders() == ["BeamNG", "Rally"]
+    # Menus show folders with presets only, the presets page all
+    assert [f for f, _g in config.list_presets_by_folder()] == ["BeamNG"]
+    assert config.list_presets_by_folder(empty=True) == [
+        ("BeamNG", [("Drift", drift)]), ("Rally", [])]
+    config.set_preset_folder(drift, None)
+    assert config.list_folders() == ["BeamNG", "Rally"]     # emptied, kept
+    config.set_preset_folder(drift, "Rally")
+    assert config.rename_folder("Rally", "Stage") == 1
+    assert config.list_folders() == ["BeamNG", "Stage"]
+    assert config.rename_folder("Stage", "beamng") == 1     # merged
+    assert config.list_folders() == ["BeamNG"]
+    assert config.preset_folder(drift) == "BeamNG"
+    assert config.delete_folder("BeamNG") == 1
+    assert config.list_folders() == [] and config.preset_folder(drift) is None
+    assert config.read_preset(drift) == ("Drift", {"FF": 55})
+    assert config.get_setting("preset_folders") is None
+    config.set_setting("preset_folders", "nonsense")
+    assert config.list_folders() == []
+
+
+def test_delete_folder_with_presets(home):
+    drift, climb, daily = (config.preset_path(n) for n in ("Drift", "Climb", "Daily"))
+    config.write_preset(drift, "Drift", {"FF": 55}, "BeamNG")
+    config.write_preset(climb, "Climb", {"FF": 60}, "BeamNG")
+    config.write_preset(daily, "Daily", {"FF": 50})
+    before = {p: p.read_bytes() for p in (drift, climb)}
+    deleted, error = config.delete_folder_with_presets("beamng")
+    assert error is None and dict(deleted) == before
+    assert not drift.exists() and not climb.exists() and daily.exists()
+    assert config.list_folders() == []
+    config.restore_presets(deleted, "BeamNG")
+    assert {p: p.read_bytes() for p in (drift, climb)} == before
+    assert config.list_folders() == ["BeamNG"]
+    assert config.delete_folder_with_presets("") == ([], None)
+
+
+def test_delete_folder_with_presets_stops_on_error(home, monkeypatch):
+    for n in ("A", "B"):
+        config.write_preset(config.preset_path(n), n, {"FF": 50}, "X")
+    real = config.pathlib.Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        if self.name == "B.json":
+            raise PermissionError("read-only")
+        return real(self, *args, **kwargs)
+    monkeypatch.setattr(config.pathlib.Path, "unlink", unlink)
+    deleted, error = config.delete_folder_with_presets("X")
+    assert [p.name for p, _c in deleted] == ["A.json"]
+    assert isinstance(error, PermissionError)
+    assert config.list_folders() == ["X"]           # B is still in it

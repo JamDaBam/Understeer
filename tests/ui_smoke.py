@@ -476,17 +476,8 @@ def steps(win):
             check(names(win.folder_flows["BeamNG"]) == ["Drift F"], "tile in its folder")
             check("Climb F" in names(win.presets_flow) and "Drift F" not in
                   names(win.presets_flow), "the others outside")
-            # Move into the folder, typed in another spelling
-            win._ask_preset_folder(climb, "Climb F")
-            d = win.get_visible_dialog()
-            pick = [w for w in walk(d) if isinstance(w, Gtk.MenuButton)]
-            offered = [w.get_label() for w in walk(pick[0].get_popover())
-                       if isinstance(w, Gtk.Label)] if pick else []
-            check("BeamNG" in offered, f"folders suggested: {offered}")
-            entry = [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0]
-            entry.set_text("beamng")
-            d.emit("response", "move")
-            d.force_close()
+            # Dropped on a folder; one typed in another spelling is the same
+            win._drop_preset(climb, "beamng")
             check(config.preset_folder(climb) == "BeamNG", "moved, spelled as the folder")
             check(names(win.folder_flows["BeamNG"]) == ["Climb F", "Drift F"],
                   "both in the folder")
@@ -511,7 +502,82 @@ def steps(win):
             rows = {r.get_title(): r.get_text() for r in walk(d)
                     if isinstance(r, Adw.EntryRow)}
             check(rows == {"Name": "", "Folder (optional)": "BeamNG"}, f"save as: {rows}")
+            offered = [r for r in walk(d) if isinstance(r, Adw.ActionRow)]
+            check([r.get_title() for r in offered] == ["BeamNG"],
+                  f"folders suggested: {[r.get_title() for r in offered]}")
+            folder_row = [r for r in walk(d) if isinstance(r, Adw.EntryRow)][1]
+            folder_row.set_text("")
+            offered[0].emit("activated")
+            check(folder_row.get_text() == "BeamNG", "a click fills in the folder")
             d.force_close()
+            # A new folder, empty: on the page, not in the menus
+            win._ask_new_folder()
+            d = win.get_visible_dialog()
+            check(isinstance(d, Adw.Dialog) and d.get_title() == "New Folder",
+                  "new folder asked")
+            entry = [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0]
+            hint = [w for w in walk(d) if isinstance(w, Gtk.Label)
+                    and "error" in w.get_css_classes()][0]
+            check(not d.ok_button.get_sensitive() and not hint.get_opacity(),
+                  "no name yet: Create off, no red hint")
+            entry.set_text("x")
+            check(d.ok_button.get_sensitive(), "Create on with a name")
+            entry.set_text("  ")
+            check(not d.ok_button.get_sensitive() and hint.get_opacity() == 1
+                  and "error" in entry.get_css_classes(), "emptied: red hint")
+            d.force_close()
+            win._new_folder(" Rally ")
+            check(list(win.folder_flows) == ["BeamNG", "Rally"]
+                  and win.folder_flows["Rally"] is None, "empty folder shown")
+            check(not any(len(e) == 2 and e[0] == "Rally"
+                          for e in application._tray_presets()), "not in the tray")
+            win._drop_preset(drift, "Rally")
+            check(names(win.folder_flows["Rally"]) == ["Drift F"], "dropped in")
+            win._drop_preset(drift, None)
+            check("Drift F" in names(win.presets_flow) and win.folder_flows["Rally"] is None,
+                  "dropped out; the folder stays")
+            # A preset dropped on New Folder: asked for the name, then in it
+            win._ask_new_folder(drift)
+            d = win.get_visible_dialog()
+            body = [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)]
+            check("“Drift F” is put into it." in body, f"body: {body}")
+            [w for w in walk(d) if isinstance(w, Adw.EntryRow)][0].set_text("Stage")
+            d.ok_button.emit("clicked")
+            check(config.preset_folder(drift) == "Stage", "new folder with the preset")
+            win._ask_delete_folder("Stage", 1)
+            answer("keep")
+            check(config.preset_folder(drift) is None and "Stage" not in win.folder_flows,
+                  "folder deleted, preset kept")
+            # Deleted with its presets, then undone
+            config.write_preset(config.preset_path("Gone F"), "Gone F", {"FF": 30}, "Trash")
+            win._presets_changed()
+            win._set_active_preset(config.preset_path("Gone F"), {"FF": 30})
+            games_before = win.games_page.games
+            win.games_page.games = [dict(game="g", name="BeamNG.drive", auto=True,
+                                         preset="Gone F.json")]
+            win._confirm_delete_preset(config.preset_path("Gone F"), "Gone F")
+            d = win.get_visible_dialog()
+            check("Used by: BeamNG.drive" in d.get_body(), f"game named: {d.get_body()}")
+            d.force_close()
+            win._ask_delete_folder("Trash", 1)
+            d = win.get_visible_dialog()
+            check("Used by: BeamNG.drive" in d.get_body(), "game named for the folder")
+            win.games_page.games = games_before
+            check(d.get_response_label("all") == "Delete with Presets",
+                  "delete with presets offered")
+            answer("all")
+            check(not config.preset_path("Gone F").exists()
+                  and "Trash" not in win.folder_flows, "folder and preset deleted")
+            check(win.active_preset is None, "deleted preset no longer active")
+            win._on_toast_button(win._toast)       # Undo
+            check(config.preset_folder(config.preset_path("Gone F")) == "Trash",
+                  "undone: preset back in its folder")
+            config.preset_path("Gone F").unlink()
+            config.delete_folder("Trash")
+            win._presets_changed()
+            win._ask_delete_folder("Rally", 0)
+            check("Rally" not in win.folder_flows, "empty folder deleted without asking")
+            win._drop_preset(drift, "BeamNG")
             check(win._shared(drift)[2] == "BeamNG", "shared with its folder")
             shared = config.preset_path("Shared F")
             win._import_preset(sharing.preset_json("Shared F", {"FF": 40}, "beamng"))
@@ -521,6 +587,7 @@ def steps(win):
             answer("replace")
             check(config.preset_folder(shared) == "Mine", "replaced, stays in its folder")
             shared.unlink()
+            config.delete_folder("Mine")            # kept while empty
             win._presets_changed()
             win._rename_folder("BeamNG", "Beam")
             check(config.list_folders() == ["Beam"] and list(win.folder_flows) == ["Beam"],
@@ -533,6 +600,7 @@ def steps(win):
         finally:
             drift.unlink(missing_ok=True)
             climb.unlink(missing_ok=True)
+            config.set_setting("preset_folders", None)
             win._set_active_preset(gt3, config.read_preset(gt3)[1])
     yield "folders", folders
 
