@@ -335,7 +335,7 @@ def steps(win):
 
     def add_button(d):
         return next(w for w in walk(d) if isinstance(w, Gtk.Button)
-                    and w.get_label() == "Add Preset")
+                    and "suggested-action" in w.get_css_classes())
 
     def paste_dialog():
         d = win.get_visible_dialog()
@@ -380,6 +380,48 @@ def steps(win):
         config.preset_path(name).unlink()
         win._presets_changed()
     yield "clipboard stays private", private_kept
+
+    def paste_thread():
+        thread = ("Hi, my presets:\n" + sharing.preset_text("Thread A", {"FF": 11})
+                  + "\n> quoted: " + sharing.preset_json("Thread A", {"FF": 11})
+                  + "\nand " + sharing.preset_json("Test GT3", {"SHO": 5}))
+        win._ask_paste_preset(thread)
+        d = win.get_visible_dialog()
+        rows = [w for w in walk(d) if isinstance(w, Adw.ExpanderRow)]
+        check([r.get_title() for r in rows] == ["Thread A", "Test GT3"],
+              f"presets found in the thread: {[r.get_title() for r in rows]}")
+        check(add_button(d).get_label() == "Add (2)",
+              f"add label: {add_button(d).get_label()!r}")
+        boxes = [w for w in walk(d) if isinstance(w, Gtk.CheckButton)]
+        boxes[1].set_active(False)
+        check(add_button(d).get_label() == "Add (1)", "only the checked ones")
+        add_button(d).emit("clicked")
+        d.force_close()
+        _n, vals = config.read_preset(config.preset_path("Thread A"))
+        check(vals == {"FF": 11}, f"thread preset added: {vals}")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 40, "unchecked preset left out")
+        check(win.get_visible_dialog() is None, "nothing to ask")
+        config.preset_path("Thread A").unlink()
+        win._presets_changed()
+    yield "paste a thread", paste_thread
+
+    def one_after_another():
+        win._import_presets([sharing.Found("Test GT3", {"SHO": 5}, 1),
+                             sharing.Found("Test GT3", {"SHO": 6}, 2)])
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_response_label("cancel") == "Skip", "skip offered")
+        answer("cancel")
+        answer("keep")
+        _n, vals = config.read_preset(gt3)
+        check(vals.get("SHO") == 40, "skipped one left out")
+        third = config.preset_path("Test GT3 (3)")     # (2) is there already
+        _n, vals = config.read_preset(third)
+        check(vals == {"SHO": 6}, f"next one asked and kept: {vals}")
+        third.unlink()
+        win._presets_changed()
+    yield "names taken, one after another", one_after_another
 
     def pasted():
         _n, vals = config.read_preset(copy)

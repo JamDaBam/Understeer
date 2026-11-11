@@ -8,7 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import config, sharing
 from ..i18n import _
-from ..settings import SIM_DEFAULTS, changes
+from ..settings import SETTINGS, SIM_DEFAULTS, changes, format_value
 
 log = logging.getLogger("understeer.window")
 
@@ -501,7 +501,7 @@ class PresetsMixin:
 
     def _ask_import_preset(self):
         filters, presets = self._preset_filters()
-        dialog = Gtk.FileDialog(title=_("Import Preset"), filters=filters,
+        dialog = Gtk.FileDialog(title=_("Import Presets"), filters=filters,
                                 default_filter=presets)
 
         def chosen(d, result):
@@ -515,7 +515,7 @@ class PresetsMixin:
             source = pathlib.Path(source)
             try:
                 if source.stat().st_size > sharing.MAX_SIZE:
-                    raise sharing.Error(_("This is too long to be a preset."))
+                    raise sharing.Error(_("This is too long to hold presets."))
                 text = source.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 self._not_a_preset(_("The file holds no text."))
@@ -526,17 +526,26 @@ class PresetsMixin:
             except OSError as e:
                 self._error(_("Could not load preset"), str(e))
                 return
-            self._import_preset(text, source.stem)
+            try:
+                result = sharing.find_presets(text, source.stem)
+            except sharing.Error as e:
+                self._not_a_preset(str(e))
+                return
+            if len(result.presets) == 1 and not result.skipped:
+                self._import_presets(result.presets)
+            else:                           # choose which ones
+                self._ask_paste_preset(text, source.stem)
 
         dialog.open(self, None, chosen)
 
-    def _ask_paste_preset(self):
-        """A text field to paste a shared preset into. It shows what was
-        found; only the checked settings of it are added.
+    def _ask_paste_preset(self, text=None, fallback_name=""):
+        """A text field to paste shared presets into, e.g. a whole forum
+        thread. Below it, every preset found, with its values and a check
+        box; only the checked settings of the checked ones are added.
 
         Not an Adw.AlertDialog: all of that is a window handle, so a double
         click to select a word would maximize the window."""
-        dialog = Adw.Dialog(title=_("Paste Preset"), content_width=580)
+        dialog = Adw.Dialog(title=_("Paste Presets"), content_width=600)
         cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda b: dialog.close())
         add = Gtk.Button(label=_("Add Preset"))
@@ -547,75 +556,148 @@ class PresetsMixin:
         header.pack_end(add)
 
         intro = Gtk.Label(
-            label=_("Paste the text or JSON of a shared preset here. Understeer "
-                    "takes only the settings from it, nothing else."),
+            label=_("Paste shared presets here, as text or JSON, also a whole "
+                    "forum thread. Understeer finds every preset in it and "
+                    "takes only their settings, nothing else."),
             xalign=0, wrap=True)
         view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, monospace=True,
                             top_margin=8, bottom_margin=8, left_margin=8,
                             right_margin=8, accepts_tab=False)
-        scroll = Gtk.ScrolledWindow(child=view, min_content_height=220,
+        scroll = Gtk.ScrolledWindow(child=view, min_content_height=160,
                                     vexpand=True,
                                     hscrollbar_policy=Gtk.PolicyType.NEVER)
         scroll.add_css_class("card")
         scroll.set_overflow(Gtk.Overflow.HIDDEN)    # round corners
-        found = Gtk.Label(xalign=0, wrap=True)
+        status = Gtk.Label(xalign=0, wrap=True)
+        found_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        found_list.add_css_class("boxed-list")
+        found_scroll = Gtk.ScrolledWindow(
+            child=found_list, propagate_natural_height=True,
+            max_content_height=280, hscrollbar_policy=Gtk.PolicyType.NEVER,
+            visible=False)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=12, margin_bottom=18, margin_start=18,
                       margin_end=18)
-        for w in (intro, scroll, found):
+        for w in (intro, scroll, status, found_scroll):
             box.append(w)
         toolbar = Adw.ToolbarView(content=box)
         toolbar.add_top_bar(header)
         dialog.set_child(toolbar)
-        dialog.set_default_widget(add)
         buffer = view.get_buffer()
+        checks = []                 # [(sharing.Found, Gtk.CheckButton)]
+        timer = [0]
 
-        def text():
+        def pasted_text():
             return buffer.get_text(buffer.get_start_iter(),
                                    buffer.get_end_iter(), False)
 
-        def check(*_args):
-            pasted = text()
-            ok = False
+        def update_add(*_args):
+            n = sum(c.get_active() for _f, c in checks)
+            add.set_label(_("Add Preset") if len(checks) == 1
+                          else _("Add ({n})").format(n=n))
+            add.set_sensitive(n > 0)
+
+        def scan():
+            timer[0] = 0
+            found_list.remove_all()
+            checks.clear()
+            pasted = pasted_text()
             if not pasted.strip():
-                found.set_label("")
+                status.set_label("")
+                status.set_css_classes([])
             else:
                 try:
-                    name, values = sharing.parse(pasted)
-                    found.set_label(_("Found: “{name}”, settings: {n}").format(
-                        name=name, n=len(values)))
-                    ok = True
+                    result = sharing.find_presets(pasted, fallback_name)
                 except sharing.Error as e:
-                    found.set_label(str(e))
-            found.set_css_classes(["dim-label"] if ok or not pasted.strip()
-                                  else ["error"])
-            add.set_sensitive(ok)
+                    status.set_label(str(e))
+                    status.set_css_classes(["error"])
+                else:
+                    status.set_label(self._found_text(result))
+                    status.set_css_classes(["dim-label"])
+                    for found in result.presets:
+                        row, check = self._found_row(found, result.presets)
+                        check.connect("toggled", update_add)
+                        checks.append((found, check))
+                        found_list.append(row)
+            found_scroll.set_visible(bool(checks))
+            update_add()
+            return GLib.SOURCE_REMOVE
 
-        buffer.connect("changed", check)
-        check()
+        def changed(*_args):
+            if timer[0]:
+                GLib.source_remove(timer[0])
+                timer[0] = 0
+            if buffer.get_char_count() < 20000:
+                scan()                      # small: right away
+            else:
+                timer[0] = GLib.timeout_add(300, scan)
 
         def from_clipboard(clipboard, result):
             try:
                 pasted = clipboard.read_text_finish(result)
             except GLib.Error:
                 return
-            # Only a preset: other text on the clipboard stays private.
-            if pasted and not text():
+            # Only presets: other text on the clipboard stays private.
+            if pasted and not pasted_text():
                 try:
-                    sharing.parse(pasted)
+                    sharing.find_presets(pasted)
                 except sharing.Error:
                     return
                 buffer.set_text(pasted)
 
         def on_add(_button):
-            pasted = text()
+            if timer[0]:
+                GLib.source_remove(timer[0])
+                scan()
+            chosen = [f for f, c in checks if c.get_active()]
             dialog.close()
-            self._import_preset(pasted)
+            self._import_presets(chosen)
 
+        def closed(*_args):
+            if timer[0]:
+                GLib.source_remove(timer[0])
+                timer[0] = 0
+
+        buffer.connect("changed", changed)
         add.connect("clicked", on_add)
-        self.get_clipboard().read_text_async(None, from_clipboard)
+        dialog.connect("closed", closed)
+        if text:
+            buffer.set_text(text)
+        else:
+            scan()
+            self.get_clipboard().read_text_async(None, from_clipboard)
         dialog.present(self)
         view.grab_focus()
+
+    @staticmethod
+    def _found_text(result):
+        parts = [_("Presets found: {n}").format(n=len(result.presets))]
+        if result.skipped:
+            parts.append(_("skipped without known settings: {n}").format(
+                n=result.skipped))
+        if result.cut:
+            parts.append(_("only the first {max} are taken").format(
+                max=sharing.MAX_PRESETS))
+        return " · ".join(parts)
+
+    def _found_row(self, found, all_found):
+        """A row for a preset found: check box, name, its values to unfold."""
+        subtitle = _("Settings: {n}").format(n=len(found.values))
+        if sum(f.name == found.name for f in all_found) > 1:
+            subtitle = _("Version {n}").format(n=found.version) + " · " + subtitle
+        row = Adw.ExpanderRow(title=found.name, subtitle=subtitle)
+        row.set_use_markup(False)           # names come from others
+        check = Gtk.CheckButton(active=True, valign=Gtk.Align.CENTER,
+                                tooltip_text=_("Add this preset"))
+        row.add_prefix(check)
+        for setting in SETTINGS:
+            if setting["id"] in found.values:
+                item = Adw.ActionRow(title=_(setting["label"]))
+                item.add_suffix(Gtk.Label(
+                    label=format_value(setting, found.values[setting["id"]]),
+                    css_classes=["numeric"]))
+                row.add_row(item)
+        return row, check
 
     def _not_a_preset(self, reason):
         log.info("Not a preset: %s", reason)
@@ -624,16 +706,33 @@ class PresetsMixin:
         dialog.present(self)
 
     def _import_preset(self, text, fallback_name=""):
-        """Add a shared preset; asks first if one has the same name."""
+        """Add the presets in text; asks first for names already taken."""
         try:
-            name, values = sharing.parse(text, fallback_name)
+            result = sharing.find_presets(text, fallback_name)
         except sharing.Error as e:
             self._not_a_preset(str(e))
             return
-        values = {a: v for a, v in values.items() if a in self.rows}
+        self._import_presets(result.presets)
+
+    def _import_presets(self, found, added=None):
+        """Add presets found, one after another; for a name already taken,
+        ask whether to replace it or keep both."""
+        added = [] if added is None else added
+        if not found:
+            self._imported(added)
+            return
+        first, rest = found[0], found[1:]
+        name = first.name
+        values = {a: v for a, v in first.values.items() if a in self.rows}
         path = config.preset_path(name)
+
+        def add(path, name):
+            if self._write_imported(path, name, values):
+                added.append((path, name))
+
         if not path.exists():
-            self._add_imported(path, name, values)
+            add(path, name)
+            self._import_presets(rest, added)
             return
         try:
             _n, stored = self._read_preset(path)
@@ -655,7 +754,7 @@ class PresetsMixin:
             dialog.set_extra_child(self._changes_list(diff))
             if hasattr(dialog, "set_prefer_wide_layout"):     # Libadwaita 1.6
                 dialog.set_prefer_wide_layout(True)
-        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("cancel", _("Skip") if rest else _("Cancel"))
         dialog.add_response("keep", _("Keep Both"))
         dialog.add_response("replace", _("Replace"))
         dialog.set_response_appearance("replace",
@@ -665,28 +764,38 @@ class PresetsMixin:
 
         def on_response(d, response):
             if response == "replace":
-                self._add_imported(path, name, values)
+                add(path, name)
             elif response == "keep":
                 new = sharing.free_name(
                     name, lambda n: config.preset_path(n).exists())
-                self._add_imported(config.preset_path(new), new, values)
+                add(config.preset_path(new), new)
+            self._import_presets(rest, added)
 
         dialog.connect("response", on_response)
         dialog.present(self)
 
-    def _add_imported(self, path, name, values):
+    def _write_imported(self, path, name, values):
         try:
             config.write_preset(path, name, values)
         except OSError as e:
             self._error(_("Could not save preset"), str(e))
-            return
+            return False
         log.info("Preset %r imported as %s: %s", name, path.name,
                  " ".join(f"{a}={v}" for a, v in values.items()))
         if self.active_preset == path:
             self.active_values = dict(values)
+        return True
+
+    def _imported(self, added):
+        if not added:
+            return
         self._presets_changed()
-        self._notify(_("Preset “{name}” imported").format(name=name),
-                     _("Apply"), lambda: self._ask_apply_preset(path))
+        if len(added) == 1:
+            path, name = added[0]
+            self._notify(_("Preset “{name}” imported").format(name=name),
+                         _("Apply"), lambda: self._ask_apply_preset(path))
+        else:
+            self._notify(_("Presets imported: {n}").format(n=len(added)))
 
     def _ask_rename_preset(self, path, name):
         entry = Gtk.Entry(text=name, activates_default=True)
