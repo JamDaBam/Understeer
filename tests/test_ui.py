@@ -59,11 +59,16 @@ def test_app_runs_through(display, tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     env = {k: v for k, v in os.environ.items()
-           if k not in ("WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")}
+           if k not in ("WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS",
+                        "LANGUAGE", "LC_ALL", "LC_MESSAGES")}
     env.update({
         "DISPLAY": f":{display}", "GDK_BACKEND": "x11",
         "GSK_RENDERER": "cairo",        # no GPU needed
         "NO_AT_BRIDGE": "1",
+        "LANG": "C.UTF-8",              # the checks expect English text
+        # No desktop portals: on KDE they keep running after the test, one
+        # more of them after every run.
+        "ADW_DISABLE_PORTAL": "1", "GDK_DEBUG": "no-portals",
         "HOME": str(home),
         "XDG_CONFIG_HOME": str(home / ".config"),
         "XDG_DATA_HOME": str(home / ".local" / "share"),
@@ -74,9 +79,15 @@ def test_app_runs_through(display, tmp_path):
     command = [sys.executable, str(SMOKE), str(tmp_path)]
     if shutil.which("dbus-run-session"):    # a session bus for the tray icon
         command = ["dbus-run-session", "--", *command]
-    result = subprocess.run(command,
-                            env=env, cwd=ROOT, capture_output=True, text=True,
-                            timeout=150)
-    output = result.stdout + result.stderr
+    # Into files, not pipes: services the session bus starts (on KDE one
+    # waits a minute for a notification daemon) would keep a pipe open, and
+    # the test would wait for them long after the app has ended.
+    out_path, err_path = tmp_path / "stdout.txt", tmp_path / "stderr.txt"
+    with open(out_path, "w") as out, open(err_path, "w") as err:
+        result = subprocess.run(command, env=env, cwd=ROOT, stdout=out,
+                                stderr=err, stdin=subprocess.DEVNULL,
+                                timeout=150)
+    stdout = out_path.read_text(errors="replace")
+    output = stdout + err_path.read_text(errors="replace")
     assert result.returncode == 0, output
-    assert "failures: 0" in result.stdout, output
+    assert "failures: 0" in stdout, output
