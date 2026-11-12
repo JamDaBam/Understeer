@@ -20,7 +20,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 - **Plug and play:** Switch the wheelbase on or plug it in while Understeer is open, it is found by itself.
 - **Presets per game:** Give each game a preset on the *Games* page. While Understeer runs, it applies the preset as soon as the game starts, or once the wheelbase is switched on if that comes later. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture, also chosen from [SteamGridDB](https://www.steamgriddb.com) with your free personal API key.
 - **In the background:** Under *Preferences → Games*, Understeer can keep running when you close its window, with an icon in the system tray (KDE Plasma, Cinnamon, XFCE and others; GNOME with the AppIndicator extension), and start at login. Then the presets of your games are applied without opening it first, and a notification tells you whether that worked (can be switched off). Click the icon to open it. Its menu applies one of your presets without opening the window and quits Understeer, as does *Quit* in the main menu (Ctrl+Q).
-- **Your hardware:** *Preferences → Wheelbase* shows your wheelbase, the steering wheel on it and their firmware versions (needs hid-fanatecff from October 2026 for the steering wheel and firmware). Changing the steering wheel shows up right away.
+- **Your hardware:** *Preferences → Wheelbase* shows your wheelbase, the steering wheel on it and their firmware versions (the wheelbase firmware needs hid-fanatecff 0.2.3, the steering wheel and its firmware its current `master`, see [Prerequisites](#prerequisites)). Changing the steering wheel shows up right away.
 - **Your look:** Every setting is a tile with its value in large type, in two sizes (*Full* or *Compact*). Under *Preferences → General* you choose light, dark or system colours, one of four themes (Standard, Carbon, Midnight, Pit Lane), an accent colour and the corner radius (3 px by default).
 - **Translations:** Available in English and German, chosen automatically or under *Preferences → General*. More languages can be added easily (see below).
 
@@ -33,6 +33,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 ## Prerequisites
 
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
+
+Understeer needs hid-fanatecff 0.1 or newer; Standard/Advanced mode of the tuning menu needs 0.1.1 and the firmware version of the wheelbase 0.2.3. The steering wheel, its firmware and its LEDs need the current `master` of hid-fanatecff (October 2026 or newer); there is no numbered release with them yet. Understeer works with older versions too and leaves out what they don't offer.
 
 The AppImage uses Python 3 with PyGObject, GTK 4 and Libadwaita 1.5 or newer from your system, as found for example in Ubuntu 24.04, Fedora 40 and Debian 13.
 
@@ -106,6 +108,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 |---|---|
 | `settings.py` | The settings shown in the app (sysfs attribute, range, tab, description) |
 | `device.py` | Finding the wheelbase, reading and writing sysfs, permissions and udev rule |
+| `capabilities.py` | Which hardware functions the wheelbase, wheel and pedals offer (`python3 -m understeer.capabilities` shows them) |
 | `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
 | `config.py` | Presets and app settings in `~/.config/Understeer/` |
 | `sharing.py` | Sharing presets as a file or text, and finding presets in pasted text |

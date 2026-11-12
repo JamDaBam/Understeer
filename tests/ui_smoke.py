@@ -35,10 +35,16 @@ for k, v in {"fw_version": 1234, "rim_id": 0x0A, "fw_version_rim": 52}.items():
 if not (dev / "device").exists():
     (dev / "device").symlink_to(hid)
 
-from understeer import device, steamgriddb  # noqa: E402
+(hid / "display").write_text("")
+(hid / "display").chmod(0o220)          # write only, as the driver makes it
+
+from understeer import capabilities, device, steamgriddb  # noqa: E402
 
 device.SYSFS_GLOB = str(scratch / "sysfs" / "ftec_tuning" / "*")
 device.RUMBLE_GLOB = str(scratch / "sysfs" / "none" / "*" / "rumble")
+capabilities.HID_GLOB = str(scratch / "sysfs" / "none" / "*")
+capabilities.LEDS_GLOB = str(scratch / "sysfs" / "none" / "*")
+capabilities.WHEEL_GLOB = str(scratch / "sysfs" / "none" / "*")
 
 
 def fake_search(term, key):
@@ -158,6 +164,10 @@ def r_suffix(row):
 def steps(win):
     """Each step runs on its own main loop turn, so the UI can settle."""
     yield "start", lambda: check(win.device_path is not None, "fake wheelbase found")
+    yield "hardware functions", lambda: check(
+        win.capabilities.can_write(capabilities.DISPLAY)
+        and not win.capabilities.has(capabilities.ADVANCED_MODE),
+        "display found, no advanced_mode in the fake wheelbase")
 
     def live_write():
         win.rows["FF"].set(55, silent=False)
