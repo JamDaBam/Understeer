@@ -8,7 +8,7 @@ import os
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
-from .. import APP_ICON, APP_ID, config, games, releases, report
+from .. import APP_ICON, APP_ID, capabilities, config, games, releases, report
 from .. import log as session_log
 from ..device import (RIMS, can_write, describe_access, find_device_path,
                       find_rumble_path, install_udev_rule, join_group, model_id,
@@ -34,6 +34,7 @@ from .trash_dialog import TrashMixin
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheelbase
 PLUG_TICKS = 4       # ... and every 4th time (1 s) for a wheelbase plugged in or out
+CAPS_TICKS = 8       # ... and every 8th time (2 s) for the hardware functions
 INPUT_SETTLE_MS = 2000  # udev may give access to a new input device a bit later
 GAMES_WATCH_MS = 2000   # how often to look for started games
 DIALOG_MIN_WIDTH = 720  # big dialogs: About, What's New, Preferences, ...
@@ -59,6 +60,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self.wheel = {}          # see device.wheel_info()
+        self.capabilities = None  # see capabilities.detect()
         # Steering angle of the wheelbase: largest angle, value for Auto
         self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
         self._in_background = False     # window hidden, still watching games
@@ -682,6 +684,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             log.info("Rumble: %s", self.rumble_path or "not available")
         else:
             log.info("No wheelbase found")
+        self._check_capabilities()
         self.wheel = wheel_info(self.device_path) if self.device_path else {}
         if self.wheel.get("base_firmware") is not None or self.wheel.get("rim_id"):
             log.info("Wheel: %s", self._wheel_text())
@@ -1126,7 +1129,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         tuning menu moves the matching control. Values the app wrote itself
         are already in device_values, so they don't count as changes.
         """
-        if self._check_plugged() or not self.device_path:
+        if self._check_plugged():
+            return GLib.SOURCE_CONTINUE
+        self._caps_tick = (getattr(self, "_caps_tick", 0) + 1) % CAPS_TICKS
+        if not self._caps_tick:
+            self._check_capabilities()
+        if not self.device_path:
             return GLib.SOURCE_CONTINUE
         self._check_wheel()
         if self._live_timer:
@@ -1175,6 +1183,14 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             parts.append(f"wheel {RIMS.get(w['rim_id'], 'unknown')} "
                          f"(id {w['rim_id']}), firmware {w.get('rim_firmware')}")
         return "; ".join(parts)
+
+    def _check_capabilities(self):
+        """Find out again which hardware functions there are and log a
+        change, e.g. a wheel with other LEDs put on or pedals plugged in."""
+        caps = capabilities.detect()
+        if caps != self.capabilities:
+            log.info("Hardware functions: %s", capabilities.summary(caps))
+            self.capabilities = caps
 
     def _check_wheel(self):
         """Notice a steering wheel being put on or changed."""

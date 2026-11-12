@@ -87,8 +87,9 @@ def wheel_info(device_path):
     """What the driver tells about the wheelbase and the wheel on it:
     {"base": name or None, "base_firmware", "rim_id", "rim_firmware"}.
 
-    rim_id and the firmware versions come with hid-fanatecff from October
-    2026 on; with older drivers they are None. rim_id 0 means no wheel was
+    The wheelbase firmware comes with hid-fanatecff 0.2.3, rim_id and the
+    wheel's firmware with its master from October 2026 (no numbered release
+    yet); with older drivers they are None. rim_id 0 means no wheel was
     reported yet. The files belong to the HID device, the parent of the
     tuning folder.
     """
