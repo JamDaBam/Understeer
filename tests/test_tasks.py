@@ -7,6 +7,10 @@ from gi.repository import GLib  # noqa: E402
 
 from understeer.ui import tasks  # noqa: E402
 
+# PyGObject on Python 3.14 warns about asyncio internals when the test turns
+# the main loop by hand; that is not Understeer's code.
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning:gi.events")
+
 
 def run(work, expected=()):
     loop, got = GLib.MainLoop(), []
