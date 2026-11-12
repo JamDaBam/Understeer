@@ -1384,7 +1384,12 @@ def steps(win):
               "ClubSport Steering Wheel Formula V2 · Firmware 52",
               f"wheel row: {win.rim_row.get_subtitle()!r}"),
         check("Formula V2" in dict(win.report_details()).get("Wheel", ""),
-              "wheel in the report"))
+              "wheel in the report"),
+        check("display w" in dict(win.report_details()).get("Hardware functions", "")
+              and "advanced_mode -" in dict(win.report_details())["Hardware functions"],
+              "hardware functions in the report"),
+        check(dict(win.report_details()).get("Driver generation")
+              == "October 2026 or newer (rim_id)", "driver generation in the report"))
     yield "wheel changed", lambda: (hid / "rim_id").write_text("15\n")
     yield "wait for the wheel", lambda: None
     yield "new wheel shown", lambda: (
