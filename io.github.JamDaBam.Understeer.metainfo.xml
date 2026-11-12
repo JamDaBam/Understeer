@@ -49,6 +49,14 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.1.0" date="2026-11-12">
+            <description>
+                <ul>
+                    <li>Report a Problem also tells which functions your wheelbase, steering wheel and pedals offer (e.g. LEDs, display, pedal rumble) and whether hid-fanatecff is from before October 2026</li>
+                    <li xml:lang="de">„Problem melden“ gibt jetzt auch an, welche Funktionen deine Wheelbase, dein Lenkrad und deine Pedale bieten (z. B. LEDs, Display, Pedal-Rumble) und ob hid-fanatecff älter als Oktober 2026 ist</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.0.0" date="2026-11-11">
             <description>
                 <p>Understeer 2.0: presets and games work the same way, nothing you delete is gone at once, and the steering angle goes as far as your wheelbase does.</p>

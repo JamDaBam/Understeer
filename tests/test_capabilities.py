@@ -380,6 +380,23 @@ def test_summary_and_describe(sysfs):
     assert "base_rev_leds   rw      9" in text
 
 
+def test_summary_for_reports(sysfs):
+    """No paths, so a report shows nothing personal; counts for LED rows."""
+    hid, _tuning = sysfs.wheelbase()
+    sysfs.rim(BASE, 0x10, leds=9)
+    caps = detect()
+    line = summary(caps)
+    assert "rim_rev_leds rw (9)" in line and "display w," in line
+    assert "/" not in line
+    assert caps_mod.driver_text(caps) == "October 2026 or newer (rim_id)"
+
+
+def test_driver_text():
+    assert caps_mod.driver_text(caps_mod.Capabilities()) == "-"
+    assert caps_mod.driver_text(caps_mod.Capabilities(
+        wheelbase="x", old_driver=True)) == "before October 2026 (wheel_id)"
+
+
 def test_runs_as_a_module():
     """python3 -m understeer.capabilities works without a wheelbase."""
     import subprocess

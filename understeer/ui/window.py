@@ -1361,6 +1361,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         details.append(("Rumble", "not available" if not self.rumble_path else
                         "available, " + ("writable" if os.access(self.rumble_path, os.W_OK)
                                          else "not writable")))
+        caps = self.capabilities or capabilities.detect()
+        details += [("Hardware functions", capabilities.summary(caps)),
+                    ("Driver generation", capabilities.driver_text(caps))]
         details.append(("Language / layout", "{} / {}".format(
             config.get_text("language") or "system", self.layout)))
         return details

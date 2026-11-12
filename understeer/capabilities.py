@@ -281,9 +281,21 @@ def _access_text(f):
 
 
 def summary(caps):
-    """One line for the log, e.g. "advanced_mode rw, display w, ..."."""
-    return ", ".join(f"{name} {_access_text(caps.get(name))}"
-                     for name in FEATURES)
+    """One line for the log and problem reports, without paths, e.g.
+    "advanced_mode rw, display w, rim_rev_leds rw (9), ..." (r = readable,
+    w = writable, - = not available, a number for several files)."""
+    def one(name):
+        f = caps.get(name)
+        count = f" ({len(f.paths)})" if f and len(f.paths) > 1 else ""
+        return f"{name} {_access_text(f)}{count}"
+    return ", ".join(one(name) for name in FEATURES)
+
+
+def driver_text(caps):
+    """Which kind of hid-fanatecff the files show."""
+    if caps.old_driver:
+        return "before October 2026 (wheel_id)"
+    return "October 2026 or newer (rim_id)" if caps.wheelbase else "-"
 
 
 def describe(caps):
@@ -295,9 +307,7 @@ def describe(caps):
             f"id {caps.rim_id} (0x{caps.rim_id:02x}, "
             f"{device.RIMS.get(caps.rim_id, 'unknown')})" if caps.rim_id
             else "none") + (f", {caps.rim}" if caps.rim else ""),
-        "Driver:         " + ("before October 2026 (wheel_id)" if caps.old_driver
-                              else "October 2026 or newer (rim_id)" if caps.wheelbase
-                              else "-"),
+        f"Driver:         {driver_text(caps)}",
         f"Pedals:         {', '.join(caps.pedals) or 'none'}",
         "",
         "Function        Access  Files   (r = readable, w = writable, - = not available)",
