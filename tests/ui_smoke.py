@@ -66,6 +66,7 @@ from understeer.ui import cover_search, files, theme  # noqa: E402
 from understeer.ui.setting_tile import SettingTile  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
+from understeer import report as report_module  # noqa: E402
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 failures, steps_done = [], []
@@ -1893,6 +1894,44 @@ def steps(win):
               f"steering moved while measuring: {wheel['shown']}")
     yield "health check measured", health_measured
 
+    health_report = {}
+
+    def health_in_report():
+        d = health_report["d"] = ReportDialog(win, title="Brake", what="Drags")
+        parts = d._parts()
+        check(d.health_row.get_sensitive() and d.health_row.get_enable_expansion()
+              and parts["health"].startswith("Possible faults on 2 of 3 axes")
+              and "Brake (FANATEC Pedals, Z): (!) reached at most 93 %"
+              in parts["health"],
+              f"health check in the report: {parts['health']!r}")
+        check("### Health check" in report_module.report_text(**parts),
+              "and in the copied text")
+        d.health_row.set_enable_expansion(False)
+        check(d._parts()["health"] == "", "left out when switched off")
+    yield "health check in the report", health_in_report
+    yield "health report closed", lambda: health_report["d"].dialog.close()
+
+    def steering_hidden():
+        win._set_axis_hidden(wheel_axis.key, True)
+        win.axis_diagnostics.hidden_switch.set_active(True)
+    yield "steering hidden", steering_hidden
+
+    def steering_hidden_named():
+        diag = win.axis_diagnostics
+        wheel = diag.widgets[wheel_axis.key]
+        check(wheel["title"].get_label() == "Steering",
+              f"hidden steering keeps its name: {wheel['title'].get_label()!r}")
+        check(wheel["shown"] is None and not wheel["findings"].get_visible()
+              and not wheel["card"].has_css_class("health-warning"),
+              "hidden steering is out of the health check")
+        names = {k: w["title"].get_label() for k, w in diag.widgets.items()}
+        check(names[gas_axis.key] == "Throttle" and names[brake_axis.key] == "Brake"
+              and names[spare_axis.key] == "Axis RX",
+              f"names of the other tiles: {names}")
+        win._set_axis_hidden(wheel_axis.key, False)
+        diag.hidden_switch.set_active(False)
+    yield "steering hidden named", steering_hidden_named
+
     def health_left():
         diag = win.axis_diagnostics
         hc = diag.health
@@ -2189,6 +2228,10 @@ def steps(win):
     yield "report", open_report
     yield "report shown", lambda: (
         check(win.get_visible_dialog() is report["d"].dialog, "report is a dialog"),
+        check(not report["d"].health_row.get_sensitive()
+              and report["d"]._parts()["health"] == ""
+              and report["d"].health_row.get_subtitle().startswith("Not measured"),
+              "nothing measured: no health check, a hint"),
         report["d"]._copy("copied"), report["d"].dialog.close())
 
     def report_over_prefs():

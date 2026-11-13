@@ -55,8 +55,9 @@ def system_info(extra=()):
     return sanitize("\n".join(lines))
 
 
-def issue_url(title, what, system, log="", max_len=MAX_URL):
-    """Address of a new GitHub issue with the form filled in.
+def issue_url(title, what, system, log="", max_len=MAX_URL, health=""):
+    """Address of a new GitHub issue with the form filled in. health: the
+    findings of the health check (axis_health.report_text), if wanted.
 
     If it gets too long, the oldest log lines are left out first, then the
     end of the description.
@@ -64,6 +65,8 @@ def issue_url(title, what, system, log="", max_len=MAX_URL):
     def build(log_text, what_text):
         params = {"template": TEMPLATE, "title": title,
                   "what-happened": what_text, "system": system}
+        if health:
+            params["health"] = health
         if log_text:
             params["log"] = log_text
         return (f"{REPO_URL}/issues/new?"
@@ -80,9 +83,11 @@ def issue_url(title, what, system, log="", max_len=MAX_URL):
     return url
 
 
-def report_text(title, what, system, log=""):
+def report_text(title, what, system, log="", health=""):
     """The same report as Markdown, to paste anywhere."""
     parts = [f"## {title}" if title else "", what, "### System", f"```\n{system}\n```"]
+    if health:
+        parts += ["### Health check", f"```\n{health}\n```"]
     if log:
         parts += ["### Log", f"```\n{log}\n```"]
     return "\n\n".join(p for p in parts if p)

@@ -156,6 +156,7 @@ def test_checked_axes_steering_and_axes_with_a_role():
     hidden = dict(roles, **{brake.key: "hidden"})
     assert h.checked_axes(monitor, hidden) == [(wheel, True), (gas, False)]
     assert h.checked_axes(monitor, {}) == [(wheel, True)]
+    assert h.checked_axes(monitor, {wheel.key: "hidden"}) == []
 
 
 def test_no_axes():
@@ -176,3 +177,35 @@ def test_rest_measurement_leaves_out_gone_and_new_axes():
 def test_rest_measurement_without_samples():
     gas = Axis("FANATEC Pedals", 1, 0, 1000, 0)
     assert h.RestMeasurement([gas]).result([gas]) == {}
+
+
+def test_report_text_only_when_measured():
+    wheel = Axis("FANATEC Wheel", 0, 0, 65535, 32767)
+    gas = Axis("FANATEC Pedals", 1, 0, 1000, 1000)      # rests at the maximum
+    brake = Axis("FANATEC Pedals", 2, 0, 1000, 0)
+    monitor = monitor_with(wheel, gas, brake)
+    roles = {gas.key: "throttle", brake.key: "brake"}
+    assert h.report_text(h.check(monitor, roles, {}), roles) == ""
+    assert h.report_text({}, roles) == ""
+    gas.update(0)
+    brake.update(930)
+    rests = {brake.key: measured(brake, [40, 41])}
+    text = h.report_text(h.check(monitor, roles, rests), roles)
+    assert text.splitlines() == [
+        "Possible faults on 1 of 3 axes",
+        "Steering (FANATEC Wheel, X): not turned to both ends yet · rest not "
+        "measured · range 0…65535, seen 32767…32767",
+        "Throttle (FANATEC Pedals, Y): full travel · rest not measured · "
+        "range 0…1000, seen 0…1000",
+        "Brake (FANATEC Pedals, Z): (!) reached at most 93 % · (!) at 4.1 % "
+        "when released · still at rest · range 0…1000, seen 0…930",
+    ]
+
+
+def test_report_text_without_faults():
+    gas = Axis("FANATEC Pedals", 1, 0, 1000, 0)
+    gas.update(1000)
+    roles = {gas.key: "throttle"}
+    monitor = monitor_with(gas)
+    text = h.report_text(h.check(monitor, roles, {}), roles)
+    assert text.splitlines()[0] == "No faults found (not finished)"

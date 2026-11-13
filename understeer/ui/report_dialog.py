@@ -27,6 +27,8 @@ class ReportDialog:
         self.window = window
         self.system = report.system_info(window.report_details())
         self.log = report.log_excerpt()
+        diagnostics = window.axis_diagnostics
+        self.health = diagnostics.health.report() if diagnostics else ""
 
         # As big as the other big dialogs (window.fit_dialog); the content
         # scrolls, the buttons sit in a bar below and stay in view.
@@ -79,6 +81,17 @@ class ReportDialog:
                                                 "access rights"))
         system_row.add_row(self._text_row(self.system))
         sent.add(system_row)
+
+        self.health_row = Adw.ExpanderRow(
+            title=_("Health Check"),
+            subtitle=_("Pedals and steering, as measured in this session")
+            if self.health else
+            _("Not measured. For a problem with the pedals or the steering, "
+              "go through Diagnostics → Axes first."),
+            show_enable_switch=True, enable_expansion=bool(self.health))
+        self.health_row.set_sensitive(bool(self.health))
+        self.health_row.add_row(self._text_row(self.health or "—"))
+        sent.add(self.health_row)
 
         self.log_row = Adw.ExpanderRow(
             title=_("Log Excerpt"),
@@ -135,16 +148,19 @@ class ReportDialog:
         buffer = self.what.get_buffer()
         what = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(),
                                False).strip()
-        log_text = self.log if self.log_row.get_enable_expansion() else ""
-        return self.title_row.get_text().strip(), what, self.system, log_text
+        return {"title": self.title_row.get_text().strip(), "what": what,
+                "system": self.system,
+                "log": self.log if self.log_row.get_enable_expansion() else "",
+                "health": self.health
+                if self.health_row.get_enable_expansion() else ""}
 
     def _copy(self, message):
         Gdk.Display.get_default().get_clipboard().set(
-            report.report_text(*self._parts()))
+            report.report_text(**self._parts()))
         self.toasts.add_toast(Adw.Toast(title=message, timeout=3))
 
     def _open(self):
-        url = report.issue_url(*self._parts())
+        url = report.issue_url(**self._parts())
         log.info("Opening a GitHub issue (%d characters)", len(url))
         # Also on the clipboard, in case the browser cuts the address.
         self._copy(_("GitHub opened in the browser. The report is also on "

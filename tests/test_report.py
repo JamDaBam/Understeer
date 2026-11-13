@@ -58,7 +58,16 @@ def test_issue_url_shortens_a_huge_description():
 def test_template_has_the_fields_the_url_fills():
     template = (ROOT / ".github" / "ISSUE_TEMPLATE" / report.TEMPLATE).read_text()
     ids = set(re.findall(r"^\s+id:\s*(\S+)", template, re.M))
-    assert ids == {"what-happened", "system", "log"}
+    assert ids == {"what-happened", "system", "health", "log"}
+
+
+def test_health_check_in_the_report():
+    url = report.issue_url("T", "what", "sys", health="Brake: (!) at 4.0 %")
+    assert "health=Brake%3A%20%28%21%29%20at%204.0%20%25" in url
+    assert "health=" not in report.issue_url("T", "what", "sys")
+    text = report.report_text("T", "what", "sys", health="Brake: ok")
+    assert "### Health check\n\n```\nBrake: ok\n```" in text
+    assert "Health check" not in report.report_text("T", "what", "sys")
 
 
 def test_report_text():

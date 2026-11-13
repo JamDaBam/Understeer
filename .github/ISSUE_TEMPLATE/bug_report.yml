@@ -24,6 +24,12 @@ body:
     validations:
       required: true
   - type: textarea
+    id: health
+    attributes:
+      label: Health check
+      description: Pedals and steering as Understeer measured them (Diagnostics → Axes), if it was run. Optional.
+      render: text
+  - type: textarea
     id: log
     attributes:
       label: Log excerpt

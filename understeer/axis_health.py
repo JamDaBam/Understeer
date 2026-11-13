@@ -19,7 +19,7 @@ feet off (RestMeasurement). Nothing is calibrated or changed.
 """
 from dataclasses import dataclass
 
-from .inputs import FULL_RANGE_TOLERANCE
+from .inputs import AXIS_ROLES, FULL_RANGE_TOLERANCE
 
 OK = "ok"
 PENDING = "pending"     # still to do: press, turn, measure
@@ -131,7 +131,8 @@ def checked_axes(monitor, roles):
     are not checked: wheels and pedals report axes nothing is connected to."""
     steering = monitor.steering_axis()
     axes = [a for a in monitor.axes.values() if a.hi > a.lo and (
-        a is steering or roles.get(a.key) in PEDAL_ROLES)]
+        roles.get(a.key) in PEDAL_ROLES
+        or (a is steering and roles.get(a.key) != "hidden"))]
     axes.sort(key=lambda a: (a is not steering, monitor.devices.index(a.device)
                              if a.device in monitor.devices else 99, a.code))
     return [(a, a is steering) for a in axes]
@@ -172,3 +173,44 @@ class RestMeasurement:
         return {key: Rest(seen[0], seen[1], seen[2] / seen[3])
                 for key, seen in self._seen.items()
                 if seen and key in present}
+
+
+# -- for problem reports (English, like the system details) -----------------
+def _report_phrase(f):
+    v = f.value
+    text = {
+        FULL_TRAVEL: "full travel",
+        SHORT_TRAVEL: f"reached at most {v * 100:.0f} %" if v is not None else "",
+        NOT_PRESSED: "not pressed fully yet",
+        REST_OK: "back at 0 % when released",
+        REST_OFFSET: f"at {v * 100:.1f} % when released" if v is not None else "",
+        QUIET: "still at rest",
+        NOISY: f"jitters by {v * 100:.1f} % at rest" if v is not None else "",
+        REST_PENDING: "rest not measured",
+        BOTH_ENDS: "turned to both ends",
+        NOT_TURNED: "not turned to both ends yet",
+        MOVED: f"moved by {v * 100:.1f} % while let go" if v is not None else "",
+    }[f.kind]
+    return ("(!) " if f.level == WARNING else "") + text
+
+
+def report_text(results, roles):
+    """The findings for a problem report, or "" if nothing was measured in
+    this session (every finding still pending)."""
+    if not results or all(f.level == PENDING for _a, _s, found in results.values()
+                          for f in found):
+        return ""
+    names = dict(AXIS_ROLES)            # the English role names
+    levels = [worst(found) for _a, _s, found in results.values()]
+    warnings = levels.count(WARNING)
+    lines = [f"Possible faults on {warnings} of {len(levels)} axes" if warnings
+             else "No faults found"
+             + (" (not finished)" if PENDING in levels else "")]
+    for axis, steering, found in results.values():
+        name = "Steering" if steering else names.get(roles.get(axis.key), "Axis")
+        lines.append(
+            f"{name} ({axis.device}, {axis.name}): "
+            + " · ".join(_report_phrase(f) for f in found)
+            + f" · range {axis.lo}…{axis.hi}, seen "
+              f"{axis.observed_min}…{axis.observed_max}")
+    return "\n".join(lines)

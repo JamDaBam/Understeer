@@ -154,8 +154,8 @@ class AxisDiagnostics:
                   "Paddles tab. Give an axis a role there to check it, or "
                   "set it to “Not assigned” to leave it out."))
             grid = layout.tile_grid(min_per_line=1, max_per_line=4)
-            for axis, steering in checked:
-                grid.append(self._card(axis, steering))
+            for axis, _steering in checked:
+                grid.append(self._card(axis))
             self.column.append(grid)
         in_check = {a.key for a, _s in checked}
         for device in inputs.devices:
@@ -172,9 +172,11 @@ class AxisDiagnostics:
                 self.column.append(grid)
         self.update()
 
-    def _card(self, axis, steering=False):
+    def _card(self, axis):
         """A small tile: the name (a tick when the full range was seen),
-        the value as a bar, three lines of numbers and the status."""
+        the value as a bar, three lines of numbers and the status. The
+        steering is called so wherever it is, also while hidden."""
+        steering = axis is self.window.inputs.steering_axis()
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
                        css_classes=["card", "tile", "diag-tile"])
         head = Gtk.Box(spacing=8)
@@ -238,7 +240,7 @@ class AxisDiagnostics:
         card.append(w["status"])
         w["findings"] = finding_box()
         card.append(w["findings"])
-        w["card"], w["shown"] = card, None
+        w["card"], w["shown"], w["title"] = card, None, title
         self.widgets[axis.key] = w
         return card
 

@@ -49,6 +49,30 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.3.0" date="2026-11-13">
+            <description>
+                <ul>
+                    <li>New Diagnostics view next to Tuning, Presets and Games, with the tabs Axes, Buttons and LEDs. The main menu is tidier again</li>
+                    <li xml:lang="de">Neue Ansicht „Diagnose“ neben Tuning, Presets und Spiele, mit den Reitern Achsen, Tasten und LEDs. Das Hauptmenü ist wieder aufgeräumter</li>
+                    <li>Axes: every axis of the wheel and the pedals with its raw and normalized value, the range the device reports, the range seen since the last reset, flat, fuzz and resolution</li>
+                    <li xml:lang="de">Achsen: jede Achse von Lenkrad und Pedalen mit Roh- und normiertem Wert, dem Bereich, den das Gerät meldet, dem seit dem letzten Zurücksetzen beobachteten Bereich, Flat, Fuzz und Auflösung</li>
+                    <li>Health check on the Axes tab for the steering and the pedals with a role: a tile turns green once the axis was moved through its range, and orange for a possible fault – a pedal that never reaches full travel, doesn't come back to 0 % or jitters at rest, or a wheel that moves while it should be let go</li>
+                    <li xml:lang="de">Gesundheitscheck im Reiter Achsen für die Lenkung und die Pedale mit Rolle: Eine Kachel wird grün, sobald die Achse ihren ganzen Bereich durchlaufen hat, und orange bei einem möglichen Fehler – ein Pedal, das nie den vollen Weg erreicht, nicht auf 0 % zurückkommt oder in Ruhe schwankt, oder ein Lenkrad, das sich bewegt, obwohl es losgelassen sein soll</li>
+                    <li>Report a Problem adds the results of the health check, if it was run, so a report shows whether the pedals and the steering measure cleanly. It can be switched off there</li>
+                    <li xml:lang="de">„Problem melden“ fügt die Ergebnisse des Gesundheitschecks hinzu, wenn er durchgeführt wurde, damit ein Bericht zeigt, ob Pedale und Lenkung sauber messen. Dort lässt es sich abschalten</li>
+                    <li>Buttons: every button as a numbered cell, lit while held and green once pressed, with its name, code and the number games see (SDL)</li>
+                    <li xml:lang="de">Tasten: jede Taste als nummerierte Zelle, leuchtend solange gedrückt und grün, sobald sie einmal gedrückt wurde, mit Name, Code und der Nummer, die Spiele sehen (SDL)</li>
+                    <li>LEDs: switch the rev and flag LEDs one by one, show the colours of RGB LEDs and run a short test that can be stopped at any time. When you leave the tab, the LEDs are set back as they were</li>
+                    <li xml:lang="de">LEDs: Drehzahl- und Flaggen-LEDs einzeln schalten, die Farben von RGB-LEDs zeigen und einen kurzen Test starten, der sich jederzeit anhalten lässt. Beim Verlassen des Reiters werden die LEDs wieder so gesetzt, wie sie waren</li>
+                    <li>Preferences → Wheelbase shows the device details: name, USB vendor and product ID and the kernel driver, with a button to copy them for a GitHub issue. Problem reports include them too, and name the build of hid-fanatecff, which tells drivers built from git apart</li>
+                    <li xml:lang="de">„Einstellungen → Wheelbase“ zeigt die Gerätedetails: Name, USB-Hersteller- und -Produkt-ID und den Kernel-Treiber, mit einem Button, um sie für ein GitHub-Issue zu kopieren. Problemberichte enthalten sie ebenfalls und nennen den Build von hid-fanatecff, an dem sich aus Git gebaute Treiber unterscheiden lassen</li>
+                    <li>Pedal axes are hidden with an eye button instead of a role, and keep their role while hidden</li>
+                    <li xml:lang="de">Pedalachsen werden mit einem Augen-Button ausgeblendet statt über eine Rolle und behalten ihre Rolle, solange sie ausgeblendet sind</li>
+                    <li>Fixed: a click anywhere on a row with a switch turned the setting on or off; now only the switch does</li>
+                    <li xml:lang="de">Behoben: Ein Klick irgendwo in eine Zeile mit Schalter hat die Einstellung umgeschaltet; jetzt nur noch der Schalter selbst</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.2.0" date="2026-11-13">
             <description>
                 <ul>
