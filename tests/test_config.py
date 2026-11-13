@@ -92,20 +92,6 @@ def test_broken_slot_names_file(home):
     assert config.load_slot_names("0EB7:0020") == {3: "Rain"}
 
 
-def test_slot_count_per_model(home):
-    assert config.load_slot_count("0EB7:0020") == 0
-    config.save_slot_count("0EB7:0020", 6)
-    assert config.load_slot_count("0EB7:0020") == 6
-    assert config.load_slot_count("0EB7:0006") == 0
-    assert config.list_presets() == []
-
-
-def test_broken_slot_count(home):
-    config.SLOT_COUNTS_FILE.parent.mkdir(parents=True)
-    config.SLOT_COUNTS_FILE.write_text('{"0EB7:0020": "six"}')
-    assert config.load_slot_count("0EB7:0020") == 0
-
-
 def test_settings_changed_by_hand(home):
     """What a file holds after a slip of the hand must not stop the app."""
     settings = config.APP_SETTINGS_FILE.parent

@@ -97,6 +97,20 @@ class PreferencesMixin:
         self._show_slot_name_rows()
         wheel.add(self.slot_names_group)
 
+        # The Standard menu has its own two setups, named on their own
+        self.standard_names_group = Adw.PreferencesGroup(
+            title=_("Slot Names in the Standard Menu"), visible=False,
+            description=_("The Standard tuning menu has two setups of its own, "
+                          "e.g. “A SET” and “C SET”."))
+        self.standard_name_rows = {}
+        for n, title in ((0, _("Auto")), (1, _("Custom"))):
+            entry = Adw.EntryRow(title=title)
+            entry.connect("changed", lambda e, n=n: self._on_slot_name_changed(
+                n, e.get_text(), standard=True))
+            self.standard_name_rows[n] = entry
+            self.standard_names_group.add(entry)
+        wheel.add(self.standard_names_group)
+
         system = Adw.PreferencesGroup(title=_("System"))
         # Writing the settings and reading the live input
         self.perm_row = Adw.ActionRow(title=_("Permissions"), subtitle="")

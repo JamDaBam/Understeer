@@ -170,6 +170,18 @@ def read_int(path):
         return None
 
 
+STANDARD_SLOTS = (0, 1)     # Auto and Custom (A SET, C SET on a CSL DD)
+
+
+def slots_in_menu(advanced, count):
+    """The slots the tuning menu offers: in Standard mode (advanced False)
+    Auto and Custom, which the driver reports as auto and 1; otherwise
+    slots 1 to count. 0 stands for Auto."""
+    if advanced is False:
+        return list(STANDARD_SLOTS)
+    return list(range(1, count + 1))
+
+
 def read_slot(path):
     """The tuning slot the wheelbase is on: its number, 0 for its Auto
     setup (the driver writes "auto" then), None if path (the SLOT file)
@@ -292,17 +304,23 @@ class TuningMode:
         return self.CHANGED
 
 
+def _value_text(value):
+    """What is written for value: a whole number, or "auto" for SLOT."""
+    return "auto" if value == "auto" else str(int(value))
+
+
 def write_values(writes):
-    """Write {path: int}. Paths without permission go through one pkexec call.
+    """Write {path: int or "auto"}. Paths without permission go through one
+    pkexec call.
 
     Returns the list of paths that could not be written.
     """
     denied, failed, written = {}, [], []
     for path, value in writes.items():
-        name = f"{os.path.basename(path)}={int(value)}"
+        name = f"{os.path.basename(path)}={_value_text(value)}"
         try:
             with open(path, "w") as f:
-                f.write(str(int(value)))
+                f.write(_value_text(value))
             written.append(name)
         except PermissionError:
             denied[path] = value
@@ -315,9 +333,10 @@ def write_values(writes):
     if written:
         log.debug("Wrote %s", ", ".join(written))
     if denied:
-        names = ", ".join(f"{os.path.basename(p)}={int(v)}" for p, v in denied.items())
+        names = ", ".join(f"{os.path.basename(p)}={_value_text(v)}"
+                          for p, v in denied.items())
         log.info("No write access, asking for a password to write %s", names)
-        script = "; ".join(f"echo {int(v)} > {shlex.quote(p)}"
+        script = "; ".join(f"echo {_value_text(v)} > {shlex.quote(p)}"
                            for p, v in denied.items())
         if not run_privileged(script):
             log.warning("Could not write %s with a password either", names)

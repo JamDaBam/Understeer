@@ -441,3 +441,22 @@ def test_attach_again_forgets_a_switch(mode_file, tmp_path, monkeypatch):
     mode.attach(str(other))
     assert not mode.switching and mode.advanced is False
     assert mode.poll() is None
+
+
+def test_slots_in_menu():
+    """Standard has Auto and Custom (auto and 1), Advanced the slots."""
+    assert device.slots_in_menu(False, 5) == [0, 1]
+    assert device.slots_in_menu(True, 5) == [1, 2, 3, 4, 5]
+    assert device.slots_in_menu(None, 6) == [1, 2, 3, 4, 5, 6]   # no mode file
+
+
+def test_write_auto(sysfs, privileged):
+    d = sysfs("0003:0EB7:0020.0005", SLOT=2)
+    assert device.write_values({str(d / "SLOT"): "auto"}) == []
+    assert (d / "SLOT").read_text() == "auto"
+
+
+def test_write_auto_with_password(sysfs, privileged, no_write_access):
+    d = sysfs("0003:0EB7:0020.0005", SLOT=2)
+    assert device.write_values({str(d / "SLOT"): "auto"}) == []
+    assert "echo auto > " in privileged.call_args[0][0]
