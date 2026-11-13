@@ -39,6 +39,10 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 
 ![Health check on the Axes tab of Diagnostics: steering and throttle ready, the brake doesn't reach full travel](docs/diagnostics.png)
 
+In a maximized window, e.g. on a Full HD or 4K screen, the pages use the width: the settings get wider tiles with longer sliders, and the Presets and Games pages show more tiles per row.
+
+![Tuning in a maximized Full HD window with wider tiles](docs/wide.png)
+
 ## Prerequisites
 
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
@@ -145,7 +149,7 @@ Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 
 Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt install python3-pytest`). They use a fake sysfs and temporary folders, so no wheelbase or password is needed. One test runs the whole app on an invisible screen; it needs Xvfb (`sudo apt install xvfb`) and is skipped without it.
 
-The screenshots in `docs/` are made the same way: `python3 tools/screenshots.py` runs Understeer with a fake wheelbase and example presets and games in a home folder of its own and saves them. Your configuration isn't touched; only the covers of the example games are copied from your Steam cache, if it has them.
+The screenshots in `docs/` are made the same way: `python3 tools/screenshots.py` runs Understeer with a fake wheelbase and example presets and games in a home folder of its own and saves them, in a 1040 px window and one in a maximized Full HD window. Your configuration isn't touched; only the covers of the example games are copied from your Steam cache, if it has them.
 GitHub runs them on every push and pull request, and a release is only built when they pass.
 
 To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.

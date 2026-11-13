@@ -421,7 +421,7 @@ msgstr "Gesundheitscheck"
 
 #: understeer/ui/axis_diagnostics.py:153
 msgid "The steering and the axes with a role on the Pedals & Paddles tab. Give an axis a role there to check it, or set it to “Not assigned” to leave it out."
-msgstr "Die Lenkung und die Achsen mit einer Rolle im Reiter „Pedale & Paddles“. Gib einer Achse dort eine Rolle, um sie zu prüfen, oder setze sie auf „Nicht zugewiesen“, um sie wegzulassen."
+msgstr "Die Lenkung und die Achsen mit einer Rolle im Reiter „Pedale & Paddles“. Gib einer Achse dort eine Rolle, um sie zu prüfen, oder setze sie auf „Nicht zugeordnet“, um sie wegzulassen."
 
 #: understeer/ui/axis_diagnostics.py:167
 msgid "Other Axes of {device}"

@@ -7,7 +7,8 @@ Runs Understeer on an invisible screen (Xvfb) with its own home folder in
 the work folder (a new folder in /tmp if none is given; it is left there
 for a look afterwards), a fake wheelbase, example presets and games, and
 saves docs/screenshot.png, presets.png, select.png, games.png and
-diagnostics.png. Nothing of your own configuration is read or changed;
+diagnostics.png in a 1040 px window, and wide.png, the Tuning view in a
+maximized Full HD window. Nothing of your own configuration is read or changed;
 only the covers of the example games are copied from your Steam cache if
 it has them (otherwise the tiles show their name). Nothing goes to the
 network.
@@ -24,6 +25,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 SIZE = (1050, 770)      # the window; its shadow takes 5 px of each side
+WIDE = (1930, 1090)     # a maximized window on a Full HD screen
 
 GAMES = [   # Steam app id, name, preset
     (805550, "Assetto Corsa Competizione", "Spa GT3"),
@@ -67,7 +69,7 @@ def outer(work):
     steam_covers(home / ".cache" / "Understeer" / "covers")
     read, write = os.pipe()
     xvfb = subprocess.Popen(
-        ["Xvfb", "-displayfd", str(write), "-screen", "0", "1600x1000x24",
+        ["Xvfb", "-displayfd", str(write), "-screen", "0", "2000x1200x24",
          "-nolisten", "tcp"], pass_fds=(write,),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     os.close(write)
@@ -215,6 +217,16 @@ def inner(work):
         yield diagnostics
         yield lambda: None
         yield lambda: shoot(win, "diagnostics")
+
+        def wide():
+            win.set_default_size(*WIDE)
+            wheel.update(round(32767 + 60 / 270 * 32767))
+            gas.update(round(0.72 * 65535))
+            win._select_page("tuning")
+            win._update_inputs()
+        yield wide
+        yield lambda: None
+        yield lambda: shoot(win, "wide")
 
     application = app.TunerApplication()
 
