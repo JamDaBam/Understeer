@@ -111,7 +111,7 @@ class PreferencesMixin:
             self.standard_names_group.add(entry)
         wheel.add(self.standard_names_group)
 
-        system = Adw.PreferencesGroup(title=_("System"))
+        system =Adw.PreferencesGroup(title=_("System"))
         # Writing the settings and reading the live input
         self.perm_row = Adw.ActionRow(title=_("Permissions"), subtitle="")
         self.perm_btn = Gtk.Button(label=_("Set Up"))
@@ -151,6 +151,7 @@ class PreferencesMixin:
         rumble.add(fire)
         self.rumble_group = rumble
         wheel.add(rumble)
+        wheel.add(self._display_group())
 
         # -- Games ----------------------------------------------------------
         games_prefs = self._prefs_page("games", _("Games"), "applications-games-symbolic")
@@ -218,6 +219,42 @@ class PreferencesMixin:
         self.mode_row.add_suffix(self.mode_switch)
         self.mode_row.set_activatable_widget(self.mode_switch)
         return self.mode_row
+
+    def _display_group(self):
+        """A test of the display of the steering wheel: whether there is
+        one and Understeer can write to it. Written only when Show or Clear
+        is clicked. TunerWindow._update_display_group() says whether it
+        can be used."""
+        group = Adw.PreferencesGroup(
+            title=_("Steering Wheel Display Test"),
+            description=_("Checks whether your steering wheel has an LED "
+                          "display and Understeer can write to it, which the "
+                          "driver can't tell: click Show and look at the "
+                          "wheel. “888” lights every segment. Nothing is "
+                          "written until you click, and the text stays when "
+                          "Understeer closes; a game that uses the display "
+                          "replaces it."))
+        text = getattr(self, "display_entry", None)
+        self.display_entry = Adw.EntryRow(title=_("Text"))
+        # Kept when the language changes; "888" lights every segment.
+        self.display_entry.set_text(text.get_text() if text is not None else "888")
+        self.display_entry.connect("changed", lambda e: self._update_display_group())
+        self.display_entry.connect("entry-activated", lambda e: self._show_display_text())
+        self.display_show_btn = Gtk.Button(label=_("Show"), valign=Gtk.Align.CENTER)
+        self.display_show_btn.connect("clicked", lambda b: self._show_display_text())
+        self.display_entry.add_suffix(self.display_show_btn)
+        group.add(self.display_entry)
+        # What can be shown, or why not
+        self.display_status_row = Adw.ActionRow(title=_("Characters"))
+        group.add(self.display_status_row)
+        self.display_clear_row = Adw.ActionRow(
+            title=_("Clear Display"),
+            subtitle=_("Turns off every position of the display."))
+        clear_btn = Gtk.Button(label=_("Clear"), valign=Gtk.Align.CENTER)
+        clear_btn.connect("clicked", lambda b: self._clear_display())
+        self.display_clear_row.add_suffix(clear_btn)
+        group.add(self.display_clear_row)
+        return group
 
     def _updates_group(self):
         """Looking for new versions; only the AppImage can."""
