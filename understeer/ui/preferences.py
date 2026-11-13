@@ -8,6 +8,7 @@ from .. import background, backup, config, i18n, updates
 from .. import log as session_log
 from ..i18n import _
 from . import files, theme
+from .layout import SwitchRow
 from .look_prefs import LookGroups
 from .report_dialog import ReportDialog
 
@@ -219,14 +220,13 @@ class PreferencesMixin:
         self._mode_handler = self.mode_switch.connect(
             "state-set", lambda s, state: self._on_mode_chosen(state))
         self.mode_row.add_suffix(self.mode_switch)
-        self.mode_row.set_activatable_widget(self.mode_switch)
         return self.mode_row
 
     def _preset_display_group(self):
         """Whether the name of an applied preset goes to the display of the
         steering wheel; off unless switched on."""
         group = Adw.PreferencesGroup(title=_("Steering Wheel Display"))
-        row = Adw.SwitchRow(
+        row = SwitchRow(
             title=_("Show Preset Name on Wheel Display"),
             subtitle=_("After a preset has been written, also when a game "
                        "starts, its first three characters that the display "
@@ -285,7 +285,7 @@ class PreferencesMixin:
     def _updates_group(self):
         """Looking for new versions; only the AppImage can."""
         group = Adw.PreferencesGroup(title=_("Updates"))
-        row = Adw.SwitchRow(title=_("Look for New Versions"))
+        row = SwitchRow(title=_("Look for New Versions"))
         row.connect("notify::active", lambda r, _p: r.get_sensitive() and
                     r.get_active() != bool(config.get_setting("update_check"))
                     and self.set_update_check(r.get_active()))
@@ -307,18 +307,18 @@ class PreferencesMixin:
     def _background_group(self):
         """Running in the background and starting at login."""
         group = Adw.PreferencesGroup(title=_("Background"))
-        run = Adw.SwitchRow(
+        run = SwitchRow(
             title=_("Run in the Background"),
             subtitle=_("Presets of games are also applied with the window "
                        "closed. An icon in the system tray shows that "
                        "Understeer runs; quit it there or in the main menu."))
         run.set_active(bool(config.get_setting("background")))
-        login = Adw.SwitchRow(
+        login = SwitchRow(
             title=_("Start at Login"),
             subtitle=_("Starts in the background when you log in."))
         login.set_active(background.autostart_enabled())
         login.set_sensitive(run.get_active())
-        notify = Adw.SwitchRow(
+        notify = SwitchRow(
             title=_("Notify When a Game Starts"),
             subtitle=_("With the window closed, a notification tells whether "
                        "the preset of the game was applied."))

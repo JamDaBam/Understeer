@@ -416,6 +416,29 @@ def steps(win):
         win.prefs.close()
     yield "one message in the preferences", one_message_in_prefs
 
+    # Only a switch itself turns a setting on or off, not a click on its row
+    switch_rows = []
+
+    def click_rows_with_switches():
+        win._show_preferences("wheelbase")
+        rows = [w for w in walk(win.prefs) if isinstance(w, Adw.ActionRow)]
+        check(not any(isinstance(r, Adw.SwitchRow) for r in rows),
+              "no Adw.SwitchRow, which toggles on a click on the row")
+        for row in rows:
+            switches = [w for w in walk(row) if isinstance(w, Gtk.Switch)]
+            if switches:
+                switch_rows.append((row, switches[0], switches[0].get_active()))
+                row.activate()
+        check(len(switch_rows) >= 6, f"switches found: {len(switch_rows)}")
+    yield "click rows with switches", click_rows_with_switches
+
+    def rows_did_not_switch():
+        for row, switch, before in switch_rows:
+            check(switch.get_active() == before,
+                  f"a click on the row switched “{row.get_title()}”")
+        win.prefs.close()
+    yield "rows did not switch", rows_did_not_switch
+
     def driver_without_mode():
         mode_file.unlink()
         win._check_capabilities()
