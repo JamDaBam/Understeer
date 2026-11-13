@@ -296,6 +296,12 @@ def steps(win):
         not win.mode_row.get_visible(), "mode switch hidden without advanced_mode")
 
     def driver_with_mode():
+        # The steps below play the wheelbase and call _check_tuning_mode()
+        # themselves. The window's own watch would also poll between two
+        # steps and could take a mode event (and the reload after it) away
+        # from the step that checks it; on a slow runner it does.
+        GLib.source_remove(win._watch)
+        win._watch = 0
         mode_file.write_text("1\n")
         win._check_capabilities()
         check(win.mode_row.get_visible() and win.mode_row.get_sensitive(),
@@ -315,8 +321,11 @@ def steps(win):
         (dev / "SLOT").write_text("auto\n")
     yield "switch to Standard", to_standard
 
+    # The wheelbase confirms the switch; the app goes back to the slot and
+    # reads the values again a moment later, so the checks follow a step on.
+    yield "Standard reached", lambda: win._check_tuning_mode()
+
     def standard_confirmed():
-        win._check_tuning_mode()
         check(win.tuning_mode.advanced is False and not win.tuning_mode.switching,
               "switch confirmed")
         check(shown() == (False, False), f"Standard shown: {shown()}")
@@ -430,6 +439,10 @@ def steps(win):
         (dev / "SLOT").write_text("1\n")
         win._load_from_device()
     yield "slots per mode", slots_per_mode
+
+    def watch_again():
+        win._watch = GLib.timeout_add(window_module.WATCH_MS, win._check_device)
+    yield "watch the wheelbase again", watch_again
 
     def one_message_in_prefs():
         win._show_preferences("wheelbase")
