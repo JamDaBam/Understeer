@@ -1803,6 +1803,122 @@ def steps(win):
                   for k in win.axis_diagnostics.widgets),
               f"pedal cards gone: {sorted(win.axis_diagnostics.widgets)}"))
 
+    # -- health check on the same axes ------------------------------------
+    wheel_axis = inputs.Axis("FANATEC Wheel", 0, 0, 65535, 32767)
+    gas_axis = inputs.Axis("FANATEC Pedals", 1, 0, 1000, 0)
+    brake_axis = inputs.Axis("FANATEC Pedals", 2, 0, 1000, 0)
+    spare_axis = inputs.Axis("FANATEC Pedals", 3, 0, 1000, 0)   # no role
+
+    def health_check():
+        win.inputs.axes = {a.key: a for a in
+                           (gas_axis, brake_axis, spare_axis, wheel_axis)}
+        win.inputs.all_axes = dict(win.inputs.axes)
+        win.inputs.devices = ["FANATEC Wheel", "FANATEC Pedals"]
+        win._set_axis_role(gas_axis.key, "throttle")
+        win._set_axis_role(brake_axis.key, "brake")
+        win.axis_diagnostics.rebuild()
+    yield "health check", health_check
+
+    def health_measured():
+        diag = win.axis_diagnostics
+        hc = diag.health
+        check(win.diagnostics_page.tabs.get_child_by_name("health") is None,
+              "no tab of its own: it is part of the axes tab")
+        check(hc.summary.get_label().startswith("Health check not finished"),
+              f"summary: {hc.summary.get_label()!r}")
+        tile = diag.widgets[gas_axis.key]["card"]
+        check(not tile.has_css_class("health-ready"), "not ready before pressed")
+        hc.measure_button.emit("clicked")
+        check(hc.measuring and not hc.measure_button.get_sensitive()
+              and hc.status.get_label().startswith("Measuring"),
+              f"measuring: {hc.status.get_label()!r}")
+        brake_axis.value = 40               # a brake that drags
+        hc._sample()
+        hc.finish_measuring()
+        check(not hc.measuring
+              and set(hc.rests) == {gas_axis.key, brake_axis.key, wheel_axis.key}
+              and hc.status.get_label() == "Rest values measured",
+              f"checked axes measured, not the spare one: {sorted(hc.rests)}")
+        brake_axis.value = 0
+        for value in (1000, 0):
+            gas_axis.update(value)
+        brake_axis.update(930)
+        wheel_axis.update(0)
+        wheel_axis.update(65535)
+        wheel_axis.update(36000)            # let go off centre: no matter
+        win._update_inputs()
+        check(hc.summary.get_label()
+              == "Health check: possible faults on 1 of 3 axes"
+              and hc.summary.has_css_class("warning"),
+              f"summary: {hc.summary.get_label()!r}")
+        brake = diag.widgets[brake_axis.key]
+        texts = [t for _l, t in brake["shown"]]
+        check(brake["card"].has_css_class("health-warning")
+              and brake["shown"][0][0] == "warning"
+              and any(t.startswith("Reached at most 93 %") for t in texts)
+              and any(t.startswith("At 4.0 % when released") for t in texts),
+              f"brake orange, warnings first: {brake['shown']}")
+        gas = diag.widgets[gas_axis.key]
+        check(gas["card"].has_css_class("health-ready")
+              and [t for _l, t in gas["shown"]] == [
+                  "Ready: full travel reached", "Back at 0 % when released",
+                  "Steady at rest"], f"gas green: {gas['shown']}")
+        wheel = diag.widgets[wheel_axis.key]
+        check(wheel["card"].has_css_class("health-ready")
+              and wheel["shown"] == [("ok", "Ready: turned to both ends"),
+                                     ("ok", "Steady at rest")],
+              f"steering: both ends, still, centre doesn't matter: "
+              f"{wheel['shown']}")
+        spare = diag.widgets[spare_axis.key]
+        check(spare["shown"] is None and not spare["findings"].get_visible()
+              and spare["status"].get_visible()
+              and not spare["card"].has_css_class("health-ready"),
+              "axis without a role is not checked")
+        check(not wheel["status"].get_visible()
+              and wheel["findings"].get_visible(), "findings instead of status")
+        before = gas["card"].measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        check(before == brake["card"].measure(Gtk.Orientation.HORIZONTAL, -1)[1],
+              "findings don't change the width of the tiles")
+        # The wheel turned while it should be let go
+        hc.start_measuring()
+        wheel_axis.value = 30000
+        hc._sample()
+        wheel_axis.value = 36000
+        hc._sample()
+        hc.finish_measuring()
+        win._update_inputs()
+        check(wheel["card"].has_css_class("health-warning")
+              and wheel["shown"][0][0] == "warning"
+              and wheel["shown"][0][1].startswith("Moved by 82° during"),
+              f"steering moved while measuring: {wheel['shown']}")
+    yield "health check measured", health_measured
+
+    def health_left():
+        diag = win.axis_diagnostics
+        hc = diag.health
+        hc.start_measuring()
+        win.diagnostics_page.tabs.set_visible_child_name("buttons")
+        check(not hc.measuring and not hc._timer
+              and hc.status.get_label() == "Measurement cancelled",
+              "leaving the tab cancels the measurement")
+        check(len(hc.rests) == 3, "the rest values from before are kept")
+        win.diagnostics_page.tabs.set_visible_child_name("axes")
+        brake_axis.update(0)                # let go before the reset
+        diag.reset()
+        check(not hc.rests and not hc.status.get_visible()
+              and hc.summary.get_label().startswith("Health check not finished")
+              and not diag.widgets[gas_axis.key]["card"].has_css_class(
+                  "health-ready"), f"reset: {hc.summary.get_label()!r}")
+        win._set_axis_role(gas_axis.key, "")
+        win._set_axis_role(brake_axis.key, "")
+        win.inputs.axes, win.inputs.all_axes = {}, {}
+        win.inputs.devices = []
+        diag.rebuild()
+        check(not hc.summary.get_visible() and not hc.measure_button.get_sensitive(),
+              "no axes: no summary, nothing to measure")
+        win._on_input_gone()
+    yield "health check left", health_left
+
     # -- button diagnostics on the same reader ----------------------------
     def button_diagnostics():
         win.inputs.devices = ["FANATEC Wheel", "FANATEC Pedals"]

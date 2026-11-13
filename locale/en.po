@@ -367,95 +367,111 @@ msgstr "Purple"
 msgid "Slate"
 msgstr "Slate"
 
-#: understeer/ui/axis_diagnostics.py:22
+#: understeer/ui/axis_diagnostics.py:28
 msgid "No range reported"
 msgstr "No range reported"
 
-#: understeer/ui/axis_diagnostics.py:24
+#: understeer/ui/axis_diagnostics.py:30
 msgid "Not moved yet"
 msgstr "Not moved yet"
 
-#: understeer/ui/axis_diagnostics.py:26
+#: understeer/ui/axis_diagnostics.py:32
 msgid "Full range reached"
 msgstr "Full range reached"
 
-#: understeer/ui/axis_diagnostics.py:28
+#: understeer/ui/axis_diagnostics.py:34
 msgid "Maximum not reached"
 msgstr "Maximum not reached"
 
-#: understeer/ui/axis_diagnostics.py:30
+#: understeer/ui/axis_diagnostics.py:36
 msgid "Minimum not reached"
 msgstr "Minimum not reached"
 
-#: understeer/ui/axis_diagnostics.py:31
+#: understeer/ui/axis_diagnostics.py:37
 msgid "Neither end reached"
 msgstr "Neither end reached"
 
-#: understeer/ui/axis_diagnostics.py:43
+#: understeer/ui/axis_diagnostics.py:49
 msgid "Axis {name}"
 msgstr "Axis {name}"
 
-#: understeer/ui/axis_diagnostics.py:65
+#: understeer/ui/axis_diagnostics.py:74
 msgid "Reset Measurements"
 msgstr "Reset Measurements"
 
-#: understeer/ui/axis_diagnostics.py:66
-msgid "Start the observed ranges anew"
-msgstr "Start the observed ranges anew"
+#: understeer/ui/axis_diagnostics.py:75
+msgid "Start the observed ranges and the rest values anew"
+msgstr "Start the observed ranges and the rest values anew"
 
-#: understeer/ui/axis_diagnostics.py:70
-msgid "Move every axis to both ends. Observed shows the lowest and highest value since the last reset. Read only: nothing is changed on the device."
-msgstr "Move every axis to both ends. Observed shows the lowest and highest value since the last reset. Read only: nothing is changed on the device."
+#: understeer/ui/axis_diagnostics.py:80
+msgid "Move every axis to both ends: the tile of a pedal or the steering turns green once it is ready. Measure the rest values with hands and feet off to check that every axis stands still and the pedals come back to 0 %. Read only: nothing is changed on the device."
+msgstr "Move every axis to both ends: the tile of a pedal or the steering turns green once it is ready. Measure the rest values with hands and feet off to check that every axis stands still and the pedals come back to 0 %. Read only: nothing is changed on the device."
 
-#: understeer/ui/axis_diagnostics.py:116
+#: understeer/ui/axis_diagnostics.py:136
 msgid "No read access to {devices}. Set up permissions in the preferences."
 msgstr "No read access to {devices}. Set up permissions in the preferences."
 
-#: understeer/ui/axis_diagnostics.py:126
+#: understeer/ui/axis_diagnostics.py:146
 msgid "Show hidden axes ({n})"
 msgstr "Show hidden axes ({n})"
 
-#: understeer/ui/axis_diagnostics.py:156
+#: understeer/ui/axis_diagnostics.py:152
+msgid "Health Check"
+msgstr "Health Check"
+
+#: understeer/ui/axis_diagnostics.py:153
+msgid "The steering and the axes with a role on the Pedals & Paddles tab. Give an axis a role there to check it, or set it to “Not assigned” to leave it out."
+msgstr "The steering and the axes with a role on the Pedals & Paddles tab. Give an axis a role there to check it, or set it to “Not assigned” to leave it out."
+
+#: understeer/ui/axis_diagnostics.py:167
+msgid "Other Axes of {device}"
+msgstr "Other Axes of {device}"
+
+#: understeer/ui/axis_diagnostics.py:182
+msgid "Steering"
+msgstr "Steering"
+
+#: understeer/ui/axis_diagnostics.py:190
 msgid "Name and code the driver reports"
 msgstr "Name and code the driver reports"
 
-#: understeer/ui/axis_diagnostics.py:167
+#: understeer/ui/axis_diagnostics.py:201
 msgid "Show this axis again"
 msgstr "Show this axis again"
 
-#: understeer/ui/axis_diagnostics.py:168
+#: understeer/ui/axis_diagnostics.py:202
 msgid "Hide this axis"
 msgstr "Hide this axis"
 
-#: understeer/ui/axis_diagnostics.py:181
+#: understeer/ui/axis_diagnostics.py:215
 msgid "Normalized"
 msgstr "Normalized"
 
-#: understeer/ui/axis_diagnostics.py:188
+#: understeer/ui/axis_diagnostics.py:222
 msgid "Raw"
 msgstr "Raw"
 
-#: understeer/ui/axis_diagnostics.py:189
+#: understeer/ui/axis_diagnostics.py:223
 msgid "Device range"
 msgstr "Device range"
 
-#: understeer/ui/axis_diagnostics.py:190
+#: understeer/ui/axis_diagnostics.py:224
 msgid "Observed"
 msgstr "Observed"
 
-#: understeer/ui/axis_diagnostics.py:191
+#: understeer/ui/axis_diagnostics.py:225
 msgid "Flat (deadzone)"
 msgstr "Flat (deadzone)"
 
-#: understeer/ui/axis_diagnostics.py:191
+#: understeer/ui/axis_diagnostics.py:225
 msgid "Fuzz"
 msgstr "Fuzz"
 
-#: understeer/ui/axis_diagnostics.py:192
+#: understeer/ui/axis_diagnostics.py:226
 msgid "Resolution"
 msgstr "Resolution"
 
-#: understeer/ui/axis_diagnostics.py:193
+#: understeer/ui/axis_diagnostics.py:227
 msgid "Not reported"
 msgstr "Not reported"
 
@@ -874,6 +890,86 @@ msgstr "Add"
 #: understeer/ui/games_page.py:745
 msgid "Program File"
 msgstr "Program File"
+
+#: understeer/ui/health_check.py:26
+msgid "Moved by {n}° during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+msgstr "Moved by {n}° during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+
+#: understeer/ui/health_check.py:30
+msgid "Reached at most {n} %. Press it fully down; if it gets no further, it may be blocked or need calibrating in the firmware or the game."
+msgstr "Reached at most {n} %. Press it fully down; if it gets no further, it may be blocked or need calibrating in the firmware or the game."
+
+#: understeer/ui/health_check.py:34
+msgid "At {n} % when released: games may take it as slightly pressed, e.g. as a dragging brake."
+msgstr "At {n} % when released: games may take it as slightly pressed, e.g. as a dragging brake."
+
+#: understeer/ui/health_check.py:37
+msgid "Moved by {n} % during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+msgstr "Moved by {n} % during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+
+#: understeer/ui/health_check.py:41
+msgid "Jitters by {n} % at rest: often a dirty potentiometer or a drifting load cell."
+msgstr "Jitters by {n} % at rest: often a dirty potentiometer or a drifting load cell."
+
+#: understeer/ui/health_check.py:44
+msgid "Ready: full travel reached"
+msgstr "Ready: full travel reached"
+
+#: understeer/ui/health_check.py:45
+msgid "Press it fully down once"
+msgstr "Press it fully down once"
+
+#: understeer/ui/health_check.py:46
+msgid "Back at 0 % when released"
+msgstr "Back at 0 % when released"
+
+#: understeer/ui/health_check.py:47
+msgid "Steady at rest"
+msgstr "Steady at rest"
+
+#: understeer/ui/health_check.py:48
+msgid "Measure the rest values to check this"
+msgstr "Measure the rest values to check this"
+
+#: understeer/ui/health_check.py:49
+msgid "Ready: turned to both ends"
+msgstr "Ready: turned to both ends"
+
+#: understeer/ui/health_check.py:50
+msgid "Turn it to both ends once"
+msgstr "Turn it to both ends once"
+
+#: understeer/ui/health_check.py:65
+msgid "Health check: possible faults on {n} of {total} axes"
+msgstr "Health check: possible faults on {n} of {total} axes"
+
+#: understeer/ui/health_check.py:68
+msgid "Health check not finished yet: measure the rest values and move every axis to its end"
+msgstr "Health check not finished yet: measure the rest values and move every axis to its end"
+
+#: understeer/ui/health_check.py:70
+msgid "Health check: no faults found"
+msgstr "Health check: no faults found"
+
+#: understeer/ui/health_check.py:108
+msgid "Measure Rest Values"
+msgstr "Measure Rest Values"
+
+#: understeer/ui/health_check.py:111
+msgid "For {n} seconds, with hands and feet off"
+msgstr "For {n} seconds, with hands and feet off"
+
+#: understeer/ui/health_check.py:167
+msgid "Measuring, don't touch the pedals or the wheel… {n} s"
+msgstr "Measuring, don't touch the pedals or the wheel… {n} s"
+
+#: understeer/ui/health_check.py:173
+msgid "Rest values measured"
+msgstr "Rest values measured"
+
+#: understeer/ui/health_check.py:193
+msgid "Measurement cancelled"
+msgstr "Measurement cancelled"
 
 #: understeer/ui/led_diagnostics.py:22
 msgid "Cyan"

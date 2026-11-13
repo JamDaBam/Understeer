@@ -5,13 +5,17 @@ since the last reset and the device's flat, fuzz and resolution.
 Read only. It shows the axes of the window's InputMonitor (window.inputs)
 and opens no input device itself; the window calls update() with its live
 display and rebuild() when the devices or the axis roles change. A tab of
-the Diagnostics view (see diagnostics_page).
+the Diagnostics view (see diagnostics_page). The tiles of the pedals and
+the steering wheel also show the health check (see health_check): green
+once the axis was moved through its range, orange for a possible fault.
 """
 from gi.repository import Gtk, Pango
 
+from .. import axis_health as health
 from ..i18n import _
 from ..inputs import AXIS_ROLES, kernel_name
 from . import layout
+from .health_check import HealthCheck, finding_box, lines, show_lines
 
 # Room for the longest value, "-32768 … 32767 (100 %)": the tiles get their
 # width from it, so they keep it when the values change.
@@ -66,17 +70,24 @@ class AxisDiagnostics:
         # unless shown on purpose: a hidden axis may be the faulty one.
         self.show_hidden = False
 
+        self.health = HealthCheck(window, self.update)
         reset = Gtk.Button(label=_("Reset Measurements"))
-        reset.set_tooltip_text(_("Start the observed ranges anew"))
+        reset.set_tooltip_text(_("Start the observed ranges and the rest "
+                                 "values anew"))
         reset.connect("clicked", lambda b: self.reset())
         self.page, outer = layout.scroll_page()
         layout.page_head(
-            outer, _("Move every axis to both ends. Observed shows the lowest "
-                     "and highest value since the last reset. Read only: "
-                     "nothing is changed on the device."), [reset])
+            outer, _("Move every axis to both ends: the tile of a pedal or "
+                     "the steering turns green once it is ready. Measure the "
+                     "rest values with hands and feet off to check that every "
+                     "axis stands still and the pedals come back to 0 %. "
+                     "Read only: nothing is changed on the device."),
+            [reset, self.health.measure_button])
         self.problem = Gtk.Label(xalign=0, wrap=True)
         self.problem.add_css_class("warning")
         outer.append(self.problem)
+        outer.append(self.health.status)
+        outer.append(self.health.summary)
         self.column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         outer.append(self.column)
         self.hidden_box = Gtk.Box(spacing=12, margin_top=6)
@@ -105,7 +116,12 @@ class AxisDiagnostics:
 
     def reset(self):
         self.window.inputs.reset_measurements()
+        self.health.reset()
         self.update()
+
+    def leave(self):
+        """The tab was left: a rest measurement stops."""
+        self.health.leave()
 
     def rebuild(self):
         """A section per device with a small tile per axis; after the
@@ -129,28 +145,42 @@ class AxisDiagnostics:
         self.hidden_label.set_label(
             _("Show hidden axes ({n})").format(n=hidden))
         self.hidden_box.set_visible(bool(hidden))
+        # The axes of the health check first, in a section of their own
+        checked = health.checked_axes(inputs, self.window.axis_roles)
+        if checked:
+            layout.section(
+                self.column, _("Health Check"),
+                _("The steering and the axes with a role on the Pedals & "
+                  "Paddles tab. Give an axis a role there to check it, or "
+                  "set it to “Not assigned” to leave it out."))
+            grid = layout.tile_grid(min_per_line=1, max_per_line=4)
+            for axis, steering in checked:
+                grid.append(self._card(axis, steering))
+            self.column.append(grid)
+        in_check = {a.key for a, _s in checked}
         for device in inputs.devices:
             axes = sorted((a for a in inputs.all_axes.values()
-                           if a.device == device and
+                           if a.device == device and a.key not in in_check and
                            (self.show_hidden or not self._hidden(a))),
                           key=lambda a: a.code)
             if axes:
-                layout.section(self.column, device)
+                layout.section(self.column, _("Other Axes of {device}").format(
+                    device=device) if checked else device)
                 grid = layout.tile_grid(min_per_line=1, max_per_line=4)
                 for axis in axes:
                     grid.append(self._card(axis))
                 self.column.append(grid)
         self.update()
 
-    def _card(self, axis):
+    def _card(self, axis, steering=False):
         """A small tile: the name (a tick when the full range was seen),
         the value as a bar, three lines of numbers and the status."""
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
                        css_classes=["card", "tile", "diag-tile"])
         head = Gtk.Box(spacing=8)
         names = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
-        title = Gtk.Label(label=axis_title(axis, self.window.axis_roles,
-                                           self.window.roles_before_hidden),
+        title = Gtk.Label(label=_("Steering") if steering else axis_title(
+            axis, self.window.axis_roles, self.window.roles_before_hidden),
                           xalign=0, css_classes=["heading"])
         title.set_ellipsize(Pango.EllipsizeMode.END)
         names.append(title)
@@ -206,11 +236,16 @@ class AxisDiagnostics:
                                 max_width_chars=1)
         w["status"].set_ellipsize(Pango.EllipsizeMode.END)
         card.append(w["status"])
+        w["findings"] = finding_box()
+        card.append(w["findings"])
+        w["card"], w["shown"] = card, None
         self.widgets[axis.key] = w
         return card
 
     def update(self):
         """Show the current values; called with the live display."""
+        results = self.health.results()
+        self.health.show_summary(results)
         for key, w in self.widgets.items():
             axis = self.window.inputs.all_axes.get(key)
             if axis is None:
@@ -232,3 +267,25 @@ class AxisDiagnostics:
             for css, on in (("success", full), ("dim-label", not full)):
                 (w["status"].add_css_class if on
                  else w["status"].remove_css_class)(css)
+            self._show_health(w, results.get(key))
+
+    def _angle(self):
+        """Steering angle of the wheelbase in degrees, if known."""
+        row = self.window.rows.get("SEN")
+        value = row.get() if row else None
+        return value if isinstance(value, (int, float)) and value > 0 else None
+
+    def _show_health(self, w, result):
+        """The findings instead of the status, and the colour of the tile;
+        hats and hidden axes keep their status."""
+        found = result[2] if result else None
+        w["status"].set_visible(found is None)
+        w["findings"].set_visible(found is not None)
+        warn = bool(found) and health.worst(found) == health.WARNING
+        ready = bool(found) and not warn and health.ready(found)
+        for css, on in (("health-ready", ready), ("health-warning", warn)):
+            (w["card"].add_css_class if on else w["card"].remove_css_class)(css)
+        shown = lines(found, self._angle()) if found else None
+        if shown != w["shown"]:
+            w["shown"] = shown
+            show_lines(w["findings"], shown or [])

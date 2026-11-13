@@ -33,6 +33,16 @@ flowbox > flowboxchild > .tile.diag-tile {
   padding: 10px 12px;
 }
 
+/* Health check: a tile is green once its axis is ready, orange for a
+   possible fault */
+flowbox > flowboxchild > .tile.diag-tile.health-ready {
+  box-shadow: 0 0 0 2px @success_color;
+}
+
+flowbox > flowboxchild > .tile.diag-tile.health-warning {
+  box-shadow: 0 0 0 2px @warning_color;
+}
+
 /* Button diagnostics: a small cell per button, many in a row; green once
    pressed, in the accent colour while held */
 .button-cell {
