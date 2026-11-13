@@ -230,9 +230,10 @@ class PreferencesMixin:
             title=_("Show Preset Name on Wheel Display"),
             subtitle=_("After a preset has been written, also when a game "
                        "starts, its first three characters that the display "
-                       "can show appear on it, e.g. “Ral” for “Rally 1”. A "
-                       "game that uses the display replaces the name. It "
-                       "stays until something else writes to the display."))
+                       "can show appear on it, e.g. “Ral” for “Rally 1”. "
+                       "After switching slots it shows the preset of the new "
+                       "slot, or is cleared. A game that uses the display "
+                       "replaces the name."))
         row.set_active(bool(config.get_setting(PRESET_ON_DISPLAY, False)))
         row.connect("notify::active", lambda r, _p: self._set_preset_on_display(
             r.get_active()))

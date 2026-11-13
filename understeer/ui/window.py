@@ -1451,18 +1451,21 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._display_written(display.clear(path), _("Display cleared"))
 
     def _show_preset_name(self, name):
-        """After a preset was written, by hand or when a game started: its
-        name on the display, if switched on, so the display doesn't keep
-        the name of the preset before. Never in the way of the preset:
-        nothing is told if it can't be written, it is only logged."""
+        """After a preset was written, by hand or when a game started, or
+        after switching to a slot: the name of its preset on the display,
+        if switched on, so the display doesn't keep the name of the preset
+        before. The display is cleared for a slot without a preset (name
+        None) and a name it can't show. Never in the way of the preset or
+        the slot: nothing is told if it can't be written, it is only
+        logged."""
         if not config.get_setting(PRESET_ON_DISPLAY, False):
             return
         path = self._display_path()
-        text = display.name_text(name)
-        if path is None or text is None:
-            log.info("Preset name not shown: %s", "no writable display"
-                     if path is None else "no character the display can show")
+        if path is None:
+            log.info("Preset name not shown: no writable display")
             return
+        text = (display.name_text(name) if name is not None else None) \
+            or display.CLEAR_TEXT
         if text == self._display_shown:
             return          # Understeer wrote that last: it shows it already
         result = display.write(path, text)

@@ -779,6 +779,48 @@ def steps(win):
         check(win.active_preset == gt3, "GT3 active again, as the next steps expect")
     yield "preset per slot", preset_per_slot
 
+    def preset_name_per_slot():
+        two = config.preset_path("Slot Two")
+        odd = config.preset_path("kmx")             # nothing the display can show
+        config.write_preset(two, "Slot Two", {"SHO": 30})
+        config.write_preset(odd, "kmx", {"SHO": 50})
+        win._presets_changed()
+        first = int((dev / "SLOT").read_text())
+        second, third = [s for s in (2, 3, 4) if s != first][:2]
+
+        def on_slot(slot, sho):
+            (dev / "SLOT").write_text(f"{slot}\n")
+            (dev / "SHO").write_text(f"{sho}\n")
+            win._load_from_device()
+        try:
+            win.preset_display_row.set_active(True)
+            win._apply_preset(gt3)
+            check(display_text() == "Tes", f"GT3 shown: {display_text()!r}")
+            on_slot(second, 70)
+            check(display_text() == "   ", f"a slot without preset: cleared: {display_text()!r}")
+            win._apply_preset(two)
+            check(display_text() == "Slo", f"its preset shown: {display_text()!r}")
+            on_slot(first, 40)
+            check(display_text() == "Tes", f"back: the preset of that slot: {display_text()!r}")
+            on_slot(second, 30)
+            check(display_text() == "Slo", f"and the other one: {display_text()!r}")
+            win._apply_preset(odd)
+            check(display_text() == "   ",
+                  f"a name it can't show clears it: {display_text()!r}")
+            on_slot(third, 30)
+            check(display_text() == "   ", "still clear in a slot without preset")
+            win.preset_display_row.set_active(False)
+            on_slot(first, 40)
+            check(display_text() == "   ", "option off: nothing written on switching")
+        finally:
+            win.preset_display_row.set_active(False)
+            two.unlink(missing_ok=True)
+            odd.unlink(missing_ok=True)
+            on_slot(first, 40)
+            win._presets_changed()
+        check(win.active_preset == gt3, "GT3 active again, as the next steps expect")
+    yield "preset name per slot", preset_name_per_slot
+
     def preset_values():
         win._apply_values({"SHO": 60})
         win._show_preset(gt3)
