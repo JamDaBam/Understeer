@@ -49,6 +49,16 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.3.3" date="2026-11-13">
+            <description>
+                <ul>
+                    <li>Diagnostics → Axes: four axis tiles fit into one row in a window about 1040 px wide, so the steering and three pedals stand side by side</li>
+                    <li xml:lang="de">Diagnose → Achsen: Vier Achsen-Kacheln passen schon in einem etwa 1040 px breiten Fenster in eine Reihe, sodass Lenkung und drei Pedale nebeneinander stehen</li>
+                    <li>Fixed: in German, the health check hint named the role to leave an axis out differently from the Pedals &amp; Paddles tab</li>
+                    <li xml:lang="de">Behoben: Der Hinweis im Gesundheitscheck nennt die Rolle zum Weglassen einer Achse jetzt wie der Reiter „Pedale &amp; Paddles“: „Nicht zugeordnet“</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.3.2" date="2026-11-13">
             <description>
                 <ul>
