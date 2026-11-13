@@ -1733,20 +1733,30 @@ def steps(win):
         win.inputs.all_axes = dict(win.inputs.axes)
         win.inputs.all_axes[hat.key] = hat
         win.inputs.devices = ["FANATEC Wheel", "FANATEC Pedals"]
-        win.activate_action("win.axis-diagnostics", None)
+        check(not any(win.lookup_action(a) for a in (
+            "axis-diagnostics", "button-diagnostics", "led-diagnostics")),
+            "no diagnostics in the menu any more")
+        win._select_page("diagnostics")
+        win._on_input_gone()        # the devices changed: pages rebuilt
     yield "axis diagnostics", axis_diagnostics
 
     def diagnostics_shown():
         diag = win.axis_diagnostics
-        check(diag is not None and win.get_visible_dialog() is diag.dialog,
-              "diagnostics is a dialog")
+        page = win.diagnostics_page
+        check(page.tab == "axes" and page.shown("axes")
+              and win.views.get_visible_child_name() == "diagnostics",
+              "diagnostics view on its first tab")
         check(set(diag.widgets) == set(win.inputs.all_axes),
               f"a card per axis: {sorted(diag.widgets)}")
         throttle = win.inputs.all_axes["FANATEC Pedals:1"]
+        card = diag.widgets[throttle.key]["bar"].get_parent().get_parent()
+        before = card.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
         throttle.update(0)
         throttle.update(65535)
         win._update_inputs()
         w = diag.widgets[throttle.key]
+        after = card.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        check(before == after, f"tile keeps its width: {before} -> {after}")
         check(w["observed"].get_label() == "0 … 65535 (100 %)",
               f"observed range: {w['observed'].get_label()}")
         check(w["status"].get_label() == "Full range reached",
@@ -1791,10 +1801,7 @@ def steps(win):
     yield "axis diagnostics after unplug", lambda: (
         check(all(k.startswith("FANATEC Wheel")
                   for k in win.axis_diagnostics.widgets),
-              f"pedal cards gone: {sorted(win.axis_diagnostics.widgets)}"),
-        win.axis_diagnostics.dialog.close())
-    yield "axis diagnostics closed", lambda: check(
-        win.axis_diagnostics is None, "dialog forgotten when closed")
+              f"pedal cards gone: {sorted(win.axis_diagnostics.widgets)}"))
 
     # -- button diagnostics on the same reader ----------------------------
     def button_diagnostics():
@@ -1805,13 +1812,14 @@ def steps(win):
                            ] + [("FANATEC Pedals", 0x120)]:
             b = inputs.Button(name, code)
             win.inputs.buttons[b.key] = b
-        win.activate_action("win.button-diagnostics", None)
+        win.diagnostics_page.tabs.set_visible_child_name("buttons")
+        win.button_diagnostics.rebuild()
     yield "button diagnostics", button_diagnostics
 
     def buttons_shown():
         diag = win.button_diagnostics
-        check(diag is not None and win.get_visible_dialog() is diag.dialog,
-              "button diagnostics is a dialog")
+        check(win.diagnostics_page.shown("buttons")
+              and not win.diagnostics_page.shown("axes"), "buttons tab shown")
         check(set(diag.widgets) == set(win.inputs.buttons),
               f"a tile per button: {len(diag.widgets)}")
         check(diag.summary.get_label() == "0 of 57 buttons tested",
@@ -1865,10 +1873,7 @@ def steps(win):
         win.button_diagnostics.rebuild(),
         check(win.button_diagnostics.problem.get_visible()
               and not win.button_diagnostics.widgets,
-              "no device: a hint, no tiles"),
-        win.button_diagnostics.dialog.close())
-    yield "button diagnostics closed", lambda: check(
-        win.button_diagnostics is None, "dialog forgotten when closed")
+              "no device: a hint, no tiles"))
 
     # -- LED diagnostics: a Formula V2 with 9 RGB rev LEDs and 3+3 flags ---
     led_root = scratch / "sysfs" / "leds"
@@ -1893,13 +1898,14 @@ def steps(win):
             (folder / "multi_index").chmod(0o444)
         capabilities.LEDS_GLOB = str(led_root / "*")
         win._check_capabilities()
-        win.activate_action("win.led-diagnostics", None)
+        check(not win.led_diagnostics.active and not win.led_diagnostics.toggles,
+              "LED page idle while another tab is shown")
+        win.diagnostics_page.tabs.set_visible_child_name("leds")
     yield "LED diagnostics", led_diagnostics
 
     def leds_shown():
         diag = win.led_diagnostics
-        check(diag is not None and win.get_visible_dialog() is diag.dialog,
-              "LED diagnostics is a dialog")
+        check(diag.active, "LED page active on its tab")
         check(len(diag.toggles) == 15
               and not any(t.get_active() for t in diag.toggles.values()),
               f"15 LEDs, all dark: {len(diag.toggles)}")
@@ -1999,13 +2005,27 @@ def steps(win):
               "usable again")
     yield "LED diagnostics read only", led_read_only
 
-    yield "LED diagnostics close", lambda: win.led_diagnostics.dialog.close()
-
-    def leds_closed():
-        check(win.led_diagnostics is None, "dialog forgotten when closed")
+    def leds_left_running():
+        diag = win.led_diagnostics
+        diag.start_test()
+        diag._step()
+        diag._step()
+        win.diagnostics_page.tabs.set_visible_child_name("axes")
+        check(not diag.active and not diag.running and not diag._timer,
+              "leaving the tab stops the test")
         check(all(led_file(n, "multi_intensity") == "0 0 0"
                   and led_file(n) == "255" for n in led_names),
-              "LEDs set back as they were before the dialog")
+              "LEDs set back as they were before the tab was shown")
+        win.diagnostics_page.tabs.set_visible_child_name("leds")
+        diag.toggles[str(led_root / led_names[0])].set_active(True)
+        win._select_page("tuning")          # another view
+        check(not diag.active and led_file(n := led_names[0], "multi_intensity")
+              == "0 0 0", f"LED {n} set back when the view is left")
+        win.diagnostics_page.tabs.set_visible_child_name("leds")
+        check(not diag.active, "the tab alone does not wake it up")
+    yield "LED diagnostics left", leds_left_running
+
+    def leds_closed():
         capabilities.LEDS_GLOB = str(scratch / "sysfs" / "none" / "*")
         win._check_capabilities()
     yield "LED diagnostics closed", leds_closed

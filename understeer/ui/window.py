@@ -27,7 +27,7 @@ from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PRESET_ON_DISPLAY, PreferencesMixin
 from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
-from .led_diagnostics import LedDiagnostics
+from .diagnostics_page import DiagnosticsPage
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
 from .dates import date_text
@@ -104,9 +104,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.show_hidden_axes = False
         self.axis_widgets = {}   # axis key -> (level bar, value label, max label)
         self._input_timer = 0
-        self.axis_diagnostics = None   # the open AxisDiagnostics dialog
-        self.button_diagnostics = None  # the open ButtonDiagnostics dialog
-        self.led_diagnostics = None     # the open LedDiagnostics dialog
+        # Pages of the Diagnostics view, see DiagnosticsPage
+        self.diagnostics_page = None
+        self.axis_diagnostics = self.button_diagnostics = None
+        self.led_diagnostics = None
         self._open_groups = set()   # advanced groups the user opened
         self._group_summaries = []  # updates their one-line values
 
@@ -195,7 +196,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if self._shut_down:
             return
         self._shut_down = True
-        self._close_led_diagnostics()
+        self.diagnostics_page.leave()
         self.flush_live()
         self.games_page.key_entry.flush()   # an API key still being typed
         GLib.source_remove(self._watch)
@@ -211,7 +212,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         Watching the wheelbase and the games goes on; the live input
         display stops, nobody sees it.
         """
-        self._close_led_diagnostics()
+        self.diagnostics_page.leave()
         self.flush_live()
         self.games_page.key_entry.flush()
         self._in_background = True
@@ -242,6 +243,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._in_background = False
             log.info("Window shown again")
             self._start_inputs()
+            self.diagnostics_page.shown_changed()
             # Not over changes that wait for Apply, e.g. the preset of a
             # game that started meanwhile
             if not self.pending:
@@ -299,9 +301,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         device = Gio.Menu()
         device.append(_("Reload from Device"), "win.reload")
         device.append(_("Save as Preset…"), "win.save-preset")
-        device.append(_("Axis Diagnostics…"), "win.axis-diagnostics")
-        device.append(_("Button Diagnostics…"), "win.button-diagnostics")
-        device.append(_("LED Diagnostics…"), "win.led-diagnostics")
         menu.append_section(None, device)
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
@@ -351,9 +350,14 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         content_view.add_bottom_bar(self.pending_bar)
         content_view.add_bottom_bar(self.switcher_bar)
 
+        old = self.diagnostics_page
+        if old is not None:
+            old.leave()         # no LED test goes on in the old widgets
+        self.diagnostics_page = DiagnosticsPage(self, old and old.tab)
         builders = {"tuning": self._build_tuning_view,
                     "presets": self._build_presets_page,
-                    "games": self._build_games_page}
+                    "games": self._build_games_page,
+                    "diagnostics": lambda: self.diagnostics_page.view}
         for key, title, icon in VIEWS:
             self.views.add_titled_with_icon(builders[key](), key, _(title), icon)
         self._build_preferences()
@@ -365,6 +369,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         # Choosing tiles ends on another page
         self.views.connect("notify::visible-child-name",
                            lambda *a: self._stop_choosing())
+        self.views.connect("notify::visible-child-name",
+                           lambda *a: self.diagnostics_page.shown_changed())
+        self.diagnostics_page.shown_changed()
         if tab:
             self.tabs.set_visible_child_name(tab)
         self._set_narrow(self._narrow)
@@ -389,25 +396,10 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                              12, ("top", "start", "end"))
         top.append(self._build_live_strip())
 
-        tab_row = Gtk.Box(spacing=2)
-        tab_row.add_css_class("tab-row")
         self.tabs = Gtk.Stack(vexpand=True)
         self.tabs.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        buttons = {}
-        for key, title in TABS:
-            button = Gtk.ToggleButton(label=_(title))
-            button.add_css_class("flat")
-            button.add_css_class("tab")
-            if buttons:
-                button.set_group(next(iter(buttons.values())))
-            button.connect("toggled", lambda b, k=key: b.get_active() and
-                           self.tabs.set_visible_child_name(k))
-            buttons[key] = button
-            tab_row.append(button)
-            self.tabs.add_named(self._build_tab(key), key)
-        buttons[TABS[0][0]].set_active(True)
-        self.tabs.connect("notify::visible-child-name", lambda s, _p:
-                          buttons[s.get_visible_child_name()].set_active(True))
+        tab_row = layout.tab_row(self.tabs, [
+            (key, _(title), self._build_tab(key)) for key, title in TABS])
         self.status_label = Gtk.Label(hexpand=True, xalign=1)
         self.status_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.status_label.add_css_class("dim-label")
@@ -644,9 +636,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         add("about", lambda *a: self._show_about())
         add("whats-new", lambda *a: self._show_whats_new())
         add("report", lambda *a: ReportDialog(self))
-        add("axis-diagnostics", lambda *a: self._show_axis_diagnostics())
-        add("button-diagnostics", lambda *a: self._show_button_diagnostics())
-        add("led-diagnostics", lambda *a: self._show_led_diagnostics())
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
@@ -1265,18 +1254,6 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 self.led_diagnostics.hardware_changed()
         self._update_mode_switch()
         self._update_display_group()
-
-    def _close_led_diagnostics(self):
-        """No LED test may go on without a window: stop it, set the LEDs
-        back."""
-        if self.led_diagnostics is not None:
-            self.led_diagnostics.close()
-
-    def _show_led_diagnostics(self):
-        if self.led_diagnostics:
-            self.led_diagnostics.dialog.present(self)
-        else:
-            LedDiagnostics(self)
 
     def _check_wheel(self):
         """Notice a steering wheel being put on or changed."""
