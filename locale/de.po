@@ -367,95 +367,111 @@ msgstr "Lila"
 msgid "Slate"
 msgstr "Schiefer"
 
-#: understeer/ui/axis_diagnostics.py:22
+#: understeer/ui/axis_diagnostics.py:28
 msgid "No range reported"
 msgstr "Kein Bereich gemeldet"
 
-#: understeer/ui/axis_diagnostics.py:24
+#: understeer/ui/axis_diagnostics.py:30
 msgid "Not moved yet"
 msgstr "Noch nicht bewegt"
 
-#: understeer/ui/axis_diagnostics.py:26
+#: understeer/ui/axis_diagnostics.py:32
 msgid "Full range reached"
 msgstr "Voller Bereich erreicht"
 
-#: understeer/ui/axis_diagnostics.py:28
+#: understeer/ui/axis_diagnostics.py:34
 msgid "Maximum not reached"
 msgstr "Maximum nicht erreicht"
 
-#: understeer/ui/axis_diagnostics.py:30
+#: understeer/ui/axis_diagnostics.py:36
 msgid "Minimum not reached"
 msgstr "Minimum nicht erreicht"
 
-#: understeer/ui/axis_diagnostics.py:31
+#: understeer/ui/axis_diagnostics.py:37
 msgid "Neither end reached"
 msgstr "Kein Ende erreicht"
 
-#: understeer/ui/axis_diagnostics.py:43
+#: understeer/ui/axis_diagnostics.py:49
 msgid "Axis {name}"
 msgstr "Achse {name}"
 
-#: understeer/ui/axis_diagnostics.py:65
+#: understeer/ui/axis_diagnostics.py:74
 msgid "Reset Measurements"
 msgstr "Messwerte zurücksetzen"
 
-#: understeer/ui/axis_diagnostics.py:66
-msgid "Start the observed ranges anew"
-msgstr "Die beobachteten Bereiche neu beginnen"
+#: understeer/ui/axis_diagnostics.py:75
+msgid "Start the observed ranges and the rest values anew"
+msgstr "Beobachtete Bereiche und Ruhewerte neu beginnen"
 
-#: understeer/ui/axis_diagnostics.py:70
-msgid "Move every axis to both ends. Observed shows the lowest and highest value since the last reset. Read only: nothing is changed on the device."
-msgstr "Bewege jede Achse bis zu beiden Enden. Beobachtet zeigt den kleinsten und größten Wert seit dem letzten Zurücksetzen. Nur lesend: Am Gerät wird nichts verändert."
+#: understeer/ui/axis_diagnostics.py:80
+msgid "Move every axis to both ends: the tile of a pedal or the steering turns green once it is ready. Measure the rest values with hands and feet off to check that every axis stands still and the pedals come back to 0 %. Read only: nothing is changed on the device."
+msgstr "Bewege jede Achse bis zu beiden Enden: Die Kachel eines Pedals oder der Lenkung wird grün, sobald sie bereit ist. Miss die Ruhewerte mit Händen und Füßen weg, um zu prüfen, ob jede Achse stillsteht und die Pedale auf 0 % zurückkommen. Nur lesend: Am Gerät wird nichts geändert."
 
-#: understeer/ui/axis_diagnostics.py:116
+#: understeer/ui/axis_diagnostics.py:136
 msgid "No read access to {devices}. Set up permissions in the preferences."
 msgstr "Kein Lesezugriff auf {devices}. Richte die Berechtigungen in den Einstellungen ein."
 
-#: understeer/ui/axis_diagnostics.py:126
+#: understeer/ui/axis_diagnostics.py:146
 msgid "Show hidden axes ({n})"
 msgstr "Ausgeblendete Achsen anzeigen ({n})"
 
-#: understeer/ui/axis_diagnostics.py:156
+#: understeer/ui/axis_diagnostics.py:152
+msgid "Health Check"
+msgstr "Gesundheitscheck"
+
+#: understeer/ui/axis_diagnostics.py:153
+msgid "The steering and the axes with a role on the Pedals & Paddles tab. Give an axis a role there to check it, or set it to “Not assigned” to leave it out."
+msgstr "Die Lenkung und die Achsen mit einer Rolle im Reiter „Pedale & Paddles“. Gib einer Achse dort eine Rolle, um sie zu prüfen, oder setze sie auf „Nicht zugewiesen“, um sie wegzulassen."
+
+#: understeer/ui/axis_diagnostics.py:167
+msgid "Other Axes of {device}"
+msgstr "Weitere Achsen von {device}"
+
+#: understeer/ui/axis_diagnostics.py:182
+msgid "Steering"
+msgstr "Lenkung"
+
+#: understeer/ui/axis_diagnostics.py:190
 msgid "Name and code the driver reports"
 msgstr "Name und Code, die der Treiber meldet"
 
-#: understeer/ui/axis_diagnostics.py:167
+#: understeer/ui/axis_diagnostics.py:201
 msgid "Show this axis again"
 msgstr "Diese Achse wieder anzeigen"
 
-#: understeer/ui/axis_diagnostics.py:168
+#: understeer/ui/axis_diagnostics.py:202
 msgid "Hide this axis"
 msgstr "Diese Achse ausblenden"
 
-#: understeer/ui/axis_diagnostics.py:181
+#: understeer/ui/axis_diagnostics.py:215
 msgid "Normalized"
 msgstr "Normiert"
 
-#: understeer/ui/axis_diagnostics.py:188
+#: understeer/ui/axis_diagnostics.py:222
 msgid "Raw"
 msgstr "Rohwert"
 
-#: understeer/ui/axis_diagnostics.py:189
+#: understeer/ui/axis_diagnostics.py:223
 msgid "Device range"
 msgstr "Gerätebereich"
 
-#: understeer/ui/axis_diagnostics.py:190
+#: understeer/ui/axis_diagnostics.py:224
 msgid "Observed"
 msgstr "Beobachtet"
 
-#: understeer/ui/axis_diagnostics.py:191
+#: understeer/ui/axis_diagnostics.py:225
 msgid "Flat (deadzone)"
 msgstr "Flat (Totzone)"
 
-#: understeer/ui/axis_diagnostics.py:191
+#: understeer/ui/axis_diagnostics.py:225
 msgid "Fuzz"
 msgstr "Fuzz"
 
-#: understeer/ui/axis_diagnostics.py:192
+#: understeer/ui/axis_diagnostics.py:226
 msgid "Resolution"
 msgstr "Auflösung"
 
-#: understeer/ui/axis_diagnostics.py:193
+#: understeer/ui/axis_diagnostics.py:227
 msgid "Not reported"
 msgstr "Nicht gemeldet"
 
@@ -874,6 +890,86 @@ msgstr "Hinzufügen"
 #: understeer/ui/games_page.py:745
 msgid "Program File"
 msgstr "Programmdatei"
+
+#: understeer/ui/health_check.py:26
+msgid "Moved by {n}° during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+msgstr "Während der Ruhemessung um {n}° bewegt. Lenkrad loslassen und erneut messen; bewegt es sich von selbst, das Force Feedback prüfen."
+
+#: understeer/ui/health_check.py:30
+msgid "Reached at most {n} %. Press it fully down; if it gets no further, it may be blocked or need calibrating in the firmware or the game."
+msgstr "Höchstens {n} % erreicht. Ganz durchdrücken; geht es nicht weiter, ist es vielleicht blockiert oder muss in der Firmware oder im Spiel kalibriert werden."
+
+#: understeer/ui/health_check.py:34
+msgid "At {n} % when released: games may take it as slightly pressed, e.g. as a dragging brake."
+msgstr "Losgelassen bei {n} %: Spiele können das als leicht gedrückt werten, z. B. als schleifende Bremse."
+
+#: understeer/ui/health_check.py:37
+msgid "Moved by {n} % during the rest measurement. Let go of the wheel and measure again; if it moves by itself, check the force feedback."
+msgstr "Während der Ruhemessung um {n} % bewegt. Lenkrad loslassen und erneut messen; bewegt es sich von selbst, das Force Feedback prüfen."
+
+#: understeer/ui/health_check.py:41
+msgid "Jitters by {n} % at rest: often a dirty potentiometer or a drifting load cell."
+msgstr "Schwankt in Ruhe um {n} %: oft ein verschmutztes Potentiometer oder eine driftende Loadcell."
+
+#: understeer/ui/health_check.py:44
+msgid "Ready: full travel reached"
+msgstr "Bereit: voller Pedalweg erreicht"
+
+#: understeer/ui/health_check.py:45
+msgid "Press it fully down once"
+msgstr "Einmal ganz durchdrücken"
+
+#: understeer/ui/health_check.py:46
+msgid "Back at 0 % when released"
+msgstr "Losgelassen wieder bei 0 %"
+
+#: understeer/ui/health_check.py:47
+msgid "Steady at rest"
+msgstr "In Ruhe stabil"
+
+#: understeer/ui/health_check.py:48
+msgid "Measure the rest values to check this"
+msgstr "Ruhewerte messen, um das zu prüfen"
+
+#: understeer/ui/health_check.py:49
+msgid "Ready: turned to both ends"
+msgstr "Bereit: bis zu beiden Anschlägen gedreht"
+
+#: understeer/ui/health_check.py:50
+msgid "Turn it to both ends once"
+msgstr "Einmal bis zu beiden Anschlägen drehen"
+
+#: understeer/ui/health_check.py:65
+msgid "Health check: possible faults on {n} of {total} axes"
+msgstr "Gesundheitscheck: mögliche Fehler an {n} von {total} Achsen"
+
+#: understeer/ui/health_check.py:68
+msgid "Health check not finished yet: measure the rest values and move every axis to its end"
+msgstr "Gesundheitscheck noch nicht fertig: Ruhewerte messen und jede Achse bis zum Ende bewegen"
+
+#: understeer/ui/health_check.py:70
+msgid "Health check: no faults found"
+msgstr "Gesundheitscheck: keine Fehler gefunden"
+
+#: understeer/ui/health_check.py:108
+msgid "Measure Rest Values"
+msgstr "Ruhewerte messen"
+
+#: understeer/ui/health_check.py:111
+msgid "For {n} seconds, with hands and feet off"
+msgstr "{n} Sekunden lang, Hände und Füße weg"
+
+#: understeer/ui/health_check.py:167
+msgid "Measuring, don't touch the pedals or the wheel… {n} s"
+msgstr "Messe, Pedale und Lenkrad nicht berühren … {n} s"
+
+#: understeer/ui/health_check.py:173
+msgid "Rest values measured"
+msgstr "Ruhewerte gemessen"
+
+#: understeer/ui/health_check.py:193
+msgid "Measurement cancelled"
+msgstr "Messung abgebrochen"
 
 #: understeer/ui/led_diagnostics.py:22
 msgid "Cyan"

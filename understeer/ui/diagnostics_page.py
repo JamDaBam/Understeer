@@ -1,8 +1,8 @@
 """The Diagnostics view: axes, buttons and LEDs in tabs, like the settings
 of the Tuning view.
 
-The pages are window.axis_diagnostics, window.button_diagnostics and
-window.led_diagnostics. Axes and buttons only read; the LED page writes,
+The pages are window.axis_diagnostics (with the health check),
+window.button_diagnostics and window.led_diagnostics. Axes and buttons only read; the LED page writes,
 so it is active only while its tab is shown (see LedDiagnostics.enter()).
 """
 from gi.repository import Adw, Gtk
@@ -65,9 +65,12 @@ class DiagnosticsPage:
             led.leave()
         if self.shown("axes"):
             self.window.axis_diagnostics.update()
+        else:
+            self.window.axis_diagnostics.leave()
         if self.shown("buttons"):
             self.window.button_diagnostics.update()
 
     def leave(self):
         """Before the window hides, quits or is built anew."""
         self.window.led_diagnostics.leave()
+        self.window.axis_diagnostics.leave()
