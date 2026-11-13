@@ -959,15 +959,15 @@ msgstr "Ruhewerte messen"
 msgid "For {n} seconds, with hands and feet off"
 msgstr "{n} Sekunden lang, Hände und Füße weg"
 
-#: understeer/ui/health_check.py:167
+#: understeer/ui/health_check.py:171
 msgid "Measuring, don't touch the pedals or the wheel… {n} s"
 msgstr "Messe, Pedale und Lenkrad nicht berühren … {n} s"
 
-#: understeer/ui/health_check.py:173
+#: understeer/ui/health_check.py:177
 msgid "Rest values measured"
 msgstr "Ruhewerte gemessen"
 
-#: understeer/ui/health_check.py:193
+#: understeer/ui/health_check.py:197
 msgid "Measurement cancelled"
 msgstr "Messung abgebrochen"
 
@@ -2055,71 +2055,79 @@ msgstr "Benutzt von: {games}"
 msgid "Could not restore presets"
 msgstr "Presets konnten nicht wiederhergestellt werden"
 
-#: understeer/ui/report_dialog.py:48
+#: understeer/ui/report_dialog.py:50
 msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub, where you see everything before you send it."
 msgstr "Beschreibe kurz, was passiert ist. Understeer ergänzt die technischen Details und öffnet ein ausgefülltes Issue auf GitHub. Dort siehst du alles, bevor du es absendest."
 
-#: understeer/ui/report_dialog.py:52
+#: understeer/ui/report_dialog.py:54
 msgid "Title"
 msgstr "Titel"
 
-#: understeer/ui/report_dialog.py:57
+#: understeer/ui/report_dialog.py:59
 msgid "What happened?"
 msgstr "Was ist passiert?"
 
-#: understeer/ui/report_dialog.py:58
+#: understeer/ui/report_dialog.py:60
 msgid "What did you do, what did you expect, and what happened instead?"
 msgstr "Was hast du gemacht, was hast du erwartet und was ist stattdessen passiert?"
 
-#: understeer/ui/report_dialog.py:75
+#: understeer/ui/report_dialog.py:77
 msgid "Added to the Report"
 msgstr "Wird mitgeschickt"
 
-#: understeer/ui/report_dialog.py:76
+#: understeer/ui/report_dialog.py:78
 msgid "Your user name and home folder are left out."
 msgstr "Dein Benutzername und dein Home-Ordner werden entfernt."
 
-#: understeer/ui/report_dialog.py:77
+#: understeer/ui/report_dialog.py:79
 msgid "System Details"
 msgstr "Systemdetails"
 
-#: understeer/ui/report_dialog.py:78
+#: understeer/ui/report_dialog.py:80
 msgid "Versions, wheelbase and access rights"
 msgstr "Versionen, Wheelbase und Zugriffsrechte"
 
-#: understeer/ui/report_dialog.py:84
+#: understeer/ui/report_dialog.py:87
+msgid "Pedals and steering, as measured in this session"
+msgstr "Pedale und Lenkung, wie in dieser Sitzung gemessen"
+
+#: understeer/ui/report_dialog.py:89
+msgid "Not measured. For a problem with the pedals or the steering, go through Diagnostics → Axes first."
+msgstr "Nicht gemessen. Bei einem Problem mit Pedalen oder Lenkung vorher Diagnose → Achsen durchgehen."
+
+#: understeer/ui/report_dialog.py:97
 msgid "Log Excerpt"
 msgstr "Auszug aus der Logdatei"
 
-#: understeer/ui/report_dialog.py:85
+#: understeer/ui/report_dialog.py:98
 msgid "The last entries of this session"
 msgstr "Die letzten Einträge dieser Sitzung"
 
-#: understeer/ui/report_dialog.py:92
+#: understeer/ui/report_dialog.py:105
 msgid "Show the whole log file, e.g. to drag it into the issue"
 msgstr "Die ganze Logdatei zeigen, z. B. um sie in das Issue zu ziehen"
 
-#: understeer/ui/report_dialog.py:102
+#: understeer/ui/report_dialog.py:115
 msgid "Copy Only"
 msgstr "Nur kopieren"
 
-#: understeer/ui/report_dialog.py:104
+#: understeer/ui/report_dialog.py:117
 msgid "Copy the filled-in report, e.g. for a comment on an existing issue, an e-mail or a forum post"
 msgstr "Den ausgefüllten Bericht kopieren, z. B. für einen Kommentar zu einem bestehenden Issue, eine E-Mail oder einen Forenbeitrag"
 
-#: understeer/ui/report_dialog.py:106
+#: understeer/ui/report_dialog.py:119
 msgid "Report copied"
 msgstr "Bericht kopiert"
 
-#: understeer/ui/report_dialog.py:107
+#: understeer/ui/report_dialog.py:120
 msgid "Open on GitHub"
 msgstr "Auf GitHub öffnen"
 
-#: understeer/ui/report_dialog.py:110
+#: understeer/ui/report_dialog.py:123
 msgid "Needs a GitHub account"
 msgstr "Braucht ein GitHub-Konto"
 
-#: understeer/ui/report_dialog.py:150
+#: understeer/ui/report_dialog.py:166
 msgid "GitHub opened in the browser. The report is also on the clipboard."
 msgstr "GitHub wurde im Browser geöffnet. Der Bericht liegt auch in der Zwischenablage."
 

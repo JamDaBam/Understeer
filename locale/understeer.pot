@@ -959,15 +959,15 @@ msgstr ""
 msgid "For {n} seconds, with hands and feet off"
 msgstr ""
 
-#: understeer/ui/health_check.py:167
+#: understeer/ui/health_check.py:171
 msgid "Measuring, don't touch the pedals or the wheel… {n} s"
 msgstr ""
 
-#: understeer/ui/health_check.py:173
+#: understeer/ui/health_check.py:177
 msgid "Rest values measured"
 msgstr ""
 
-#: understeer/ui/health_check.py:193
+#: understeer/ui/health_check.py:197
 msgid "Measurement cancelled"
 msgstr ""
 
@@ -2055,71 +2055,79 @@ msgstr ""
 msgid "Could not restore presets"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:48
+#: understeer/ui/report_dialog.py:50
 msgid "Describe briefly what happened. Understeer adds the technical details and opens a filled-in issue on GitHub, where you see everything before you send it."
 msgstr ""
 
-#: understeer/ui/report_dialog.py:52
+#: understeer/ui/report_dialog.py:54
 msgid "Title"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:57
+#: understeer/ui/report_dialog.py:59
 msgid "What happened?"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:58
+#: understeer/ui/report_dialog.py:60
 msgid "What did you do, what did you expect, and what happened instead?"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:75
+#: understeer/ui/report_dialog.py:77
 msgid "Added to the Report"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:76
+#: understeer/ui/report_dialog.py:78
 msgid "Your user name and home folder are left out."
 msgstr ""
 
-#: understeer/ui/report_dialog.py:77
+#: understeer/ui/report_dialog.py:79
 msgid "System Details"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:78
+#: understeer/ui/report_dialog.py:80
 msgid "Versions, wheelbase and access rights"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:84
+#: understeer/ui/report_dialog.py:87
+msgid "Pedals and steering, as measured in this session"
+msgstr ""
+
+#: understeer/ui/report_dialog.py:89
+msgid "Not measured. For a problem with the pedals or the steering, go through Diagnostics → Axes first."
+msgstr ""
+
+#: understeer/ui/report_dialog.py:97
 msgid "Log Excerpt"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:85
+#: understeer/ui/report_dialog.py:98
 msgid "The last entries of this session"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:92
+#: understeer/ui/report_dialog.py:105
 msgid "Show the whole log file, e.g. to drag it into the issue"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:102
+#: understeer/ui/report_dialog.py:115
 msgid "Copy Only"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:104
+#: understeer/ui/report_dialog.py:117
 msgid "Copy the filled-in report, e.g. for a comment on an existing issue, an e-mail or a forum post"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:106
+#: understeer/ui/report_dialog.py:119
 msgid "Report copied"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:107
+#: understeer/ui/report_dialog.py:120
 msgid "Open on GitHub"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:110
+#: understeer/ui/report_dialog.py:123
 msgid "Needs a GitHub account"
 msgstr ""
 
-#: understeer/ui/report_dialog.py:150
+#: understeer/ui/report_dialog.py:166
 msgid "GitHub opened in the browser. The report is also on the clipboard."
 msgstr ""
 

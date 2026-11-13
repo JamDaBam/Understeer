@@ -118,6 +118,10 @@ class HealthCheck:
         return health.check(self.window.inputs, self.window.axis_roles,
                             self.rests)
 
+    def report(self):
+        """The findings for a problem report, "" if nothing was measured."""
+        return health.report_text(self.results(), self.window.axis_roles)
+
     def show_summary(self, results):
         self.summary.set_label(summary_text(results) if results else "")
         self.summary.set_visible(bool(results))
