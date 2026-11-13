@@ -303,6 +303,8 @@ class PresetsMixin:
             update = Gio.Menu()
             update.append(_("Save to “{name}”").format(
                 name=menu_label(self._active_name())), "win.update-preset")
+            update.append(_("Remove “{name}” from Slot").format(
+                name=menu_label(self._active_name())), "win.remove-preset-from-slot")
             menu.append_section(None, update)
         presets = Gio.Menu()
         for folder, group in groups:
@@ -422,6 +424,24 @@ class PresetsMixin:
                      path.name if path else "none")
             self._set_active_preset(path, values)
         self._show_preset_name(name)        # or clear the display
+
+    def _remove_preset_from_slot(self):
+        """Take the active preset out of the slot: no preset is active any
+        more, here or when coming back to the slot. Nothing is written: the
+        values stay on the wheelbase and the preset stays as it is. With
+        the option on, the display is cleared as for a slot without one."""
+        if self.active_preset is None:
+            return
+        name = self._active_name()
+        slot = self._preset_slot[1] if self._preset_slot else None
+        log.info("Preset %s removed from slot %s", self.active_preset.name,
+                 "unknown" if slot is None else slot or "auto")
+        if self._preset_slot is not None:
+            self._slot_presets.pop(self._preset_slot, None)
+        self._set_active_preset(None, {})
+        self._show_preset_name(None)
+        self._notify(_("“{name}” removed from the slot, its values stay").format(
+            name=short(name)))
 
     def _set_active_preset(self, path, values):
         self.active_preset = pathlib.Path(path) if path else None

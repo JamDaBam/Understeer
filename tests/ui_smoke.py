@@ -821,6 +821,56 @@ def steps(win):
         check(win.active_preset == gt3, "GT3 active again, as the next steps expect")
     yield "preset name per slot", preset_name_per_slot
 
+    def menu_entries():
+        labels = []
+        menu = win.preset_button.get_menu_model()
+        for i in range(menu.get_n_items()):
+            section = menu.get_item_link(i, "section")
+            for j in range(section.get_n_items() if section else 0):
+                labels.append(section.get_item_attribute_value(j, "label").unpack())
+        return labels
+
+    def remove_preset_from_slot():
+        first = int((dev / "SLOT").read_text())
+        second = 2 if first != 2 else 3
+
+        def on_slot(slot, sho):
+            (dev / "SLOT").write_text(f"{slot}\n")
+            (dev / "SHO").write_text(f"{sho}\n")
+            win._load_from_device()
+        stored = gt3.read_text()
+        try:
+            win.preset_display_row.set_active(True)
+            win._apply_preset(gt3)
+            check("Remove “Test GT3” from Slot" in menu_entries(),
+                  f"offered in the Presets menu: {menu_entries()}")
+            win.rows["SHO"].set(60, silent=False)   # an unsaved change
+            win.flush_live()
+            values = {p.name: p.read_text() for p in dev.iterdir() if p.is_file()}
+            win.activate_action("win.remove-preset-from-slot", None)
+            check(win.active_preset is None
+                  and win.preset_label.get_label() == "Presets",
+                  f"no preset active: {win.preset_label.get_label()!r}")
+            check({p.name: p.read_text() for p in dev.iterdir() if p.is_file()}
+                  == values and win.rows["SHO"].get() == 60,
+                  "the values stay, nothing written")
+            check(gt3.read_text() == stored, "the preset itself stays as it is")
+            check(display_text() == "   ", f"display cleared: {display_text()!r}")
+            check(win._toast_text.get_label()
+                  == "“Test GT3” removed from the slot, its values stay",
+                  f"told: {win._toast_text.get_label()!r}")
+            check(not any(e.startswith("Remove") for e in menu_entries()),
+                  "nothing to remove any more")
+            on_slot(second, 70)
+            on_slot(first, 60)
+            check(win.active_preset is None, "the slot stays without preset")
+        finally:
+            win.preset_display_row.set_active(False)
+            on_slot(first, 40)
+            win._apply_preset(gt3)              # as the next steps expect
+        check(win.active_preset == gt3, "GT3 active again")
+    yield "remove preset from slot", remove_preset_from_slot
+
     def preset_values():
         win._apply_values({"SHO": 60})
         win._show_preset(gt3)

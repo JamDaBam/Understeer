@@ -653,6 +653,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())
         self.update_action.set_enabled(False)
+        add("remove-preset-from-slot", lambda *a: self._remove_preset_from_slot())
 
     def _apply_layout(self):
         compact = self.layout == "compact"
