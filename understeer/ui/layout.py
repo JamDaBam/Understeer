@@ -1,7 +1,9 @@
 """Building blocks of the pages, the same on all of them: a scrolling
 column, section headings, grids of tiles and the dashed tiles that make
 something new."""
-from gi.repository import Adw, GObject, Gtk
+import weakref
+
+from gi.repository import Adw, GLib, GObject, Gtk
 
 SIDES = ("top", "bottom", "start", "end")
 
@@ -22,12 +24,142 @@ def scroll_page():
     return page, column
 
 
-def tile_grid(min_per_line=1, max_per_line=5):
-    """Grid of tiles that wraps to the window width."""
-    return Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
-                       homogeneous=True, min_children_per_line=min_per_line,
-                       max_children_per_line=max_per_line, column_spacing=12,
-                       row_spacing=12, valign=Gtk.Align.START)
+_ALL_COLUMNS = weakref.WeakSet()
+
+
+class Columns:
+    """The column width the tile grids of one page share, so their tiles
+    line up and each grid has as many per row as the others.
+
+    Gtk.FlowBox gives a row as many tiles as fit at the natural width of
+    its widest tile, and that depends on its text: a grid with a long
+    preset name got fewer, wider tiles than the one above, and asked for
+    more height than it then used. Here every tile asks for the same
+    width: the largest minimum width of all tiles of the page, which
+    comes from the CSS (min-width) and from what can't shrink, such as
+    the quick select of the steering angle.
+    """
+
+    def __init__(self):
+        self.width = 0
+        # Held here: a WeakSet loses grids nothing else in Python holds,
+        # although GTK still shows them. Grids taken off the page are
+        # dropped in _update().
+        self._grids = []
+        self._scheduled = False
+        _ALL_COLUMNS.add(self)
+
+    def add(self, grid):
+        self._grids.append(grid)
+        self.schedule()
+
+    def schedule(self):
+        """Measure again once the main loop is idle, e.g. after tiles were
+        added or the layout changed."""
+        if not self._scheduled:
+            self._scheduled = True
+            GLib.idle_add(self._update)
+
+    def _update(self):
+        self._scheduled = False
+        kept = []
+        for grid in self._grids:
+            if grid.get_parent() is not None:
+                grid.placed = True
+            elif getattr(grid, "placed", False):
+                continue                # was on the page, is gone now
+            kept.append(grid)
+        self._grids = kept
+        places = [place for grid in kept if grid.get_parent()
+                  for place in _children(grid)]
+        width = max((tile.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+                     for place in places
+                     if (tile := place.get_child()) is not None
+                     and tile.get_visible()), default=0)
+        if width != self.width:
+            self.width = width
+            for place in places:
+                place.queue_resize()
+        return GLib.SOURCE_REMOVE
+
+
+def update_columns():
+    """Measure every page's tiles again, e.g. after switching between the
+    full and the compact layout, whose tiles have other minimum widths."""
+    for columns in list(_ALL_COLUMNS):
+        columns.schedule()
+
+
+def columns():
+    """A Columns for the tile grids of one page."""
+    return Columns()
+
+
+def _children(grid):
+    child = grid.get_first_child()
+    while child is not None:
+        if isinstance(child, Gtk.FlowBoxChild):
+            yield child
+        child = child.get_next_sibling()
+
+
+class _ColumnLayout(Gtk.LayoutManager):
+    """The place of a tile in a TileGrid: as wide as the shared columns
+    naturally, not as its text would like; at least its minimum width."""
+
+    def __init__(self, columns):
+        super().__init__()
+        self.columns = columns
+        self._minimum = None
+
+    def do_measure(self, widget, orientation, for_size):
+        tile = widget.get_first_child()
+        if tile is None or not tile.get_visible():
+            return 0, 0, -1, -1
+        minimum, natural, _mb, _nb = tile.measure(orientation, for_size)
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            if minimum != self._minimum:
+                # A new tile, or the layout or theme changed: the shared
+                # width is measured again once the CSS applies
+                self._minimum = minimum
+                self.columns.schedule()
+            natural = max(minimum, self.columns.width)
+        return minimum, natural, -1, -1
+
+    def do_allocate(self, widget, width, height, baseline):
+        tile = widget.get_first_child()
+        if tile is not None:
+            tile.allocate(width, height, baseline, None)
+
+
+class TileGrid(Gtk.FlowBox):
+    """A grid of tiles that wraps to the window width; see Columns."""
+    __gtype_name__ = "UndersteerTileGrid"
+
+    def __init__(self, columns=None, **props):
+        super().__init__(**props)
+        self.columns = columns or Columns()
+        self.columns.add(self)
+
+    def append(self, tile):
+        place = Gtk.FlowBoxChild()
+        place.set_layout_manager(_ColumnLayout(self.columns))
+        place.set_child(tile)
+        super().append(place)
+        self.columns.schedule()
+
+
+def tile_grid(min_per_line=1, max_per_line=5, columns=None):
+    """Grid of tiles that wraps to the window width. Grids of one page
+    share columns (see Columns), so their tiles line up."""
+    # vexpand set to False: tiles stretch a line inside them (vexpand)
+    # to keep their buttons at the bottom, which would otherwise make the
+    # grid take the free height of a page that is shorter than the window,
+    # with empty space below the first grid
+    return TileGrid(columns, selection_mode=Gtk.SelectionMode.NONE,
+                    homogeneous=True, min_children_per_line=min_per_line,
+                    max_children_per_line=max_per_line, column_spacing=12,
+                    row_spacing=12, valign=Gtk.Align.START, vexpand=False)
 
 
 def section(column, title, description=None, suffix=None):

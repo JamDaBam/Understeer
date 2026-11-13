@@ -71,6 +71,7 @@ class AxisDiagnostics:
         self.show_hidden = False
 
         self.health = HealthCheck(window, self.update)
+        self.columns = layout.columns()     # the sections line up
         reset = Gtk.Button(label=_("Reset Measurements"))
         reset.set_tooltip_text(_("Start the observed ranges and the rest "
                                  "values anew"))
@@ -153,7 +154,8 @@ class AxisDiagnostics:
                 _("The steering and the axes with a role on the Pedals & "
                   "Paddles tab. Give an axis a role there to check it, or "
                   "set it to “Not assigned” to leave it out."))
-            grid = layout.tile_grid(min_per_line=1, max_per_line=4)
+            grid = layout.tile_grid(min_per_line=1, max_per_line=4,
+                                    columns=self.columns)
             for axis, _steering in checked:
                 grid.append(self._card(axis))
             self.column.append(grid)
@@ -166,7 +168,8 @@ class AxisDiagnostics:
             if axes:
                 layout.section(self.column, _("Other Axes of {device}").format(
                     device=device) if checked else device)
-                grid = layout.tile_grid(min_per_line=1, max_per_line=4)
+                grid = layout.tile_grid(min_per_line=1, max_per_line=4,
+                                    columns=self.columns)
                 for axis in axes:
                     grid.append(self._card(axis))
                 self.column.append(grid)

@@ -57,7 +57,9 @@ class PresetsMixin:
         layout.section(column, _("Saved Presets"),
                       _("Saves all current settings under a name in "
                         "~/.config/Understeer/."), bring)
-        # The presets without a folder, then a heading and tiles per folder
+        # The presets without a folder, then a heading and tiles per folder;
+        # all of them and the tiles above in the same columns
+        self.preset_columns = layout.columns()
         self.presets_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
                                    spacing=12)
         column.append(self.presets_box)
@@ -73,7 +75,7 @@ class PresetsMixin:
         choosing = self.preset_selection.active
         self.preset_selection.available([str(p) for _n, p in presets])
         # Making new things and the built-in preset, no drop target as a whole
-        actions = layout.tile_grid()
+        actions = layout.tile_grid(columns=self.preset_columns)
         self.presets_box.append(actions)
         self.folder_flows = {}
         actions.append(layout.dashed_tile(
@@ -89,7 +91,7 @@ class PresetsMixin:
         actions.append(self._sim_defaults_tile())
         actions.set_sensitive(not choosing)     # nothing to choose there
         # The presets without a folder; dropping one here takes it out
-        self.presets_flow = layout.tile_grid()
+        self.presets_flow = layout.tile_grid(columns=self.preset_columns)
         if loose or len(groups) > (1 if loose else 0):
             self.presets_box.append(self._preset_section(None, loose))
         for folder, group in groups:
@@ -102,7 +104,8 @@ class PresetsMixin:
         section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         section.add_css_class("preset-folder")
         section.append(self._folder_head(folder, group))
-        flow = self.presets_flow if folder is None else layout.tile_grid()
+        flow = self.presets_flow if folder is None else \
+            layout.tile_grid(columns=self.preset_columns)
         if group:
             for name, path in group:
                 flow.append(self.preset_selection.wrap(
@@ -204,7 +207,10 @@ class PresetsMixin:
             tile.add_css_class("active")
         # Two lines at most, asking for the room of a usual name: a long
         # name made every tile as wide
-        title = name_label(Gtk.Label(label=name, xalign=0), lines=2, chars=16)
+        # It takes the room of the row, as at a game: with a filler after
+        # the pencil, a long name got less and broke inside a word
+        title = name_label(Gtk.Label(label=name, xalign=0, hexpand=True),
+                           lines=2, chars=16)
         full_name_tip(title, name, 16)
         title.add_css_class("preset-name")
         # Right after the name, like at a folder and a game
@@ -218,7 +224,6 @@ class PresetsMixin:
         head.append(title)
         if not self.preset_selection.active:     # a check mark is there then
             head.append(rename_btn)
-            head.append(Gtk.Box(hexpand=True))
             head.append(self._preset_menu(path))
         else:
             head.set_margin_end(36)
