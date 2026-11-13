@@ -92,6 +92,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.active_preset = None   # path of the last applied/saved preset
         self.active_values = {}     # values stored in that preset
+        # Which preset is active in which slot, see _follow_slot()
+        self._slot_presets = {}     # (advanced, slot) -> preset path
+        self._preset_slot = None    # (advanced, slot) the active preset is in
         self._preset_names = {}     # preset path -> name, see _rebuild_preset_menu
 
         self.inputs = InputMonitor(self._on_input, self._on_input_gone)
@@ -980,6 +983,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if missing:
             log.info("Not supported by this wheelbase: %s", ", ".join(missing))
         self._set_status(_("In sync with device"))
+        self._follow_slot()
         self._update_preset_indicator()
 
     # -----------------------------------------------------------------------
