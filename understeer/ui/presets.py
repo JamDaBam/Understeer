@@ -433,6 +433,12 @@ class PresetsMixin:
                     name=short(name)))
             if self._in_background:         # chosen in the tray menu
                 self._notify_tray_preset(name, outcome, failed)
+        if outcome in ("written", "no device"):
+            # The preset is what the tiles compare to from now on: nothing
+            # is marked as changed, and Undo goes back to the preset. Not
+            # while it waits for Apply: Discard goes back to the wheelbase.
+            for row in self.rows.values():
+                row.set_baseline(row.get())
 
     def apply_from_tray(self, path):
         """A preset chosen in the tray menu. Unsaved changes of the active

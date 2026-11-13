@@ -9,6 +9,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+import time
 
 SYSFS_GLOB  = "/sys/class/ftec_tuning/*"
 RUMBLE_GLOB = "/sys/bus/hid/devices/*/rumble"
@@ -169,17 +170,157 @@ def read_int(path):
         return None
 
 
+STANDARD_SLOTS = (0, 1)     # Auto and Custom (A SET, C SET on a CSL DD)
+
+
+def slots_in_menu(advanced, count):
+    """The slots the tuning menu offers: in Standard mode (advanced False)
+    Auto and Custom, which the driver reports as auto and 1; otherwise
+    slots 1 to count. 0 stands for Auto."""
+    if advanced is False:
+        return list(STANDARD_SLOTS)
+    return list(range(1, count + 1))
+
+
+def read_slot(path):
+    """The tuning slot the wheelbase is on: its number, 0 for its Auto
+    setup (the driver writes "auto" then), None if path (the SLOT file)
+    can't be read."""
+    try:
+        with open(path) as f:
+            text = f.read().strip()
+        return 0 if text == "auto" else int(text)
+    except (OSError, ValueError):
+        return None
+
+
+def read_advanced_mode(path):
+    """Whether the tuning menu is in Advanced mode: True, False for
+    Standard, None if path (the advanced_mode file) can't be read or holds
+    something else.
+
+    hid-fanatecff writes "1" or "0" there (hid-ftecff-tuning.c); before the
+    wheelbase has reported its settings it says 0.
+    """
+    value = read_int(path)
+    return bool(value) if value in (0, 1) else None
+
+
+MODE_SWITCH_SECONDS = 5     # how long the wheelbase gets to switch its menu
+MODE_RETRY_SECONDS = 1      # ... and how often it is asked again meanwhile
+MODE_SETTLE_SECONDS = 2.5   # after switching it takes no request for a while
+
+
+class TuningMode:
+    """Follows and switches the Standard/Advanced mode of the tuning menu.
+
+    Writing to advanced_mode doesn't set the mode: if the number differs
+    from the mode the driver knows, it asks the wheelbase to switch to the
+    other one, and it reports success in any case. The file shows the new
+    mode once the wheelbase has sent its settings again. So a switch only
+    counts when it can be read back, and poll() tells how it ended.
+
+    A CSL DD switches within 0.2 s, but ignores the request for about two
+    seconds after it has switched (measured: 1.8 s ignored, 2.3 s taken).
+    So busy tells while a switch is better not asked for, and poll() asks
+    again until the wheelbase follows. That can't switch twice: the driver
+    only passes on a number that differs from the mode the wheelbase
+    reported.
+    """
+    SWITCHED = "switched"   # the wheelbase did what switch() asked for
+    FAILED = "failed"       # ... or didn't, in MODE_SWITCH_SECONDS
+    CHANGED = "changed"     # switched by someone else, e.g. on the wheelbase
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self.path = None        # the advanced_mode file, None if there is none
+        self.advanced = None    # mode last read: True, False or None (unknown)
+        self._wanted = None     # mode a switch is waiting for
+        self._deadline = self._retry_at = self._settled_at = 0
+
+    @property
+    def switching(self):
+        return self._wanted is not None
+
+    @property
+    def busy(self):
+        """Switching, or switched so recently that the wheelbase would
+        ignore the next request."""
+        return self.switching or self._clock() < self._settled_at
+
+    def attach(self, path):
+        """Follow this advanced_mode file from now on; None for none."""
+        if path == self.path:
+            return
+        self.path = path
+        self._wanted = None
+        self._settled_at = 0
+        self.advanced = read_advanced_mode(path) if path else None
+
+    def switch(self, advanced):
+        """Ask the wheelbase for Advanced (True) or Standard (False).
+        Returns False if that could not be written; otherwise poll() tells
+        later whether the wheelbase switched."""
+        # Not for a file that is gone: writing would make one, or in sysfs
+        # ask for a password in vain.
+        if not self.path or not os.path.isfile(self.path):
+            return False
+        if write_values({self.path: int(bool(advanced))}):
+            self._wanted = None
+            return False
+        self._wanted = bool(advanced)
+        self._deadline = self._clock() + MODE_SWITCH_SECONDS
+        self._retry_at = self._clock() + MODE_RETRY_SECONDS
+        return True
+
+    def poll(self):
+        """Read the mode again. Returns SWITCHED or FAILED once for a
+        switch() that ended, CHANGED if the mode changed without one, else
+        None. A mode read for the first time is no change."""
+        if not self.path:
+            return None
+        mode = read_advanced_mode(self.path)
+        if self._wanted is not None:
+            now = self._clock()
+            if mode == self._wanted:
+                self._wanted, self.advanced = None, mode
+                self._settled_at = now + MODE_SETTLE_SECONDS
+                return self.SWITCHED
+            if now < self._deadline:
+                if now >= self._retry_at and os.path.isfile(self.path):
+                    self._retry_at = now + MODE_RETRY_SECONDS
+                    write_values({self.path: int(self._wanted)})
+                return None
+            self._wanted = None
+            if mode is not None:
+                self.advanced = mode
+            return self.FAILED
+        if mode is None or mode == self.advanced:
+            return None
+        known, self.advanced = self.advanced is not None, mode
+        if not known:
+            return None
+        self._settled_at = self._clock() + MODE_SETTLE_SECONDS
+        return self.CHANGED
+
+
+def _value_text(value):
+    """What is written for value: a whole number, or "auto" for SLOT."""
+    return "auto" if value == "auto" else str(int(value))
+
+
 def write_values(writes):
-    """Write {path: int}. Paths without permission go through one pkexec call.
+    """Write {path: int or "auto"}. Paths without permission go through one
+    pkexec call.
 
     Returns the list of paths that could not be written.
     """
     denied, failed, written = {}, [], []
     for path, value in writes.items():
-        name = f"{os.path.basename(path)}={int(value)}"
+        name = f"{os.path.basename(path)}={_value_text(value)}"
         try:
             with open(path, "w") as f:
-                f.write(str(int(value)))
+                f.write(_value_text(value))
             written.append(name)
         except PermissionError:
             denied[path] = value
@@ -192,9 +333,10 @@ def write_values(writes):
     if written:
         log.debug("Wrote %s", ", ".join(written))
     if denied:
-        names = ", ".join(f"{os.path.basename(p)}={int(v)}" for p, v in denied.items())
+        names = ", ".join(f"{os.path.basename(p)}={_value_text(v)}"
+                          for p, v in denied.items())
         log.info("No write access, asking for a password to write %s", names)
-        script = "; ".join(f"echo {int(v)} > {shlex.quote(p)}"
+        script = "; ".join(f"echo {_value_text(v)} > {shlex.quote(p)}"
                            for p, v in denied.items())
         if not run_privileged(script):
             log.warning("Could not write %s with a password either", names)

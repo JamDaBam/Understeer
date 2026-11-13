@@ -201,3 +201,262 @@ def test_wheel_info(sysfs, tmp_path):
 def test_wheel_info_unknown_base(sysfs):
     assert device.wheel_info(str(sysfs("0003:0EB7:0999.0001")))["base"] is None
     assert device.wheel_info(str(sysfs("odd-name")))["base"] is None
+
+
+# -- Standard / Advanced tuning menu ----------------------------------------
+
+@pytest.mark.parametrize("text, expected", [
+    ("1\n", 1), ("6\n", 6), ("auto\n", 0), ("auto", 0), ("", None), ("x\n", None)])
+def test_read_slot(tmp_path, text, expected):
+    """The driver writes the number of the slot, or "auto" for the Auto
+    setup of the wheelbase."""
+    path = tmp_path / "SLOT"
+    path.write_text(text)
+    assert device.read_slot(str(path)) == expected
+
+
+def test_read_slot_missing(tmp_path):
+    assert device.read_slot(str(tmp_path / "SLOT")) is None
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("1\n", True), ("0\n", False), ("1", True),
+    ("2\n", None), ("advanced\n", None), ("", None)])
+def test_read_advanced_mode(tmp_path, text, expected):
+    """The driver writes 1 or 0; anything else is not a mode."""
+    path = tmp_path / "advanced_mode"
+    path.write_text(text)
+    assert device.read_advanced_mode(str(path)) is expected
+
+
+def test_read_advanced_mode_missing(tmp_path):
+    assert device.read_advanced_mode(str(tmp_path / "advanced_mode")) is None
+
+
+class Clock:
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self):
+        return self.now
+
+
+@pytest.fixture
+def mode_file(sysfs):
+    """advanced_mode of a wheelbase in Advanced mode, next to its settings."""
+    return sysfs("0003:0EB7:0020.0005", advanced_mode=1, FF=70, SEN=900, SLOT=2
+                 ) / "advanced_mode"
+
+
+def test_mode_is_read_when_attached(mode_file):
+    mode = device.TuningMode()
+    assert mode.path is None and mode.advanced is None and mode.poll() is None
+    mode.attach(str(mode_file))
+    assert mode.advanced is True and not mode.switching
+    assert mode.poll() is None          # nothing happened since
+
+
+@pytest.mark.parametrize("start, wanted", [(0, True), (1, False)])
+def test_switch_mode(mode_file, privileged, start, wanted):
+    """Standard to Advanced and back: the number is written, and the switch
+    counts once the file shows the new mode."""
+    mode_file.write_text(f"{start}\n")
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    assert mode.switch(wanted) and mode.switching
+    assert mode.advanced is (not wanted)        # not before it is read back
+    assert mode_file.read_text() == str(int(wanted))
+    assert mode.poll() == mode.SWITCHED
+    assert mode.advanced is wanted and not mode.switching
+    assert mode.poll() is None                  # told once
+    privileged.assert_not_called()
+
+
+def test_switch_leaves_other_settings_alone(mode_file, privileged):
+    folder = mode_file.parent
+    before = {p.name: p.read_text() for p in folder.iterdir()
+              if p.name != "advanced_mode"}
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    assert mode.switch(False) and mode.poll() == mode.SWITCHED
+    assert {p.name: p.read_text() for p in folder.iterdir()
+            if p.name != "advanced_mode"} == before
+    assert sorted(before) == ["FF", "SEN", "SLOT"]
+
+
+def test_wheelbase_does_not_switch(mode_file, monkeypatch):
+    """The driver accepts every write; a wheelbase that keeps its mode is
+    noticed when the time is up, not before."""
+    monkeypatch.setattr(device, "write_values", lambda writes: [])
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert mode.switch(False)
+    clock.now += device.MODE_SWITCH_SECONDS - 0.1
+    assert mode.poll() is None and mode.switching
+    clock.now += 0.2
+    assert mode.poll() == mode.FAILED
+    assert mode.advanced is True and not mode.switching
+    assert mode.poll() is None
+
+
+def test_asks_again_while_waiting(mode_file, monkeypatch):
+    """A wheelbase that has just switched ignores the request, so it is
+    repeated every MODE_RETRY_SECONDS until the switch is read back."""
+    asked = []
+    monkeypatch.setattr(device, "write_values",
+                        lambda writes: asked.append(dict(writes)) or [])
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert mode.switch(False) and asked == [{str(mode_file): 0}]
+    clock.now += device.MODE_RETRY_SECONDS - 0.1
+    assert mode.poll() is None and len(asked) == 1      # not yet
+    clock.now += 0.2
+    assert mode.poll() is None and asked[1:] == [{str(mode_file): 0}]
+    assert mode.poll() is None and len(asked) == 2      # once per second
+    clock.now += device.MODE_RETRY_SECONDS
+    assert mode.poll() is None and len(asked) == 3
+    mode_file.write_text("0\n")         # now the wheelbase switched
+    clock.now += device.MODE_RETRY_SECONDS
+    assert mode.poll() == mode.SWITCHED and len(asked) == 3
+    clock.now += device.MODE_RETRY_SECONDS
+    assert mode.poll() is None and len(asked) == 3      # nothing more to ask
+
+
+def test_busy_after_switching(mode_file):
+    """The wheelbase ignores a request right after it has switched, also
+    after a switch made on the wheelbase itself."""
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert not mode.busy
+    assert mode.switch(False) and mode.busy             # switching
+    assert mode.poll() == mode.SWITCHED and mode.busy   # ... and just after
+    clock.now += device.MODE_SETTLE_SECONDS - 0.1
+    assert mode.busy
+    clock.now += 0.2
+    assert not mode.busy
+    mode_file.write_text("1\n")                         # on the wheelbase
+    assert mode.poll() == mode.CHANGED and mode.busy
+    clock.now += device.MODE_SETTLE_SECONDS
+    assert not mode.busy
+
+
+def test_not_busy_after_a_failed_switch(mode_file, monkeypatch):
+    monkeypatch.setattr(device, "write_values", lambda writes: [])
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert mode.switch(False)
+    clock.now += device.MODE_SWITCH_SECONDS
+    assert mode.poll() == mode.FAILED and not mode.busy
+
+
+def test_does_not_ask_a_file_that_is_gone(mode_file, monkeypatch):
+    asked = []
+    monkeypatch.setattr(device, "write_values",
+                        lambda writes: asked.append(dict(writes)) or [])
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert mode.switch(False)
+    mode_file.unlink()                  # the wheelbase was switched off
+    clock.now += device.MODE_RETRY_SECONDS
+    assert mode.poll() is None and len(asked) == 1
+    clock.now += device.MODE_SWITCH_SECONDS
+    assert mode.poll() == mode.FAILED and mode.advanced is True
+
+
+def test_wheelbase_switches_late(mode_file, monkeypatch):
+    monkeypatch.setattr(device, "write_values", lambda writes: [])
+    clock = Clock()
+    mode = device.TuningMode(clock)
+    mode.attach(str(mode_file))
+    assert mode.switch(False)
+    clock.now += 1
+    assert mode.poll() is None
+    mode_file.write_text("0\n")         # the wheelbase reports its settings
+    assert mode.poll() == mode.SWITCHED and mode.advanced is False
+
+
+def test_mode_changed_on_the_wheelbase(mode_file):
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    mode_file.write_text("0\n")
+    assert mode.poll() == mode.CHANGED and mode.advanced is False
+    assert mode.poll() is None
+    mode_file.write_text("1\n")
+    assert mode.poll() == mode.CHANGED and mode.advanced is True
+
+
+def test_mode_read_for_the_first_time_is_no_change(mode_file):
+    mode_file.write_text("\n")          # nothing to read yet
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    assert mode.advanced is None
+    mode_file.write_text("1\n")
+    assert mode.poll() is None and mode.advanced is True
+
+
+def test_mode_file_missing(tmp_path, privileged):
+    """An older driver, or the wheelbase unplugged meanwhile."""
+    mode = device.TuningMode()
+    mode.attach(str(tmp_path / "advanced_mode"))
+    assert mode.advanced is None and mode.poll() is None
+    assert not mode.switch(True) and not mode.switching
+    mode.attach(None)
+    assert not mode.switch(True) and mode.poll() is None
+    privileged.assert_not_called()
+
+
+def test_mode_file_gone_keeps_last_mode(mode_file):
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    mode_file.unlink()
+    assert mode.poll() is None and mode.advanced is True
+
+
+def test_mode_file_read_only(mode_file, privileged, no_write_access):
+    """Without write access and with the password refused nothing is
+    switched, and nothing is waited for."""
+    privileged.return_value = False
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    assert not mode.switch(False)
+    assert not mode.switching and mode.advanced is True
+    assert mode_file.read_text() == "1\n"
+    assert mode.poll() is None
+
+
+def test_attach_again_forgets_a_switch(mode_file, tmp_path, monkeypatch):
+    """A wheelbase plugged in again gets a new folder; a switch asked of
+    the old one is over."""
+    monkeypatch.setattr(device, "write_values", lambda writes: [])
+    mode = device.TuningMode()
+    mode.attach(str(mode_file))
+    assert mode.switch(False)
+    other = tmp_path / "advanced_mode"
+    other.write_text("0\n")
+    mode.attach(str(other))
+    assert not mode.switching and mode.advanced is False
+    assert mode.poll() is None
+
+
+def test_slots_in_menu():
+    """Standard has Auto and Custom (auto and 1), Advanced the slots."""
+    assert device.slots_in_menu(False, 5) == [0, 1]
+    assert device.slots_in_menu(True, 5) == [1, 2, 3, 4, 5]
+    assert device.slots_in_menu(None, 6) == [1, 2, 3, 4, 5, 6]   # no mode file
+
+
+def test_write_auto(sysfs, privileged):
+    d = sysfs("0003:0EB7:0020.0005", SLOT=2)
+    assert device.write_values({str(d / "SLOT"): "auto"}) == []
+    assert (d / "SLOT").read_text() == "auto"
+
+
+def test_write_auto_with_password(sysfs, privileged, no_write_access):
+    d = sysfs("0003:0EB7:0020.0005", SLOT=2)
+    assert device.write_values({str(d / "SLOT"): "auto"}) == []
+    assert "echo auto > " in privileged.call_args[0][0]

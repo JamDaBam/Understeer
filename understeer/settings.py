@@ -144,7 +144,7 @@ SIM_DEFAULTS = {"SEN": 900, "FF": 70, "FOR": 100, "SPR": 0, "DPR": 0,
                 "SHO": 80, "FFS": 1, "FEI": 30, "INT": 0}
 
 SLOTS = 5       # slots the driver can switch to
-MAX_SLOT = 15   # the device reports the slot in 4 bits; a CSL DD has 6 slots
+MAX_SLOT = 15   # the device reports the slot in 4 bits; Auto is reported as 0
 
 
 def fit_step(setting, value):

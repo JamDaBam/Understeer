@@ -10,10 +10,11 @@ from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .. import APP_ICON, APP_ID, capabilities, config, games, releases, report
 from .. import log as session_log
-from ..device import (RIMS, can_write, describe_access, find_device_path,
-                      find_rumble_path, install_udev_rule, join_group, model_id,
-                      permission_hint, read_int, steering_range, wheel_info,
-                      write_values)
+from ..device import (RIMS, TuningMode, can_write, describe_access,
+                      find_device_path, find_rumble_path, install_udev_rule,
+                      join_group, model_id, permission_hint, read_int,
+                      read_slot, slots_in_menu, steering_range, wheel_info,
+                      write_values, STANDARD_SLOTS)
 from .. import i18n
 from ..i18n import _
 from ..inputs import InputMonitor
@@ -61,6 +62,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self.wheel = {}          # see device.wheel_info()
         self.capabilities = None  # see capabilities.detect()
+        self.tuning_mode = TuningMode()     # Standard or Advanced tuning menu
         # Steering angle of the wheelbase: largest angle, value for Auto
         self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
         self._in_background = False     # window hidden, still watching games
@@ -78,7 +80,11 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.model = None           # wheelbase model, e.g. "0EB7:0020"
         self.slot_names = {}        # slot number -> name chosen by the user
-        self.slot_count = SLOTS     # more if the wheelbase reported more
+        self.standard_slot_names = {}   # ... in the Standard menu (0 Auto, 1 Custom)
+        self.slot_count = SLOTS     # slots 1-5 of the Advanced menu
+        self._slot_list = []        # slot numbers in the slot menu, 0 = Auto
+        self._mode_slots = {}       # mode (advanced) -> slot last used in it
+        self._prefs_toast = None    # the message shown in the preferences
         self._filling_slot_names = False
 
         self.active_preset = None   # path of the last applied/saved preset
@@ -295,7 +301,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.undo_btn = Gtk.Button(icon_name="edit-undo-symbolic")
         self.undo_btn.set_tooltip_text(
-            _("Undo all changes since the values were loaded"))
+            _("Undo all changes since the values were loaded or a preset "
+              "was applied"))
         self.undo_btn.set_action_name("win.undo-all")
         header.pack_end(self.undo_btn)
 
@@ -720,23 +727,33 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
     def _load_slot_names(self):
         self.model = model_id(self.device_path) if self.device_path else None
         self.slot_names = config.load_slot_names(self.model) if self.model else {}
-        self.slot_count = min(MAX_SLOT, max(SLOTS, config.load_slot_count(
-            self.model) if self.model else 0))
+        self.standard_slot_names = (config.load_slot_names(
+            self._standard_names_key()) if self.model else {})
         self._show_slot_name_rows()
         self._filling_slot_names = True
         try:
             for n, entry in self.slot_name_rows.items():
                 entry.set_text(self.slot_names.get(n, ""))
+            for n, entry in self.standard_name_rows.items():
+                entry.set_text(self.standard_slot_names.get(n, ""))
         finally:
             self._filling_slot_names = False
         self.slot_names_group.set_sensitive(self.model is not None)
+        self.standard_names_group.set_sensitive(self.model is not None)
         self._update_slot_dropdown()
 
+    def _standard_names_key(self):
+        """Where the names of the slots of the Standard menu are kept: next
+        to those of the model, under a key of their own."""
+        return f"{self.model} standard"
+
     def _show_slot_name_rows(self):
-        """One name row per slot of the connected wheelbase."""
-        for n in range(1, self.slot_count + 1):
+        """One name row per slot of the connected wheelbase, and one for
+        its Auto setup (slot 0)."""
+        for n in range(0, self.slot_count + 1):
             if n not in self.slot_name_rows:
-                entry = Adw.EntryRow(title=_("Slot {n}").format(n=n))
+                entry = Adw.EntryRow(title=_("Auto") if n == 0
+                                     else _("Slot {n}").format(n=n))
                 self._filling_slot_names = True
                 try:
                     entry.set_text(self.slot_names.get(n, ""))
@@ -749,47 +766,61 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         for n, entry in self.slot_name_rows.items():
             entry.set_visible(n <= self.slot_count)
 
+    def _menu_slots(self):
+        """The slots the slot menu lists, in its order: those of the tuning
+        menu in its mode, and the one the wheelbase is on if it isn't one
+        of them (Auto in Advanced mode)."""
+        slots = slots_in_menu(self.tuning_mode.advanced, self.slot_count)
+        current = self.device_values.get("SLOT")
+        if current is not None and current not in slots:
+            slots.append(current)
+        return slots
+
     def _show_device_slot(self):
         """Select the slot the wheelbase reports in the slot menu.
 
-        Returns the slot number, or None if it can't be read.
+        Returns the slot number, 0 for the Auto setup of the wheelbase, or
+        None if the slot can't be read.
         """
-        slot = read_int(self._attr_file("SLOT"))
-        if not slot or not 1 <= slot <= MAX_SLOT:
+        slot = read_slot(self._attr_file("SLOT"))
+        if slot is None or not 0 <= slot <= MAX_SLOT:
             return None
-        if slot > self.slot_count:
-            # Some wheelbases have more slots than the driver can switch
-            # to (a CSL DD has 6); remember that for this model.
-            self.slot_count = slot
-            if self.model:
-                config.save_slot_count(self.model, slot)
-            self._show_slot_name_rows()
-            self._update_slot_dropdown()
-        with self.slot_dropdown.handler_block(self._slot_handler):
-            self.slot_dropdown.set_selected(slot - 1)
+        self.device_values["SLOT"] = slot
+        self._update_slot_dropdown()
         return slot
 
-    def _on_slot_name_changed(self, n, text):
+    def _on_slot_name_changed(self, n, text, standard=False):
         if self._filling_slot_names or self.model is None:
             return
-        config.save_slot_name(self.model, n, text)
+        names = self.standard_slot_names if standard else self.slot_names
+        config.save_slot_name(self._standard_names_key() if standard
+                              else self.model, n, text)
         if text.strip():
-            self.slot_names[n] = text.strip()
+            names[n] = text.strip()
         else:
-            self.slot_names.pop(n, None)
+            names.pop(n, None)
         self._update_slot_dropdown()
 
     def _slot_label(self, n):
-        return self.slot_names.get(n) or _("Slot {n}").format(n=n)
+        """The name of slot n in the mode the tuning menu is in."""
+        if self.tuning_mode.advanced is False and n in STANDARD_SLOTS:
+            return self.standard_slot_names.get(n) or (
+                _("Auto") if n == 0 else _("Custom"))
+        return self.slot_names.get(n) or (
+            _("Auto") if n == 0 else _("Slot {n}").format(n=n))
 
     def _update_slot_dropdown(self):
-        labels = [self._slot_label(n) for n in range(1, self.slot_count + 1)]
+        """List the slots of the menu and select the one the wheelbase is
+        on. Changing the list must not switch the slot on the wheelbase."""
+        self._slot_list = self._menu_slots()
+        labels = [self._slot_label(n) for n in self._slot_list]
         model = self.slot_dropdown.get_model()
-        # Changing the list must not switch the slot on the wheelbase.
+        current = self.device_values.get("SLOT")
         with self.slot_dropdown.handler_block(self._slot_handler):
-            selected = self.slot_dropdown.get_selected()
-            model.splice(0, model.get_n_items(), labels)
-            self.slot_dropdown.set_selected(selected)
+            if [model.get_string(i) for i in range(model.get_n_items())] != labels:
+                model.splice(0, model.get_n_items(), labels)
+            if current in self._slot_list:
+                self.slot_dropdown.set_selected(self._slot_list.index(current))
 
     def _update_banner(self):
         if not self.device_path:
@@ -933,7 +964,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 row.set(value)
             row.set_baseline(row.get())
         self.device_values["SLOT"] = self._show_device_slot()
-        log.info("Read from wheelbase (slot %s): %s", self.device_values["SLOT"],
+        mode = self.tuning_mode
+        if (self.device_values["SLOT"] is not None and mode.advanced is not None
+                and not mode.switching):
+            self._mode_slots[mode.advanced] = self.device_values["SLOT"]
+        log.info("Read from wheelbase (slot %s): %s",
+                 self.device_values["SLOT"] or "auto"
+                 if self.device_values["SLOT"] is not None else None,
                  " ".join(f"{a}={v}" for a, v in self.device_values.items()
                           if a != "SLOT" and v is not None))
         missing = [a for a, v in self.device_values.items() if v is None]
@@ -1069,10 +1106,17 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         While the preferences are open, messages show there instead.
         """
         if self._prefs_open():
+            # The preferences queue their messages too: the next one
+            # replaces the one shown.
+            if self._prefs_toast is not None:
+                self._prefs_toast.dismiss()
             toast = Adw.Toast(timeout=3, custom_title=self._toast_label(text))
             if button:
                 toast.set_button_label(button)
                 toast.connect("button-clicked", lambda t: action())
+            toast.connect("dismissed", lambda t: setattr(
+                self, "_prefs_toast", None) if self._prefs_toast is t else None)
+            self._prefs_toast = toast
             self.prefs.add_toast(toast)
             return
         if self._toast is None:
@@ -1137,9 +1181,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if not self.device_path:
             return GLib.SOURCE_CONTINUE
         self._check_wheel()
+        if self._check_tuning_mode():
+            # The values were read again, or are once the slot is back;
+            # until then the old slot is no change made on the wheelbase.
+            return GLib.SOURCE_CONTINUE
         if self._live_timer:
             return GLib.SOURCE_CONTINUE
-        slot = read_int(self._attr_file("SLOT"))
+        slot = read_slot(self._attr_file("SLOT"))
         if slot is not None and slot != self.device_values.get("SLOT"):
             discarded = bool(self.pending)
             log.info("Slot changed on the wheelbase: %s -> %s%s",
@@ -1191,6 +1239,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if caps != self.capabilities:
             log.info("Hardware functions: %s", capabilities.summary(caps))
             self.capabilities = caps
+        self._update_mode_switch()
 
     def _check_wheel(self):
         """Notice a steering wheel being put on or changed."""
@@ -1227,18 +1276,138 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self.rim_row.set_subtitle(" · ".join(
                 p for p in (self._rim_name(rim), firmware(w.get("rim_firmware"))) if p))
 
+    # -----------------------------------------------------------------------
+    # Standard or Advanced tuning menu
+    # -----------------------------------------------------------------------
+    @staticmethod
+    def _mode_text(advanced):
+        """The mode for the log."""
+        return {True: "Advanced", False: "Standard"}.get(advanced, "not readable")
+
+    def _update_mode_switch(self):
+        """Show the mode switch in the preferences if the driver offers
+        the mode and it can be read, and let it be used if it can be
+        written and the wheelbase is ready for it."""
+        feature = self.capabilities.get(capabilities.ADVANCED_MODE)
+        path = feature.paths[0] if feature and feature.readable else None
+        if path != self.tuning_mode.path:
+            self.tuning_mode.attach(path)
+            if path:
+                log.info("Tuning menu: %s",
+                         self._mode_text(self.tuning_mode.advanced))
+        known = self.tuning_mode.advanced is not None
+        self.mode_row.set_visible(known)
+        self.standard_names_group.set_visible(known)
+        self.mode_row.set_sensitive(known and feature.writable
+                                    and not self.tuning_mode.busy)
+        self._show_tuning_mode()
+        self._update_slot_dropdown()        # the slots of the mode
+
+    def _show_tuning_mode(self):
+        """Show the mode the wheelbase is in, unless it is just switching."""
+        mode = self.tuning_mode
+        if mode.advanced is not None and not mode.switching:
+            with self.mode_switch.handler_block(self._mode_handler):
+                self.mode_switch.set_active(mode.advanced)
+                self.mode_switch.set_state(mode.advanced)
+
+    def _on_mode_chosen(self, advanced):
+        """Switched in the app. Only the mode is written: other changes
+        are neither written along nor kept over the values of the new mode.
+        Returns True: the switch shows the mode as reached only once the
+        wheelbase has switched, and can't be used until then."""
+        if not self.tuning_mode.path or advanced == self.tuning_mode.advanced:
+            return False
+        self.flush_live()
+        log.info("Switching the tuning menu to %s", self._mode_text(advanced))
+        if self.tuning_mode.switch(advanced):
+            self._set_status(_("Writing…"))
+            self.mode_row.set_sensitive(False)
+        else:
+            self._mode_not_switched()
+        return True
+
+    def _mode_not_switched(self):
+        log.warning("Shown to the user: tuning menu not switched")
+        message = _("Could not switch the tuning menu")
+        self._notify(message, _("Report…"),
+                     lambda: ReportDialog(self, title=message))
+        self._show_tuning_mode()        # back to the mode that is active
+        self._update_pending_bar()      # ... and to the status before
+
+    def _check_tuning_mode(self):
+        """Follow the mode: a switch asked for here that the wheelbase made
+        or didn't make, and one made on the wheelbase itself. The values
+        of the new mode are read again, as after switching the slot.
+        Returns True if the mode changed."""
+        event = self.tuning_mode.poll()
+        if event is None:
+            if self.mode_row.get_visible() and not self.mode_row.get_sensitive():
+                self._update_mode_switch()      # ready for the next switch?
+            return False
+        mode = self.tuning_mode
+        if event == mode.FAILED:
+            self._mode_not_switched()
+            self._update_mode_switch()
+            return False
+        log.info("Tuning menu %s: %s", "switched" if event == mode.SWITCHED
+                 else "changed on the wheelbase", self._mode_text(mode.advanced))
+        self._show_tuning_mode()
+        if self._restore_slot():
+            pass                    # the values follow once the slot is back
+        elif self.pending:          # not over changes waiting for Apply
+            self._update_pending_bar()
+        else:
+            self._load_from_device()
+        self._update_mode_switch()
+        if event == mode.CHANGED:
+            self._notify(_("Tuning menu changed on the wheelbase: {mode}").format(
+                mode=_("Advanced") if mode.advanced else _("Standard")))
+        return True
+
+    def _restore_slot(self):
+        """After switching the mode, here or on the wheelbase, go to the
+        slot last used in the new mode, or else stay on the slot from
+        before if the new mode has it: a CSL DD goes to its Auto setup
+        when switched to Standard. Returns True if a slot is being
+        selected."""
+        advanced = self.tuning_mode.advanced
+        offered = (STANDARD_SLOTS if advanced is False
+                   else range(0, SLOTS + 1))       # what the driver can select
+        before = self.device_values.get("SLOT")    # read before the switch
+        target = self._mode_slots.get(advanced)
+        if target not in offered:
+            target = before
+        if target not in offered or self.pending:
+            return False
+        if read_slot(self._attr_file("SLOT")) == target:
+            return False
+        log.info("Back to slot %s after switching the tuning menu",
+                 target or "auto")
+        if write_values({self._attr_file("SLOT"): target or "auto"}):
+            log.warning("Could not go back to slot %s", target or "auto")
+            return False
+        self.device_values["SLOT"] = target     # not a change made on the wheel
+        GLib.timeout_add(150, lambda: self._load_from_device() and False)
+        return True
+
     def _on_slot_selected(self):
         if not self.device_path:
             return
+        index = self.slot_dropdown.get_selected()
+        if not 0 <= index < len(self._slot_list):
+            return
+        slot = self._slot_list[index]
+        if slot == self.device_values.get("SLOT"):
+            return
         self._flush_pending()
-        slot = self.slot_dropdown.get_selected() + 1
-        log.info("Switching to slot %s", slot)
-        if write_values({self._attr_file("SLOT"): slot}):
+        log.info("Switching to slot %s", slot or "auto")
+        if write_values({self._attr_file("SLOT"): slot or "auto"}):
             self._notify(
                 _("The driver can only switch to slots 1–{n}. Choose this "
                   "slot on the wheelbase.").format(n=SLOTS)
                 if slot > SLOTS else _("Could not switch slot"))
-            self._show_device_slot()        # back to the slot that is active
+            self._update_slot_dropdown()    # back to the slot that is active
             return
         self.device_values["SLOT"] = slot   # not a change made on the wheel
         # Switching loads the slot's stored values into all attributes.

@@ -84,6 +84,7 @@ class PreferencesMixin:
         self.rim_row = Adw.ActionRow(title=_("Steering Wheel"), subtitle_selectable=True)
         hardware.add(self.base_row)
         hardware.add(self.rim_row)
+        hardware.add(self._build_mode_row())
         wheel.add(hardware)
         self._show_wheel_info()
 
@@ -95,6 +96,20 @@ class PreferencesMixin:
         self.slot_name_rows = {}
         self._show_slot_name_rows()
         wheel.add(self.slot_names_group)
+
+        # The Standard menu has its own two setups, named on their own
+        self.standard_names_group = Adw.PreferencesGroup(
+            title=_("Slot Names in the Standard Menu"), visible=False,
+            description=_("The Standard tuning menu has two setups of its own, "
+                          "e.g. “A SET” and “C SET”."))
+        self.standard_name_rows = {}
+        for n, title in ((0, _("Auto")), (1, _("Custom"))):
+            entry = Adw.EntryRow(title=title)
+            entry.connect("changed", lambda e, n=n: self._on_slot_name_changed(
+                n, e.get_text(), standard=True))
+            self.standard_name_rows[n] = entry
+            self.standard_names_group.add(entry)
+        wheel.add(self.standard_names_group)
 
         system = Adw.PreferencesGroup(title=_("System"))
         # Writing the settings and reading the live input
@@ -185,6 +200,24 @@ class PreferencesMixin:
         data.add(problems)
         if rebuilt:
             prefs.set_focus(None)   # not on whatever took the old focus' place
+
+    def _build_mode_row(self):
+        """A switch for the Standard or Advanced mode of the tuning menu,
+        only shown if the driver offers it. It shows what was asked for at
+        once and the mode itself once the wheelbase has switched."""
+        self.mode_row = Adw.ActionRow(
+            title=_("Advanced Tuning Menu"), visible=False,
+            subtitle=_("The tuning menu on the display of the wheelbase. "
+                       "Advanced shows all settings and the tuning slots, "
+                       "Standard a short menu without the slots. Understeer "
+                       "changes the settings in both: switch this on to use "
+                       "the tuning slots."))
+        self.mode_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self._mode_handler = self.mode_switch.connect(
+            "state-set", lambda s, state: self._on_mode_chosen(state))
+        self.mode_row.add_suffix(self.mode_switch)
+        self.mode_row.set_activatable_widget(self.mode_switch)
+        return self.mode_row
 
     def _updates_group(self):
         """Looking for new versions; only the AppImage can."""
