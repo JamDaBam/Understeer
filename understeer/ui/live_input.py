@@ -5,19 +5,10 @@ from .. import config
 from ..i18n import _
 from ..inputs import AXIS_ROLES
 from . import layout
+from .axis_diagnostics import AxisDiagnostics
 from .live import WheelView
 
 STRIP_PEDALS = 4        # pedals shown in the live strip
-
-
-def _level_bar(**props):
-    """A bar for pedal travel 0..1, in the accent colour all the way (GTK
-    colours a full bar differently)."""
-    bar = Gtk.LevelBar(min_value=0, max_value=1, **props)
-    for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
-                   Gtk.LEVEL_BAR_OFFSET_FULL):
-        bar.remove_offset_value(offset)
-    return bar
 
 
 class LiveInputMixin:
@@ -91,6 +82,8 @@ class LiveInputMixin:
             return          # nobody sees the live display; show_again() starts it
         self.inputs.start()
         self._rebuild_axes_list()
+        if self.axis_diagnostics:
+            self.axis_diagnostics.rebuild()
         self._update_inputs()
         self._update_permission_row()
 
@@ -127,7 +120,7 @@ class LiveInputMixin:
             name = Gtk.Label(label=_(label) if label else
                              _("Axis {name}").format(name=axis.name))
             name.add_css_class("heading")
-            bar = _level_bar(orientation=Gtk.Orientation.VERTICAL,
+            bar = layout.level_bar(orientation=Gtk.Orientation.VERTICAL,
                              inverted=True, halign=Gtk.Align.CENTER)
             value = Gtk.Label()
             value.add_css_class("pedal-value")
@@ -177,7 +170,7 @@ class LiveInputMixin:
             name = Gtk.Label(xalign=0, label=_(dict(AXIS_ROLES)[role]) if role
                              else _("Axis {name}").format(name=axis.name))
             name.add_css_class("dim-label")
-            bar = _level_bar(css_classes=["strip-bar"])
+            bar = layout.level_bar(css_classes=["strip-bar"])
             value = Gtk.Label(xalign=0)
             value.add_css_class("strip-value")
             for w in (name, bar, value):
@@ -186,13 +179,28 @@ class LiveInputMixin:
             self.strip_widgets[axis.key] = (bar, value)
 
     def _set_axis_role(self, key, role):
+        """Give the axis a role; hiding it keeps its role for showing it
+        again (_show_axis_again)."""
+        old = self.axis_roles.get(key, "")
+        if role == "hidden":
+            if old and old != "hidden":
+                self.roles_before_hidden[key] = old
+        else:
+            self.roles_before_hidden.pop(key, None)
         if role:
             self.axis_roles[key] = role
         else:
             self.axis_roles.pop(key, None)
-        config.save_axis_roles(self.axis_roles)
+        config.save_axis_roles(self.axis_roles, self.roles_before_hidden)
         # Rebuild after the dropdown's own signal has finished.
         GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+        if self.axis_diagnostics:       # it shows the roles as names
+            GLib.idle_add(lambda: self.axis_diagnostics and
+                          self.axis_diagnostics.rebuild() and False)
+
+    def _show_axis_again(self, key):
+        """A hidden axis shown again, with the role it had before."""
+        self._set_axis_role(key, self.roles_before_hidden.get(key, ""))
 
     def _toggle_hidden(self, show):
         if show != self.show_hidden_axes:
@@ -207,6 +215,17 @@ class LiveInputMixin:
     def _on_input_gone(self):
         """Pedals (or the wheelbase) unplugged: their bars go."""
         GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+        if self.axis_diagnostics:
+            GLib.idle_add(lambda: self.axis_diagnostics and
+                          self.axis_diagnostics.rebuild() and False)
+
+    def _show_axis_diagnostics(self):
+        """The axis diagnostics dialog, on the axes read here (no second
+        reader of the input devices)."""
+        if self.axis_diagnostics:
+            self.axis_diagnostics.dialog.present(self)
+        else:
+            AxisDiagnostics(self)
 
     def _on_input(self):
         # Wheels report up to 1000 updates per second; redraw at ~30 fps.
@@ -241,4 +260,6 @@ class LiveInputMixin:
             if a:
                 bar.set_value(a.fraction())
                 value.set_label(f"{a.fraction() * 100:.0f} %")
+        if self.axis_diagnostics:
+            self.axis_diagnostics.update()
         return GLib.SOURCE_REMOVE

@@ -27,6 +27,12 @@ flowbox > flowboxchild > overlay > .tile {
   min-width: 250px;
 }
 
+/* Axis diagnostics: small tiles, many next to each other */
+flowbox > flowboxchild > .tile.diag-tile {
+  min-width: 200px;
+  padding: 10px 12px;
+}
+
 .tile-icon {
   color: @accent_color;
   background-color: alpha(@accent_bg_color, 0.14);
