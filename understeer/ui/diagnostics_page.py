@@ -5,7 +5,7 @@ The pages are window.axis_diagnostics (with the health check),
 window.button_diagnostics and window.led_diagnostics. Axes and buttons only read; the LED page writes,
 so it is active only while its tab is shown (see LedDiagnostics.enter()).
 """
-from gi.repository import Adw, Gtk
+from gi.repository import Gtk
 
 from ..i18n import N_, _
 from . import layout
@@ -41,8 +41,7 @@ class DiagnosticsPage:
                              12, ("top", "start", "end"))
         top.append(row)
         self.view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.view.append(Adw.Clamp(maximum_size=1200, tightening_threshold=900,
-                                   child=top))
+        self.view.append(layout.content_clamp(top))
         self.view.append(self.tabs)
 
     @property

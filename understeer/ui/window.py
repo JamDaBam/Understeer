@@ -421,8 +421,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         tab_row.append(self.status_label)
         top.append(tab_row)
 
-        clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
-        clamp.set_child(top)
+        clamp = layout.content_clamp(top)
         view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         view.append(clamp)
         view.append(self.tabs)
@@ -434,11 +433,14 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._build_live_pedals(column)
         grids = {}
         shared = layout.columns()       # the groups of a tab line up
+        # At most four per row: a group has up to four tiles, so in a wide
+        # window they get wider (longer sliders) instead of leaving a gap
         for s in SETTINGS:
             if s["page"] != tab:
                 continue
             if s["group"] not in grids:
-                grids[s["group"]] = layout.tile_grid(columns=shared)
+                grids[s["group"]] = layout.tile_grid(max_per_line=4,
+                                                     columns=shared)
                 if s["group"] in ADVANCED_GROUPS:
                     self._advanced_group(column, s["group"], grids[s["group"]])
                 else:

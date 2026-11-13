@@ -6,6 +6,10 @@ import weakref
 from gi.repository import Adw, GLib, GObject, Gtk
 
 SIDES = ("top", "bottom", "start", "end")
+# How wide the content of a page gets in a large window: more than a
+# Full HD screen leaves free, so a maximized window there uses its width,
+# but not the whole of a 4K screen, where lines would get hard to follow.
+CONTENT_WIDTH = 1800
 
 
 def margins(widget, size, sides=SIDES):
@@ -15,10 +19,16 @@ def margins(widget, size, sides=SIDES):
     return widget
 
 
+def content_clamp(child=None):
+    """Centres child, at most CONTENT_WIDTH wide, the same on every page."""
+    return Adw.Clamp(maximum_size=CONTENT_WIDTH, tightening_threshold=900,
+                     child=child)
+
+
 def scroll_page():
     """Scrollable page with a centred column; returns (page, column)."""
     column = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6), 12)
-    clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900, child=column)
+    clamp = content_clamp(column)
     page = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
                               vexpand=True, child=clamp)
     return page, column
