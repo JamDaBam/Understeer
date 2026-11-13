@@ -6,10 +6,10 @@ Parts of it live in their own modules as mixins: the live input display
 import logging
 import os
 
-from gi.repository import Adw, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from .. import (APP_ICON, APP_ID, capabilities, config, display, games,
-                releases, report)
+from .. import (APP_ICON, APP_ID, capabilities, config, device_info, display,
+                games, releases, report)
 from .. import log as session_log
 from ..device import (RIMS, TuningMode, can_write, describe_access,
                       find_device_path, find_rumble_path, install_udev_rule,
@@ -1268,23 +1268,55 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         """Fill the Hardware rows in the preferences."""
         if not hasattr(self, "base_row"):
             return
-        w = self.wheel
+        info = device_info.collect(self.device_path)
 
-        def firmware(version):
-            return "" if version is None else _("Firmware {version}").format(
-                version=version)
+        def firmware(item):
+            if item.known:
+                return _("Firmware {version}").format(version=item.value)
+            return _("Firmware: {state}").format(state=self._info_text(item))
 
-        if self.device_path:
-            name = w.get("base") or model_id(self.device_path)
-            self.base_row.set_subtitle(" · ".join(
-                p for p in (name, firmware(w.get("base_firmware"))) if p))
-        else:
+        if not self.device_path:
             self.base_row.set_subtitle(_("Not connected"))
-        rim = w.get("rim_id")
-        self.rim_row.set_visible(bool(rim))
-        if rim:
-            self.rim_row.set_subtitle(" · ".join(
-                p for p in (self._rim_name(rim), firmware(w.get("rim_firmware"))) if p))
+        else:
+            self.base_row.set_subtitle(" · ".join((
+                self._info_text(info["wheelbase"]),
+                firmware(info["wheelbase_firmware"]))))
+        rim = info["rim"]
+        self.rim_row.set_visible(bool(self.device_path))
+        self.rim_row.set_subtitle(
+            self._info_text(rim) if not rim.known else " · ".join(
+                (rim.value, firmware(info["rim_firmware"]))))
+        for key, row in self.device_info_rows.items():
+            row.set_subtitle(self._info_text(info[key]))
+
+    @staticmethod
+    def _info_text(item):
+        """An item of device_info.collect() as shown: its value, or why
+        there is none."""
+        if item.known:
+            return item.value
+        state = {device_info.UNSUPPORTED: _("Not supported by the installed driver"),
+                 device_info.UNAVAILABLE: _("Not available"),
+                 device_info.UNKNOWN: _("Unknown")}[item.state]
+        note = {device_info.NOT_CONNECTED: _("not connected"),
+                device_info.NO_WHEEL: _("no steering wheel reported"),
+                device_info.NOT_READABLE: _("could not be read"),
+                device_info.NOT_LOADED: _("hid-fanatecff not loaded"),
+                device_info.NOT_LISTED: _("not known to Understeer"),
+                device_info.NOT_REPORTED: _("not reported by the driver"),
+                device_info.INVALID: _("invalid value")}.get(item.note)
+        details = [d for d in (item.value, note) if d]
+        return f"{state} ({', '.join(details)})" if details else state
+
+    def _copy_device_info(self):
+        """Copy what is known about the hardware, read again now, as
+        Markdown for a GitHub issue."""
+        caps = capabilities.detect()
+        text = device_info.report_text(device_info.collect(self.device_path),
+                                       caps)
+        Gdk.Display.get_default().get_clipboard().set(text)
+        log.info("Device information copied")
+        self._notify(_("Device information copied"))
 
     # -----------------------------------------------------------------------
     # Standard or Advanced tuning menu
@@ -1638,8 +1670,9 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if self.device_path:
             details += [("Wheelbase", f"{model_id(self.device_path)} "
                          f"({'writable' if self.writable else 'no write access'})"),
-                        ("Wheel", self._wheel_text()),
                         ("Access", describe_access(self.device_path))]
+            details += device_info.report_lines(
+                device_info.collect(self.device_path))
         else:
             details.append(("Wheelbase", "not found"))
         steering = self.inputs.steering_axis()

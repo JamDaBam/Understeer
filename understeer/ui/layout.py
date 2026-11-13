@@ -1,7 +1,7 @@
 """Building blocks of the pages, the same on all of them: a scrolling
 column, section headings, grids of tiles and the dashed tiles that make
 something new."""
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GObject, Gtk
 
 SIDES = ("top", "bottom", "start", "end")
 
@@ -71,3 +71,30 @@ def dashed_tile(icon, title, hint=None, action=None, clicked=None):
         inner.append(label)
     button.set_child(inner)
     return button
+
+
+class SwitchRow(Adw.ActionRow):
+    """A row with a switch at its end that only the switch turns on and
+    off, not a click elsewhere on the row (Adw.SwitchRow toggles on any
+    click). Used like Adw.SwitchRow: active, get_active(), set_active()."""
+    __gtype_name__ = "UndersteerSwitchRow"
+
+    active = GObject.Property(type=bool, default=False)
+
+    def __init__(self, **props):
+        active = props.pop("active", False)
+        super().__init__(**props)
+        self.switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.bind_property("active", self.switch, "active",
+                           GObject.BindingFlags.BIDIRECTIONAL
+                           | GObject.BindingFlags.SYNC_CREATE)
+        self.add_suffix(self.switch)
+        # The switch tells screen readers what it is for
+        self.switch.update_relation([Gtk.AccessibleRelation.LABELLED_BY], [self])
+        self.active = active
+
+    def get_active(self):
+        return self.active
+
+    def set_active(self, active):
+        self.active = bool(active)

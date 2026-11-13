@@ -60,7 +60,7 @@ class GamesPage:
 
         # Shown in the preferences, not on the page.
         options = self.options = Adw.PreferencesGroup(title=_("Covers"))
-        self.download_row = Adw.SwitchRow(
+        self.download_row = layout.SwitchRow(
             title=_("Download Missing Covers"),
             subtitle=_("Steam games from Steam, other games from SteamGridDB "
                        "if an API key is entered below. When off, Understeer "

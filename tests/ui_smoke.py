@@ -170,6 +170,32 @@ def steps(win):
         and not win.capabilities.has(capabilities.ADVANCED_MODE),
         "display found, no advanced_mode in the fake wheelbase")
 
+    def device_information():
+        rows = win.device_info_rows
+        check(win.base_row.get_subtitle().startswith("CSL DD · ")
+              and win.base_row.get_subtitle().endswith("1234"),
+              f"wheelbase shown: {win.base_row.get_subtitle()!r}")
+        check(win.rim_row.get_visible()
+              and win.rim_row.get_subtitle().startswith(
+                  "ClubSport Steering Wheel Formula V2 · "),
+              f"wheel shown: {win.rim_row.get_subtitle()!r}")
+        check(rows["vendor_id"].get_subtitle() == "0x0EB7"
+              and rows["product_id"].get_subtitle() == "0x0020",
+              "USB ids from the folder name")
+        check(rows["device_name"].get_subtitle() != "", "no uevent: still a text")
+        # Unplugged: the rows say so; plugged in again: shown again
+        path = win.device_path
+        win.device_path = None
+        win._show_wheel_info()
+        check(win.base_row.get_subtitle() != "" and not win.rim_row.get_visible()
+              and rows["vendor_id"].get_subtitle() != "0x0EB7",
+              f"disconnected: {rows['vendor_id'].get_subtitle()!r}")
+        win.device_path = path
+        win._show_wheel_info()
+        check(rows["vendor_id"].get_subtitle() == "0x0EB7", "reconnected")
+        win._copy_device_info()            # must not raise
+    yield "device information", device_information
+
     # Testing the display of the steering wheel
     display_file = hid / "display"
 
@@ -415,6 +441,29 @@ def steps(win):
               "a message in the preferences replaces the one shown")
         win.prefs.close()
     yield "one message in the preferences", one_message_in_prefs
+
+    # Only a switch itself turns a setting on or off, not a click on its row
+    switch_rows = []
+
+    def click_rows_with_switches():
+        win._show_preferences("wheelbase")
+        rows = [w for w in walk(win.prefs) if isinstance(w, Adw.ActionRow)]
+        check(not any(isinstance(r, Adw.SwitchRow) for r in rows),
+              "no Adw.SwitchRow, which toggles on a click on the row")
+        for row in rows:
+            switches = [w for w in walk(row) if isinstance(w, Gtk.Switch)]
+            if switches:
+                switch_rows.append((row, switches[0], switches[0].get_active()))
+                row.activate()
+        check(len(switch_rows) >= 6, f"switches found: {len(switch_rows)}")
+    yield "click rows with switches", click_rows_with_switches
+
+    def rows_did_not_switch():
+        for row, switch, before in switch_rows:
+            check(switch.get_active() == before,
+                  f"a click on the row switched “{row.get_title()}”")
+        win.prefs.close()
+    yield "rows did not switch", rows_did_not_switch
 
     def driver_without_mode():
         mode_file.unlink()
@@ -1889,7 +1938,8 @@ def steps(win):
         check(win.rim_row.get_visible() and win.rim_row.get_subtitle() ==
               "ClubSport Steering Wheel Formula V2 · Firmware 52",
               f"wheel row: {win.rim_row.get_subtitle()!r}"),
-        check("Formula V2" in dict(win.report_details()).get("Wheel", ""),
+        check("Formula V2" in dict(win.report_details()).get(
+            "Steering wheel model", ""),
               "wheel in the report"),
         check("display w" in dict(win.report_details()).get("Hardware functions", "")
               and "advanced_mode -" in dict(win.report_details())["Hardware functions"],
