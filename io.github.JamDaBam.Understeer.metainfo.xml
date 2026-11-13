@@ -49,6 +49,16 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.3.2" date="2026-11-13">
+            <description>
+                <ul>
+                    <li>A large or maximized window uses more of its width, e.g. on a Full HD or 4K screen: the Presets page shows up to seven tiles per row, and the settings get wider tiles with longer sliders instead of empty space at the sides</li>
+                    <li xml:lang="de">Ein großes oder maximiertes Fenster nutzt mehr von seiner Breite, z. B. auf einem Full-HD- oder 4K-Bildschirm: Die Presets-Seite zeigt bis zu sieben Kacheln pro Reihe, und die Einstellungen bekommen breitere Kacheln mit längeren Schiebereglern statt leerem Platz an den Seiten</li>
+                    <li>The game tiles are a little narrower, so Add Game… and four games fit into one row in a window about 1040 px wide</li>
+                    <li xml:lang="de">Die Spielkacheln sind etwas schmaler, sodass „Spiel hinzufügen …“ und vier Spiele schon in einem etwa 1040 px breiten Fenster in eine Reihe passen</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.3.1" date="2026-11-13">
             <description>
                 <ul>

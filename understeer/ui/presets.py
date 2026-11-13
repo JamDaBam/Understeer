@@ -75,7 +75,7 @@ class PresetsMixin:
         choosing = self.preset_selection.active
         self.preset_selection.available([str(p) for _n, p in presets])
         # Making new things and the built-in preset, no drop target as a whole
-        actions = layout.tile_grid(columns=self.preset_columns)
+        actions = layout.tile_grid(max_per_line=7, columns=self.preset_columns)
         self.presets_box.append(actions)
         self.folder_flows = {}
         actions.append(layout.dashed_tile(
@@ -91,7 +91,7 @@ class PresetsMixin:
         actions.append(self._sim_defaults_tile())
         actions.set_sensitive(not choosing)     # nothing to choose there
         # The presets without a folder; dropping one here takes it out
-        self.presets_flow = layout.tile_grid(columns=self.preset_columns)
+        self.presets_flow = layout.tile_grid(max_per_line=7, columns=self.preset_columns)
         if loose or len(groups) > (1 if loose else 0):
             self.presets_box.append(self._preset_section(None, loose))
         for folder, group in groups:
@@ -105,7 +105,7 @@ class PresetsMixin:
         section.add_css_class("preset-folder")
         section.append(self._folder_head(folder, group))
         flow = self.presets_flow if folder is None else \
-            layout.tile_grid(columns=self.preset_columns)
+            layout.tile_grid(max_per_line=7, columns=self.preset_columns)
         if group:
             for name, path in group:
                 flow.append(self.preset_selection.wrap(
