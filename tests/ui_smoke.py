@@ -740,6 +740,45 @@ def steps(win):
         check(config.get_setting("preset_on_display") is None, "switched off again")
     yield "preset name on the display", preset_on_display
 
+    def preset_per_slot():
+        two = config.preset_path("Slot Two")
+        config.write_preset(two, "Slot Two", {"SHO": 30})
+        win._presets_changed()
+        first = int((dev / "SLOT").read_text())
+        second = 2 if first != 2 else 3
+
+        def on_slot(slot, sho):
+            """The wheelbase switched slots: they hold their own values."""
+            (dev / "SLOT").write_text(f"{slot}\n")
+            (dev / "SHO").write_text(f"{sho}\n")
+            win._load_from_device()
+
+        def active():
+            return win.active_preset, win.preset_label.get_label()
+        try:
+            check(win.active_preset == gt3, f"GT3 active: {win.active_preset}")
+            on_slot(second, 70)
+            check(active() == (None, "Presets") and not win._unsaved_preset_changes(),
+                  f"no preset active in another slot: {active()}")
+            win._apply_preset(two)
+            check(win.active_preset == two, "a preset applied in that slot")
+            on_slot(first, 40)
+            check(active() == (gt3, "Test GT3") and not win._unsaved_preset_changes(),
+                  f"back in the first slot: its preset again: {active()}")
+            on_slot(second, 60)                 # changed meanwhile on the wheelbase
+            check(active() == (two, "Slot Two •"),
+                  f"the preset of the slot, with the change: {active()}")
+            on_slot(first, 40)
+            two.unlink()
+            on_slot(second, 30)
+            check(active() == (None, "Presets"), f"a deleted preset isn't active: {active()}")
+        finally:
+            two.unlink(missing_ok=True)
+            on_slot(first, 40)
+            win._presets_changed()
+        check(win.active_preset == gt3, "GT3 active again, as the next steps expect")
+    yield "preset per slot", preset_per_slot
+
     def preset_values():
         win._apply_values({"SHO": 60})
         win._show_preset(gt3)

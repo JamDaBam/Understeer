@@ -384,6 +384,42 @@ class PresetsMixin:
         return name, {k: v for k, v in sharing.clean_values(values).items()
                       if k in self.rows}
 
+    def _follow_slot(self):
+        """After the values were read: if the wheelbase is on another slot
+        now (chosen here, on the wheelbase or after switching the tuning
+        menu), the preset active before stays with the slot it was written
+        to, and the preset last active in the new slot, if any, is active
+        again. Only for this session, like the active preset itself.
+
+        Slots are told apart by the mode of the tuning menu too: the
+        Standard menu has setups of its own.
+        """
+        slot = self.device_values.get("SLOT")
+        if slot is None:
+            return
+        key, old = (self.tuning_mode.advanced, slot), self._preset_slot
+        if key == old:
+            return
+        self._preset_slot = key
+        if old is None:
+            return          # the first slot read: the active preset is in it
+        if self.active_preset is not None:
+            self._slot_presets[old] = self.active_preset
+        else:
+            self._slot_presets.pop(old, None)
+        path, values = self._slot_presets.get(key), {}
+        if path is not None:
+            try:
+                _name, values = self._read_preset(path)
+            except (OSError, ValueError):
+                log.info("Preset %s of slot %s is gone", path.name, slot or "auto")
+                del self._slot_presets[key]
+                path = None
+        if path != self.active_preset:
+            log.info("Slot %s: preset %s", slot or "auto",
+                     path.name if path else "none")
+            self._set_active_preset(path, values)
+
     def _set_active_preset(self, path, values):
         self.active_preset = pathlib.Path(path) if path else None
         self.active_values = dict(values)
@@ -1346,6 +1382,8 @@ class PresetsMixin:
         log.info("Preset %s renamed to %r (%s)", path.name, new_name, new_path.name)
         if self.active_preset == path:
             self.active_preset = new_path
+        self._slot_presets = {k: new_path if p == path else p
+                              for k, p in self._slot_presets.items()}
         self.games_page.games = config.load_games()
         self._presets_changed()
         self._notify(_("Preset renamed to “{name}”").format(name=short(new_name)))
@@ -1381,6 +1419,8 @@ class PresetsMixin:
             files.add(pathlib.Path(path).name)
             if self.active_preset == pathlib.Path(path):
                 self.active_preset, self.active_values = None, {}
+            self._slot_presets = {k: p for k, p in self._slot_presets.items()
+                                  if p != pathlib.Path(path)}
         if not items:
             return
         if folder is not None and len(items) == len(paths):
