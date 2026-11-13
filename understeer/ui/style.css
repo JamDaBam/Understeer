@@ -274,12 +274,12 @@ button.advanced-toggle {
 /* Games */
 .games flowbox > flowboxchild > .tile,
 .games flowbox > flowboxchild > overlay > .tile {
-  min-width: 170px;
+  min-width: 164px;     /* "Add Game…" and four games side by side at 1040 px */
 }
 
 .compact .games flowbox > flowboxchild > .tile,
 .compact .games flowbox > flowboxchild > overlay > .tile {
-  min-width: 140px;
+  min-width: 134px;
 }
 
 .game-tile {
@@ -298,12 +298,12 @@ flowbox > flowboxchild > .tile.new-preset {
 }
 
 .games flowbox > flowboxchild > .tile.new-preset {
-  min-width: 166px;
+  min-width: 160px;
   padding: 8px 8px 10px 8px;
 }
 
 .compact .games flowbox > flowboxchild > .tile.new-preset {
-  min-width: 136px;
+  min-width: 130px;
   padding: 8px 12px 6px 12px;
 }
 
