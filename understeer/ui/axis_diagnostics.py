@@ -17,8 +17,11 @@ from ..inputs import AXIS_ROLES, kernel_name
 from . import layout
 from .health_check import HealthCheck, finding_box, lines, show_lines
 
-# Room for the longest value, "-32768 … 32767 (100 %)": the tiles get their
-# width from it, so they keep it when the values change.
+# The values ask for room for a usual one, "0 … 65535 (100 %)", at least,
+# and for the longest, "-32768 … 32767 (100 %)", at most. The tiles keep
+# their width when the values change anyway: the grid gives them the width
+# of its columns (see layout.Columns), not the one of their text.
+VALUE_MIN_CHARS = 17
 VALUE_CHARS = 22
 
 
@@ -53,7 +56,7 @@ def _value_line(grid, row, title):
     """A small line "title  value" in grid; returns the value label."""
     name = Gtk.Label(label=title, xalign=0, css_classes=["dim-label", "caption"])
     value = Gtk.Label(xalign=1, hexpand=True, css_classes=["numeric", "caption"],
-                      width_chars=VALUE_CHARS, max_width_chars=VALUE_CHARS,
+                      width_chars=VALUE_MIN_CHARS, max_width_chars=VALUE_CHARS,
                       ellipsize=Pango.EllipsizeMode.END)
     grid.attach(name, 0, row, 1, 1)
     grid.attach(value, 1, row, 1, 1)
