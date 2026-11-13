@@ -145,3 +145,33 @@ def test_display_not_writable(hid):
     caps = capabilities.detect()
     assert caps.has(capabilities.DISPLAY)
     assert not caps.can_write(capabilities.DISPLAY)
+
+
+# -- names, e.g. of presets, on the display ----------------------------------
+
+@pytest.mark.parametrize("name, text", [
+    ("GT3", "GT3"),
+    ("Rally 1", "Ral"),              # the first three positions
+    ("F1 2024", "F12"),              # spaces left out
+    ("Monza", "onz"),                # M can't be shown
+    ("Wet", "et"),
+    ("Café", "Caf"),                 # accents dropped
+    ("ÄÖÜ", "AOU"),
+    ("1.5 bar", "1.5b"),             # a point takes no position
+    ("A..B", "A.B"),                 # one point per position
+    ("GT3.", "GT3."),
+    ("8.8.8.8", "8.8.8."),
+    ("Drift + Rain", "Dri"),
+])
+def test_name_on_the_display(name, text):
+    assert display.name_text(name) == text
+    assert display.check_text(text) is None     # always something to show
+
+
+@pytest.mark.parametrize("name", ["", "   ", "kmx", "...", "+++", "ßß"])
+def test_name_with_nothing_to_show(name):
+    assert display.name_text(name) is None
+
+
+def test_name_is_always_shown_the_same():
+    assert len({display.name_text("Nürburgring Nordschleife") for _ in range(5)}) == 1

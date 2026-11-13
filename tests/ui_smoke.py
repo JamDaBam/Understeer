@@ -671,6 +671,75 @@ def steps(win):
         win._presets_changed()
     yield "apply preset", apply_preset
 
+    def preset_on_display():
+        race = config.preset_path("GT3 Race")
+        config.write_preset(race, "GT3 Race", {"SHO": 30})
+        win._presets_changed()
+        try:
+            check(not win.preset_display_row.get_active()
+                  and config.get_setting("preset_on_display") is None,
+                  "off unless switched on")
+            before = display_text()
+            win._apply_preset(race)
+            check((dev / "SHO").read_text().strip() == "30"
+                  and display_text() == before, "off: preset applied, display left alone: "
+                  f"{(dev / 'SHO').read_text()!r} {display_text()!r} {before!r}")
+
+            win.preset_display_row.set_active(True)
+            check(config.get_setting("preset_on_display") is True, "switched on")
+            win._apply_preset(gt3)
+            check(display_text() == "Tes", f"name shown: {display_text()!r}")
+            win._apply_preset(race)
+            check(display_text() == "GT3", f"next name shown: {display_text()!r}")
+            check(win._toast_text.get_label() == "Preset “GT3 Race” applied",
+                  f"the usual message: {win._toast_text.get_label()!r}")
+
+            display_file.chmod(0o640)
+            display_file.write_text("same")     # to see whether it is written
+            display_file.chmod(0o220)
+            win._apply_preset(race)
+            check(display_text() == "same", "the same name isn't written again")
+
+            win.writable = False                # the preset waits for Apply
+            try:
+                win._apply_preset(gt3)
+                check(win.pending and display_text() == "same",
+                      "not written: no name either")
+            finally:
+                win.writable = True
+                win._cancel_pending()
+
+            win._desktop_notify = lambda *a: None
+            try:
+                win._apply_preset(gt3, game="Some Game")
+                check((dev / "SHO").read_text().strip() == "40"
+                      and display_text() == "Tes",
+                      f"applied for a game: its name shown: {display_text()!r}")
+                win._apply_preset(race, game="Some Game", connected=True)
+                check(display_text() == "GT3",
+                      f"also when the wheelbase gets connected: {display_text()!r}")
+            finally:
+                del win._desktop_notify
+
+            display_file.unlink()               # a wheel without display file
+            win._check_capabilities()
+            win._apply_preset(race)
+            check((dev / "SHO").read_text().strip() == "30"
+                  and not display_file.exists()
+                  and win._toast_text.get_label() == "Preset “GT3 Race” applied",
+                  "without a display the preset applies as usual: "
+                  f"{(dev / 'SHO').read_text()!r} {win._toast_text.get_label()!r}")
+        finally:
+            if not display_file.exists():
+                display_file.write_text("")
+                display_file.chmod(0o220)
+            win._check_capabilities()
+            win.preset_display_row.set_active(False)
+            race.unlink(missing_ok=True)
+            win._apply_preset(gt3)              # as the next steps expect
+        check(config.get_setting("preset_on_display") is None, "switched off again")
+    yield "preset name on the display", preset_on_display
+
     def preset_values():
         win._apply_values({"SHO": 60})
         win._show_preset(gt3)

@@ -24,7 +24,7 @@ from ..settings import (ADVANCED_GROUPS, MAX_SLOT, SETTINGS, SETTINGS_BY_ID,
 from . import layout, toolkit_versions
 from .games_page import GamesPage
 from .live_input import LiveInputMixin
-from .preferences import LAYOUTS, PreferencesMixin
+from .preferences import LAYOUTS, PRESET_ON_DISPLAY, PreferencesMixin
 from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
 from .report_dialog import ReportDialog
@@ -63,6 +63,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self.wheel = {}          # see device.wheel_info()
         self.capabilities = None  # see capabilities.detect()
+        # Text Understeer last wrote to the display, None if unknown
+        self._display_shown = self._display_text_sent = None
         self.tuning_mode = TuningMode()     # Standard or Advanced tuning menu
         # Steering angle of the wheelbase: largest angle, value for Auto
         self.angle_max, self.angle_auto = SETTINGS_BY_ID["SEN"]["hi"], None
@@ -1240,6 +1242,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if caps != self.capabilities:
             log.info("Hardware functions: %s", capabilities.summary(caps))
             self.capabilities = caps
+            self._display_shown = None  # e.g. another wheelbase, or plugged in again
         self._update_mode_switch()
         self._update_display_group()
 
@@ -1431,7 +1434,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if path is None or self._display_problem() is not None:
             self._update_display_group()
             return
-        text = self.display_entry.get_text()
+        text = self._display_text_sent = self.display_entry.get_text()
         self._display_written(display.write(path, text),
                               _("Sent to the display: {text}").format(text=text))
 
@@ -1440,12 +1443,33 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if path is None:
             self._update_display_group()
             return
+        self._display_text_sent = display.CLEAR_TEXT
         self._display_written(display.clear(path), _("Display cleared"))
+
+    def _show_preset_name(self, name):
+        """After a preset was written, by hand or when a game started: its
+        name on the display, if switched on, so the display doesn't keep
+        the name of the preset before. Never in the way of the preset:
+        nothing is told if it can't be written, it is only logged."""
+        if not config.get_setting(PRESET_ON_DISPLAY, False):
+            return
+        path = self._display_path()
+        text = display.name_text(name)
+        if path is None or text is None:
+            log.info("Preset name not shown: %s", "no writable display"
+                     if path is None else "no character the display can show")
+            return
+        if text == self._display_shown:
+            return          # Understeer wrote that last: it shows it already
+        result = display.write(path, text)
+        self._display_shown = text if result == display.OK else None
 
     def _display_written(self, result, done):
         if result == display.OK:
+            self._display_shown = self._display_text_sent
             self._notify(done)
             return
+        self._display_shown = None      # unknown what it shows now
         self._notify({
             display.UNAVAILABLE: _("The display is not available any more. "
                                    "Is the wheelbase still connected?"),

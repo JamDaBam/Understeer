@@ -23,6 +23,7 @@ asked to and never by itself.
 import errno
 import logging
 import os
+import unicodedata
 
 log = logging.getLogger("understeer.display")
 
@@ -68,6 +69,30 @@ def check_text(text):
     return None
 
 
+def name_text(name):
+    """What the display shows for a name, e.g. of a preset, or None if
+    nothing of it can be shown. Always the same for the same name:
+
+    - accents are dropped ("é" -> "e"),
+    - characters the display can't show are left out, and so are spaces,
+      so that the positions show as much of the name as they can,
+    - a point or comma stays where it follows a character that is kept,
+    - the first POSITIONS characters are kept, with a point after the last.
+
+    E.g. "Rally 1" -> "Ral", "F1 2024" -> "F12", "Wet" -> "et", "1.5" -> "1.5".
+    """
+    shown = []
+    for c in unicodedata.normalize("NFKD", name):
+        if c in POINTS:
+            if shown and shown[-1][-1] not in POINTS:
+                shown[-1] += c
+        elif c in CHARACTERS and c != " ":
+            if len(shown) == POSITIONS:
+                break
+            shown.append(c)
+    return "".join(shown) or None
+
+
 def write(path, text):
     """Send text, which check_text() accepted, or CLEAR_TEXT, to the display
     file path. Returns OK, UNAVAILABLE, DENIED or FAILED; never raises."""
@@ -76,7 +101,8 @@ def write(path, text):
         return FAILED
     try:
         # Without O_CREAT: a display file that is gone is not made anew.
-        fd = os.open(path, os.O_WRONLY)
+        # O_TRUNC, as "echo >" uses, means nothing to sysfs.
+        fd = os.open(path, os.O_WRONLY | os.O_TRUNC)
     except OSError as e:
         return _failure(path, e)
     try:
