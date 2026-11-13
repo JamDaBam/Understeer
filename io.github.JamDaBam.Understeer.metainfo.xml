@@ -49,6 +49,20 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.3.1" date="2026-11-13">
+            <description>
+                <ul>
+                    <li>Fixed: tiles on a page line up again. Every folder on the Presets page, and every group of settings, uses the same columns; a long name no longer makes the tiles of its row wider</li>
+                    <li xml:lang="de">Behoben: Die Kacheln einer Seite stehen wieder in einer Linie. Jeder Ordner auf der Presets-Seite und jede Gruppe von Einstellungen nutzt dieselben Spalten; ein langer Name macht die Kacheln seiner Reihe nicht mehr breiter</li>
+                    <li>Fixed: with few presets in a large or maximized window, they sat in the middle with empty space above them; they are now right below the tiles that make new ones</li>
+                    <li xml:lang="de">Behoben: Mit wenigen Presets in einem großen oder maximierten Fenster standen sie mit leerem Platz darüber in der Mitte; jetzt stehen sie direkt unter den Kacheln zum Anlegen</li>
+                    <li>Fixed: Add Game…, Save as Preset… and New Folder… were wider than the tiles next to them, so fewer games fitted in a row</li>
+                    <li xml:lang="de">Behoben: „Spiel hinzufügen …“, „Als Preset speichern …“ und „Neuer Ordner …“ waren breiter als die Kacheln daneben, sodass weniger Spiele in eine Reihe passten</li>
+                    <li>In a narrower window the views in the header bar show their icon above the name instead of cutting the names; preset names break between words</li>
+                    <li xml:lang="de">In einem schmaleren Fenster zeigen die Ansichten in der Kopfleiste ihr Symbol über dem Namen, statt die Namen abzuschneiden; Preset-Namen brechen zwischen Wörtern um</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.3.0" date="2026-11-13">
             <description>
                 <ul>

@@ -102,8 +102,8 @@ flowbox > flowboxchild > .tile.diag-tile.health-warning {
 }
 
 .quick-select button {
-  padding-left: 6px;
-  padding-right: 6px;
+  padding-left: 4px;    /* the steering angle tile no wider than the others */
+  padding-right: 4px;
   min-width: 0;
 }
 
@@ -229,6 +229,10 @@ button.advanced-toggle {
   font-size: 0.95em;
 }
 
+.compact .preset-name {
+  font-size: 1.1em;     /* the names fit the narrower tiles */
+}
+
 .compact .quick-select button {
   min-height: 24px;
   padding-top: 0;
@@ -280,6 +284,27 @@ button.advanced-toggle {
 
 .game-tile {
   padding: 8px 8px 10px 8px;
+}
+
+/* Dashed tiles (Save as Preset, New Folder, Add Game): as wide as the
+   other tiles of their grid; min-width doesn't include their 2 px border,
+   and on the games page they have the padding of the game tiles. */
+flowbox > flowboxchild > .tile.new-preset {
+  min-width: 246px;
+}
+
+.compact flowbox > flowboxchild > .tile.new-preset {
+  min-width: 186px;
+}
+
+.games flowbox > flowboxchild > .tile.new-preset {
+  min-width: 166px;
+  padding: 8px 8px 10px 8px;
+}
+
+.compact .games flowbox > flowboxchild > .tile.new-preset {
+  min-width: 136px;
+  padding: 8px 12px 6px 12px;
 }
 
 .game-cover {

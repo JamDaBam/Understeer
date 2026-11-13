@@ -2627,6 +2627,46 @@ def steps(win):
     yield "after import", lambda: check(config.preset_path("Renamed").is_file(),
                                         "preset still there after import")
 
+    # -- tile grids of a page share their columns ------------------------
+    shared_grids = {}
+
+    def shared_columns():
+        from understeer.ui import layout
+        win._select_page("presets")
+        columns = layout.columns()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        short_grid = layout.tile_grid(columns=columns)
+        long_grid = layout.tile_grid(columns=columns)
+        for grid, texts in ((short_grid, ["A", "B"]),
+                            (long_grid, ["A much longer name than the others",
+                                         "C", "D"])):
+            for text in texts:
+                # vexpand, like the line above the buttons of a preset tile
+                grid.append(Gtk.Label(label=text, vexpand=True,
+                                      css_classes=["card", "tile"]))
+            box.append(grid)
+        win.presets_box.append(box)     # on a page, measured once idle
+        shared_grids.update(box=box, grids=(short_grid, long_grid))
+    yield "shared columns", shared_columns
+
+    def shared_columns_measured():
+        def places():
+            for grid in shared_grids["grids"]:
+                child = grid.get_first_child()
+                while child is not None:
+                    yield child
+                    child = child.get_next_sibling()
+        widths = {p.measure(Gtk.Orientation.HORIZONTAL, -1)[1] for p in places()}
+        lines = {g.get_child_at_index(0).get_width()
+                 for g in shared_grids["grids"]}
+        check(len(widths) == 1, f"every tile asks for the same width: {widths}")
+        check(len(lines) == 1, f"both grids have the same columns: {lines}")
+        check(not any(g.compute_expand(Gtk.Orientation.VERTICAL)
+                      for g in shared_grids["grids"]),
+              "a grid doesn't take the free height of a short page")
+        win.presets_box.remove(shared_grids["box"])
+    yield "shared columns measured", shared_columns_measured
+
     def layout_and_language():
         win._set_layout("compact")
         win._set_language("de")

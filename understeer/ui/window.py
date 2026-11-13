@@ -265,7 +265,15 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if not hasattr(self, "toasts"):
             self.toasts = Adw.ToastOverlay()
             self.set_content(self.toasts)
-            self._narrow = False
+            self._narrow = self._medium = False
+            # Below the width the four views need side by side: icons
+            # above their names. Added first: of two that match, the one
+            # added last applies.
+            medium = Adw.Breakpoint.new(
+                Adw.BreakpointCondition.parse("max-width: 1020sp"))
+            medium.connect("apply", lambda b: self._set_medium(True))
+            medium.connect("unapply", lambda b: self._set_medium(False))
+            self.add_breakpoint(medium)
             bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 640sp"))
             bp.connect("apply", lambda b: self._set_narrow(True))
             bp.connect("unapply", lambda b: self._set_narrow(False))
@@ -375,10 +383,16 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if tab:
             self.tabs.set_visible_child_name(tab)
         self._set_narrow(self._narrow)
+        self._set_medium(self._medium)
         self.toasts.set_child(content_view)
         self._apply_layout()        # the tiles are new
         for update in self._group_summaries:
             update()
+
+    def _set_medium(self, medium):
+        self._medium = medium
+        self.switcher.set_policy(Adw.ViewSwitcherPolicy.NARROW if medium
+                                 else Adw.ViewSwitcherPolicy.WIDE)
 
     def _set_narrow(self, narrow):
         self._narrow = narrow
@@ -419,11 +433,12 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if tab == "pedals":
             self._build_live_pedals(column)
         grids = {}
+        shared = layout.columns()       # the groups of a tab line up
         for s in SETTINGS:
             if s["page"] != tab:
                 continue
             if s["group"] not in grids:
-                grids[s["group"]] = layout.tile_grid()
+                grids[s["group"]] = layout.tile_grid(columns=shared)
                 if s["group"] in ADVANCED_GROUPS:
                     self._advanced_group(column, s["group"], grids[s["group"]])
                 else:
@@ -665,6 +680,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self.remove_css_class("compact")
         for tile in self.rows.values():
             tile.set_compact(compact)
+        layout.update_columns()     # the tiles have other minimum widths
 
     def _set_layout(self, layout):
         self.layout = layout

@@ -7,7 +7,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 ## Features
 
 - **Live tuning:** Changes reach the wheelbase while you move a control, so you feel them immediately. Undo single settings or everything since loading. Switching the slot or changing a value on the wheelbase shows up in the app right away.
-- **Everything on one view:** *Tuning* shows the live steering angle and pedals on top and all settings below in three tabs: steering & force feedback, wheel feel, pedals & paddles. Rarely changed signal settings are folded away. *Presets* and *Games* are one click away in the header bar; everything else is in the *Preferences* (main menu or Ctrl+,).
+- **Everything on one view:** *Tuning* shows the live steering angle and pedals on top and all settings below in three tabs: steering & force feedback, wheel feel, pedals & paddles. Rarely changed signal settings are folded away. *Presets*, *Games* and *Diagnostics* are one click away in the header bar; everything else is in the *Preferences* (main menu or Ctrl+,).
 - **Live input display:** See the current steering angle and how far each pedal is pressed, including the maximum reached. Useful to find the brake force you need for 100 %.
 - **Wheel & force feedback:** Steering angle with quick select, force feedback strength, force/spring/damper effects, scaling, intensity and interpolation.
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
@@ -24,6 +24,10 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 - **Presets per game:** Give each game a preset on the *Games* page. While Understeer runs, it applies the preset as soon as the game starts, or once the wheelbase is switched on if that comes later. Steam games (native, Flatpak or Snap Steam, all libraries) are found automatically and shown with their cover. Other games (Lutris, Heroic, Wine, native) are recognised by their program: pick it from the running programs or choose its file. Covers come from Steam's local cache; downloading missing ones is optional and off by default. Any game can get its own picture, also chosen from [SteamGridDB](https://www.steamgriddb.com) with your free personal API key.
 - **In the background:** Under *Preferences → Games*, Understeer can keep running when you close its window, with an icon in the system tray (KDE Plasma, Cinnamon, XFCE and others; GNOME with the AppIndicator extension), and start at login. Then the presets of your games are applied without opening it first, and a notification tells you whether that worked (can be switched off). Click the icon to open it. Its menu applies one of your presets without opening the window and quits Understeer, as does *Quit* in the main menu (Ctrl+Q).
 - **Your hardware:** *Preferences → Wheelbase* shows your wheelbase, the steering wheel on it and their firmware versions (the wheelbase firmware needs hid-fanatecff 0.2.3, the steering wheel and its firmware its current `master`, see [Prerequisites](#prerequisites)). Changing the steering wheel shows up right away. *Device Details* there show the device name, USB vendor and product ID and the kernel driver (version and build); where something is missing it says whether the installed driver doesn't offer it, it isn't available right now (e.g. no steering wheel on the wheelbase) or it is unknown (e.g. a wheel Understeer has no name for). Firmware versions are only shown as the driver reports them. The copy button next to *Hardware* copies all of it as a table for a GitHub issue, without serial numbers, USB ports or anything about you.
+- **Diagnostics:** A view of its own for checking your hardware without starting a game, in three tabs. Nothing here changes a setting.
+  - *Axes* shows every axis of the wheel and the pedals with its raw and normalized value, the range the device reports, the range seen since the last reset, and flat, fuzz and resolution. Its **health check** covers the steering and the axes you gave a role on the *Pedals & Paddles* tab: a tile turns green once the axis was moved through its whole range, and orange for a possible fault – a pedal that never reaches full travel, doesn't come back to 0 % or jitters at rest (often a dirty potentiometer or a drifting load cell), or a wheel that moves while it should be let go. *Measure Rest Values* takes three seconds with hands and feet off. *Report a Problem* adds the results, so a report shows whether the hardware measures cleanly.
+  - *Buttons* shows every button as a numbered cell, lit while held and green once pressed, with its name, code and the number games see (SDL).
+  - *LEDs* switches the rev and flag LEDs one by one, shows the colours of RGB LEDs and runs a short test that can be stopped at any time. LEDs your hardware doesn't have aren't shown; when you leave the tab, the LEDs are set back as they were. Needs write access to the LED files of hid-fanatecff (its udev rule allows it for its group, usually `games`).
 - **Your look:** Every setting is a tile with its value in large type, in two sizes (*Full* or *Compact*). Under *Preferences → General* you choose light, dark or system colours, one of four themes (Standard, Carbon, Midnight, Pit Lane), an accent colour and the corner radius (3 px by default).
 - **Translations:** Available in English and German, chosen automatically or under *Preferences → General*. More languages can be added easily (see below).
 
@@ -32,6 +36,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 ![Choosing presets to delete them at once](docs/select.png)
 
 ![Games page with a preset for each game and BeamNG.drive running](docs/games.png)
+
+![Health check on the Axes tab of Diagnostics: steering and throttle ready, the brake doesn't reach full travel](docs/diagnostics.png)
 
 ## Prerequisites
 
@@ -138,6 +144,8 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 Everything outside `ui/`, `inputs.py` and `app.py` works without GTK.
 
 Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt install python3-pytest`). They use a fake sysfs and temporary folders, so no wheelbase or password is needed. One test runs the whole app on an invisible screen; it needs Xvfb (`sudo apt install xvfb`) and is skipped without it.
+
+The screenshots in `docs/` are made the same way: `python3 tools/screenshots.py` runs Understeer with a fake wheelbase and example presets and games in a home folder of its own and saves them. Your configuration isn't touched; only the covers of the example games are copied from your Steam cache, if it has them.
 GitHub runs them on every push and pull request, and a release is only built when they pass.
 
 To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.
