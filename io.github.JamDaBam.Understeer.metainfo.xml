@@ -52,6 +52,10 @@
         <release version="2.1.0" date="2026-11-12">
             <description>
                 <ul>
+                    <li>Preferences → Wheelbase switches the tuning menu on the display of the wheelbase between Standard and Advanced, e.g. to use the tuning slots, and stays on the slot it was on; switching it on the wheelbase is followed right away. Shown when hid-fanatecff offers it (0.1.1 or newer)</li>
+                    <li xml:lang="de">„Einstellungen → Wheelbase“ schaltet das Tuning-Menü auf dem Display der Wheelbase zwischen Standard und Erweitert um, z. B. um die Tuning-Slots zu nutzen, und bleibt dabei auf dem bisherigen Slot; ein Umschalten an der Wheelbase wird sofort übernommen. Wird angezeigt, wenn hid-fanatecff es anbietet (0.1.1 oder neuer)</li>
+                    <li>The slot menu shows Auto while the wheelbase is on its Auto setup, instead of the slot before</li>
+                    <li xml:lang="de">Das Slot-Menü zeigt „Auto“, solange die Wheelbase auf ihrem Auto-Setup steht, statt des vorherigen Slots</li>
                     <li>After applying a preset no tile is marked as changed any more: the preset is what Undo goes back to</li>
                     <li xml:lang="de">Nach dem Anwenden eines Presets ist keine Kachel mehr als geändert markiert: „Rückgängig“ führt zum Preset zurück</li>
                     <li>Report a Problem also tells which functions your wheelbase, steering wheel and pedals offer (e.g. LEDs, display, pedal rumble) and whether hid-fanatecff is from before October 2026</li>

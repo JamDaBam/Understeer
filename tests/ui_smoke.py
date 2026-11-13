@@ -69,6 +69,7 @@ from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 failures, steps_done = [], []
+started = []            # set once the steps began
 finished = []           # set once every step ran
 STEP_MS = 300
 
@@ -168,6 +169,135 @@ def steps(win):
         win.capabilities.can_write(capabilities.DISPLAY)
         and not win.capabilities.has(capabilities.ADVANCED_MODE),
         "display found, no advanced_mode in the fake wheelbase")
+
+    # Standard / Advanced tuning menu: a driver that offers advanced_mode
+    mode_file = dev / "advanced_mode"
+    others = {}
+
+    def other_settings():
+        return {p.name: p.read_text().strip() for p in dev.iterdir()
+                if p.is_file() and p.name != "advanced_mode"}
+
+    def shown():
+        """(what the mode switch shows as asked for, as reached)"""
+        return win.mode_switch.get_active(), win.mode_switch.get_state()
+
+    yield "no mode switch", lambda: check(
+        not win.mode_row.get_visible(), "mode switch hidden without advanced_mode")
+
+    def driver_with_mode():
+        mode_file.write_text("1\n")
+        win._check_capabilities()
+        check(win.mode_row.get_visible() and win.mode_row.get_sensitive(),
+              "mode switch shown and usable")
+        check(shown() == (True, True), f"Advanced shown: {shown()}")
+    yield "driver with tuning mode", driver_with_mode
+
+    def to_standard():
+        others.update(other_settings())
+        win.mode_switch.set_active(False)       # as clicked
+        check(mode_file.read_text() == "0", f"0 written: {mode_file.read_text()!r}")
+        check(win.tuning_mode.switching and win.tuning_mode.advanced is True,
+              "waiting for the wheelbase")
+        check(shown() == (False, True), f"asked for, not reached yet: {shown()}")
+        check(not win.mode_row.get_sensitive(), "no second switch meanwhile")
+        # A CSL DD leaves its slot for the Auto setup when it switches
+        (dev / "SLOT").write_text("auto\n")
+    yield "switch to Standard", to_standard
+
+    def standard_confirmed():
+        win._check_tuning_mode()
+        check(win.tuning_mode.advanced is False and not win.tuning_mode.switching,
+              "switch confirmed")
+        check(shown() == (False, False), f"Standard shown: {shown()}")
+        check((dev / "SLOT").read_text() == "1" and win.device_values["SLOT"] == 1,
+              f"back on the slot it was on: {(dev / 'SLOT').read_text()!r}")
+        check("Slot changed" not in win._toast_text.get_label()
+              if win._toast is not None else True,
+              "going back to the slot is no change made on the wheelbase")
+        check(other_settings() == others, "other settings left alone")
+        check(win.status_label.get_label() == "In sync with device",
+              f"status: {win.status_label.get_label()!r}")
+        # The wheelbase ignores a request right after switching
+        check(win.tuning_mode.busy and not win.mode_row.get_sensitive(),
+              "not usable right after switching")
+        win.tuning_mode._settled_at = 0
+        win._check_tuning_mode()
+        check(win.mode_row.get_sensitive(), "usable again later")
+        mode_file.write_text("1\n")         # switched on the wheelbase
+    yield "Standard confirmed", standard_confirmed
+
+    def changed_on_the_wheelbase():
+        win._check_tuning_mode()
+        check(shown() == (True, True), f"switch follows the wheelbase: {shown()}")
+        check(win._toast_text.get_label()
+              == "Tuning menu changed on the wheelbase: Advanced",
+              f"told: {win._toast_text.get_label()!r}")
+        check(other_settings() == others, "other settings still left alone")
+        check(not win.mode_row.get_sensitive(), "not usable right after that either")
+        # A wheelbase that keeps its mode: the driver accepts the write
+        others["real"] = device.write_values, device.MODE_SWITCH_SECONDS
+        device.write_values, device.MODE_SWITCH_SECONDS = (lambda writes: []), 0.1
+        win.tuning_mode._settled_at = 0
+        win.mode_switch.set_active(False)
+        check(win.tuning_mode.switching, "waiting for the wheelbase again")
+    yield "mode changed on the wheelbase", changed_on_the_wheelbase
+
+    def not_switched():
+        device.write_values, device.MODE_SWITCH_SECONDS = others.pop("real")
+        win._check_tuning_mode()
+        check(not win.tuning_mode.switching and shown() == (True, True),
+              f"switch back at the mode of the wheelbase: {shown()}")
+        check(win._toast_text.get_label() == "Could not switch the tuning menu",
+              f"told: {win._toast_text.get_label()!r}")
+        check(win.mode_row.get_sensitive(), "usable after a failed switch")
+        mode_file.chmod(0o444)
+        win._check_capabilities()
+        check(win.mode_row.get_visible() and not win.mode_row.get_sensitive(),
+              "read only: shown, not usable")
+    yield "wheelbase keeps its mode", not_switched
+
+    def driver_without_mode():
+        mode_file.unlink()
+        win._check_capabilities()
+        check(not win.mode_row.get_visible()
+              and not win.capabilities.has(capabilities.ADVANCED_MODE),
+              "mode switch hidden again")
+        check(win.tuning_mode.path is None and win.tuning_mode.poll() is None,
+              "nothing followed any more")
+    yield "driver without tuning mode", driver_without_mode
+
+    def slot_names():
+        model = win.slot_dropdown.get_model()
+        return [model.get_string(i) for i in range(model.get_n_items())]
+
+    def auto_setup():
+        """The Auto setup of the wheelbase, chosen there: the slot menu
+        shows it instead of the slot before."""
+        check(win.slot_dropdown.get_selected() == 0 and "Auto" not in slot_names(),
+              f"slot 1 shown, no Auto listed: {slot_names()}")
+        (dev / "SLOT").write_text("auto\n")
+        win._check_device()
+        check(win.device_values["SLOT"] == 0 and slot_names()[-1] == "Auto"
+              and win.slot_dropdown.get_selected() == len(slot_names()) - 1,
+              f"Auto shown as the active slot: {slot_names()}")
+        check(win._toast_text.get_label() == "Slot changed on the wheelbase: Auto",
+              f"told: {win._toast_text.get_label()!r}")
+        written = (dev / "SLOT").read_text()
+        win._on_slot_selected()             # Auto is shown, not chosen
+        check((dev / "SLOT").read_text() == written, "nothing written for Auto")
+        win.slot_dropdown.set_selected(1)   # slot 2, as chosen in the menu
+        check((dev / "SLOT").read_text() == "2", "a slot chosen from Auto is written")
+    yield "Auto setup", auto_setup
+
+    def back_on_a_slot():
+        check(win.device_values["SLOT"] == 2 and "Auto" not in slot_names()
+              and win.slot_dropdown.get_selected() == 1,
+              f"slot 2 shown, Auto gone: {slot_names()}")
+        (dev / "SLOT").write_text("1\n")
+        win._load_from_device()
+        check(win.slot_dropdown.get_selected() == 0, "slot 1 again")
+    yield "back on a slot", back_on_a_slot
 
     def live_write():
         win.rows["FF"].set(55, silent=False)
@@ -1601,6 +1731,9 @@ def main():
     session_log.log.addHandler(Collect())
 
     def run_steps():
+        if started:     # activated again, e.g. by showing the window
+            return False
+        started.append(True)
         win = application.get_active_window()
         check(isinstance(win, Adw.ApplicationWindow), "main window shown")
         it = steps(win)
