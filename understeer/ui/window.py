@@ -8,7 +8,8 @@ import os
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
-from .. import APP_ICON, APP_ID, capabilities, config, games, releases, report
+from .. import (APP_ICON, APP_ID, capabilities, config, display, games,
+                releases, report)
 from .. import log as session_log
 from ..device import (RIMS, TuningMode, can_write, describe_access,
                       find_device_path, find_rumble_path, install_udev_rule,
@@ -1240,6 +1241,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             log.info("Hardware functions: %s", capabilities.summary(caps))
             self.capabilities = caps
         self._update_mode_switch()
+        self._update_display_group()
 
     def _check_wheel(self):
         """Notice a steering wheel being put on or changed."""
@@ -1364,6 +1366,92 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             self._notify(_("Tuning menu changed on the wheelbase: {mode}").format(
                 mode=_("Advanced") if mode.advanced else _("Standard")))
         return True
+
+    # -----------------------------------------------------------------------
+    # Text on the display of the steering wheel
+    # -----------------------------------------------------------------------
+    def _display_path(self):
+        """The display file if it can be written, else None."""
+        caps = self.capabilities
+        if caps is None or not caps.can_write(capabilities.DISPLAY):
+            return None
+        return caps.get(capabilities.DISPLAY).paths[0]
+
+    def _display_problem(self):
+        """Why the text in the entry can't be shown, or None."""
+        problem = display.check_text(self.display_entry.get_text())
+        if problem is None:
+            return None
+        reason, detail = problem
+        if reason == display.EMPTY:
+            return _("Enter up to three characters.")
+        if reason == display.UNSUPPORTED:
+            return _("“{character}” can't be shown on the display.").format(
+                character=detail)
+        if reason == display.POINT:
+            return _("A point or comma has to follow a character.")
+        return _("Only three characters fit on the display.")
+
+    def _update_display_group(self):
+        """Let the display be used only if the driver offers it and it can
+        be written, and Show only for text the display can show."""
+        if not hasattr(self, "display_entry"):
+            return
+        caps = self.capabilities
+        feature = caps.get(capabilities.DISPLAY) if caps else None
+        usable = bool(feature and feature.writable)
+        problem = self._display_problem() if usable else None
+        if feature is None:
+            status = _("No display output: no wheelbase connected, or the "
+                       "driver offers none.")
+        elif not usable:
+            status = _("No permission to write to the display. The udev rule "
+                       "of hid-fanatecff allows it for the members of its "
+                       "group, usually “games”.")
+        elif problem and self.display_entry.get_text():
+            status = problem
+        else:
+            status = _("Digits, letters except K, M, V, W and X, - _ [ ] and "
+                       "a space for a dark position. A point or comma after "
+                       "a character lights its point.")
+        self.display_status_row.set_subtitle(status)
+        failed = (not usable) or bool(problem and self.display_entry.get_text())
+        for widget in (self.display_status_row, self.display_entry):
+            if failed:
+                widget.add_css_class("error")
+            else:
+                widget.remove_css_class("error")
+        self.display_entry.set_sensitive(usable)
+        self.display_show_btn.set_sensitive(usable and problem is None)
+        self.display_clear_row.set_sensitive(usable)
+
+    def _show_display_text(self):
+        """Show was clicked (or Enter pressed in the entry)."""
+        path = self._display_path()
+        if path is None or self._display_problem() is not None:
+            self._update_display_group()
+            return
+        text = self.display_entry.get_text()
+        self._display_written(display.write(path, text),
+                              _("Sent to the display: {text}").format(text=text))
+
+    def _clear_display(self):
+        path = self._display_path()
+        if path is None:
+            self._update_display_group()
+            return
+        self._display_written(display.clear(path), _("Display cleared"))
+
+    def _display_written(self, result, done):
+        if result == display.OK:
+            self._notify(done)
+            return
+        self._notify({
+            display.UNAVAILABLE: _("The display is not available any more. "
+                                   "Is the wheelbase still connected?"),
+            display.DENIED: _("No permission to write to the display"),
+        }.get(result, _("Could not write to the display")))
+        self._check_capabilities()      # e.g. unplugged meanwhile
 
     def _restore_slot(self):
         """After switching the mode, here or on the wheelbase, go to the

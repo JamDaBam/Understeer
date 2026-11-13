@@ -12,6 +12,7 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 - **Wheel & force feedback:** Steering angle with quick select, force feedback strength, force/spring/damper effects, scaling, intensity and interpolation.
 - **Wheel feel:** Natural damper, friction and inertia, wheel vibration and drift mode.
 - **Pedals:** Load cell brake force, brake level LED and FullForce, plus a rumble test for ClubSport V3 / CSL Elite pedals.
+- **Steering wheel display test:** Not every steering wheel has an LED display, and the driver can't tell. *Preferences → Wheelbase* shows a short text on it (`888` lights every segment) and clears it, so you can see whether yours has one and Understeer can write to it. Nothing is written until you click *Show* or *Clear*, and the text stays when Understeer closes; a game that uses the display replaces it. Shown are digits, letters except K, M, V, W and X, `- _ [ ]`, and a point or comma after a character lights its point. Needs write access to the `display` file of hid-fanatecff (its udev rule allows it for its group, usually `games`).
 - **Standard or Advanced tuning menu:** *Preferences → Wheelbase* shows which tuning menu the wheelbase has on its display and switches it: Advanced has all settings and the tuning slots, Standard a short menu without them. Understeer changes the settings in both, so this is only needed to use the tuning slots. In Standard mode the slot menu offers the two setups of that menu, *Auto* and *Custom* (e.g. A SET and C SET), which can be named under *Slot Names in the Standard Menu*; *Slot Names* names Auto and slots 1–5 of the Advanced menu. Understeer remembers the slot last used in each mode and goes back to it after switching, also when the menu is switched on the wheelbase; in Advanced mode the slot menu shows *Auto* while the wheelbase is on that setup. Switching the menu on the wheelbase is followed right away. Shown when the driver offers it (hid-fanatecff 0.1.1 or newer).
 - **Tuning slots & presets:** Switch between the 5 tuning slots of the wheelbase, name them like on its display, and keep named presets for your games. Apply a preset with one click (its values are then what Undo goes back to), save your changes back into it, rename it with the pencil next to its name, and look at its values first in its ⋮ menu (what differs from your current settings is marked); before a preset is overwritten, Understeer lists every setting that changes in it (e.g. 70 % → 85 %). Quitting or applying a preset with unsaved changes to the active preset asks whether to save them first. Balanced sim racing defaults are built in.
 - **Deleting and the trash:** *Select* on the *Presets* and *Games* page lets you pick several tiles and delete them at once; one is deleted from its ⋮ menu. Nothing is gone right away: the message offers *Undo*, and deleted presets and games stay in the trash for 30 days. *Trash* next to *Select* opens it, on each page for its own kind; there you can restore them or delete them for good. A game comes back with its preset and picture; a game that uses a deleted preset gets it back once the preset is restored.
@@ -36,6 +37,8 @@ A modern, GTK4/Libadwaita graphical utility for adjusting Fanatec wheelbases and
 This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanatecff) kernel driver to be installed and active on your system. Without it, your system will not expose the hardware tuning paths required by this interface.
 
 Understeer needs hid-fanatecff 0.1 or newer; Standard/Advanced mode of the tuning menu needs 0.1.1 and the firmware version of the wheelbase 0.2.3. The steering wheel, its firmware and its LEDs need the current `master` of hid-fanatecff (October 2026 or newer); there is no numbered release with them yet. Understeer works with older versions too and leaves out what they don't offer.
+
+Understeer is developed and tested with a CSL DD (firmware 1537) and a Podium Steering Wheel GT (firmware 8). Other Fanatec hardware should work as far as hid-fanatecff supports it, but hasn't been tried by me.
 
 The AppImage uses Python 3 with PyGObject, GTK 4 and Libadwaita 1.5 or newer from your system, as found for example in Ubuntu 24.04, Fedora 40 and Debian 13.
 
@@ -109,6 +112,7 @@ Run the app from a checkout with `python3 -m understeer` (needs PyGObject with G
 |---|---|
 | `settings.py` | The settings shown in the app (sysfs attribute, range, tab, description) |
 | `device.py` | Finding the wheelbase, reading and writing sysfs, the mode of the tuning menu, permissions and udev rule |
+| `display.py` | Which text the steering wheel display can show, and writing or clearing it |
 | `capabilities.py` | Which hardware functions the wheelbase, wheel and pedals offer (`python3 -m understeer.capabilities` shows them) |
 | `inputs.py` | Live steering angle and pedal travel from `/dev/input/event*` |
 | `config.py` | Presets and app settings in `~/.config/Understeer/` |

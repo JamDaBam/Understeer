@@ -170,6 +170,90 @@ def steps(win):
         and not win.capabilities.has(capabilities.ADVANCED_MODE),
         "display found, no advanced_mode in the fake wheelbase")
 
+    # Testing the display of the steering wheel
+    display_file = hid / "display"
+
+    def display_text():
+        display_file.chmod(0o640)
+        text = display_file.read_text()
+        display_file.chmod(0o220)
+        return text
+
+    def display_usable():
+        check(display_text() == "", "nothing written to the display at start")
+        check(win.display_entry.get_sensitive()
+              and win.display_clear_row.get_sensitive(), "display usable")
+        check(win.display_entry.get_text() == "888"
+              and win.display_show_btn.get_sensitive(), "888 ready to show")
+        win.display_entry.set_text("")
+        check(not win.display_show_btn.get_sensitive(), "no Show without text")
+        win.display_entry.set_text("k")
+        check(not win.display_show_btn.get_sensitive()
+              and win.display_status_row.has_css_class("error")
+              and "“k”" in win.display_status_row.get_subtitle(),
+              f"k can't be shown: {win.display_status_row.get_subtitle()!r}")
+        win.display_entry.set_text("1234")
+        check(not win.display_show_btn.get_sensitive(), "four don't fit")
+        win._show_display_text()            # as Enter in the entry
+        check(display_text() == "", "invalid text not written")
+        win.display_entry.set_text("P1.")
+        check(win.display_show_btn.get_sensitive()
+              and not win.display_status_row.has_css_class("error"),
+              "valid text can be shown")
+        check(display_text() == "", "typing writes nothing")
+    yield "display usable", display_usable
+
+    def display_show():
+        win.display_show_btn.emit("clicked")
+        check(display_text() == "P1.", f"text written: {display_text()!r}")
+        check(win._toast_text.get_label() == "Sent to the display: P1.",
+              f"told: {win._toast_text.get_label()!r}")
+        win._check_capabilities()           # the periodic check
+        check(display_text() == "P1.", "not written again by itself")
+    yield "show text", display_show
+
+    def display_clear():
+        win._clear_display()
+        check(display_text() == "   ", f"cleared: {display_text()!r}")
+        check(win._toast_text.get_label() == "Display cleared",
+              f"told: {win._toast_text.get_label()!r}")
+    yield "clear display", display_clear
+
+    def display_not_writable():
+        if os.geteuid() == 0:
+            return                          # root may write anyway
+        display_file.chmod(0o444)
+        win._check_capabilities()
+        check(not win.display_entry.get_sensitive()
+              and not win.display_show_btn.get_sensitive()
+              and not win.display_clear_row.get_sensitive(),
+              "not usable without permission")
+        check("No permission" in win.display_status_row.get_subtitle(),
+              f"told why: {win.display_status_row.get_subtitle()!r}")
+        display_file.chmod(0o220)
+        win._check_capabilities()
+        check(win.display_entry.get_sensitive(), "usable again")
+    yield "display not writable", display_not_writable
+
+    def display_unplugged():
+        display_file.unlink()               # gone before the next check
+        win._show_display_text()
+        check(not display_file.exists(), "no display file made")
+        check(win._toast_text.get_label().startswith(
+            "The display is not available any more"),
+            f"told: {win._toast_text.get_label()!r}")
+        check(not win.capabilities.has(capabilities.DISPLAY)
+              and not win.display_entry.get_sensitive()
+              and not win.display_clear_row.get_sensitive(),
+              "not usable after the display went")
+        check(win.display_status_row.get_subtitle().startswith("No display output"),
+              f"told why: {win.display_status_row.get_subtitle()!r}")
+        display_file.write_text("")
+        display_file.chmod(0o220)
+        win._check_capabilities()
+        check(win.display_entry.get_sensitive(), "usable once it is back")
+    yield "display unplugged", display_unplugged
+
     # Standard / Advanced tuning menu: a driver that offers advanced_mode
     mode_file = dev / "advanced_mode"
     others = {}
