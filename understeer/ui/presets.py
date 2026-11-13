@@ -433,6 +433,8 @@ class PresetsMixin:
                     name=short(name)))
             if self._in_background:         # chosen in the tray menu
                 self._notify_tray_preset(name, outcome, failed)
+        if outcome == "written":
+            self._show_preset_name(name)    # by hand or for a game
         if outcome in ("written", "no device"):
             # The preset is what the tiles compare to from now on: nothing
             # is marked as changed, and Undo goes back to the preset. Not

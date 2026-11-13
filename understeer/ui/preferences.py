@@ -12,6 +12,7 @@ from .look_prefs import LookGroups
 from .report_dialog import ReportDialog
 
 LAYOUTS = ["full", "compact"]      # tile sizes, see SettingTile.set_compact
+PRESET_ON_DISPLAY = "preset_on_display"   # app setting, off if missing
 
 log = logging.getLogger("understeer.window")
 
@@ -151,6 +152,7 @@ class PreferencesMixin:
         rumble.add(fire)
         self.rumble_group = rumble
         wheel.add(rumble)
+        wheel.add(self._preset_display_group())
         wheel.add(self._display_group())
 
         # -- Games ----------------------------------------------------------
@@ -219,6 +221,29 @@ class PreferencesMixin:
         self.mode_row.add_suffix(self.mode_switch)
         self.mode_row.set_activatable_widget(self.mode_switch)
         return self.mode_row
+
+    def _preset_display_group(self):
+        """Whether the name of an applied preset goes to the display of the
+        steering wheel; off unless switched on."""
+        group = Adw.PreferencesGroup(title=_("Steering Wheel Display"))
+        row = Adw.SwitchRow(
+            title=_("Show Preset Name on Wheel Display"),
+            subtitle=_("After a preset has been written, also when a game "
+                       "starts, its first three characters that the display "
+                       "can show appear on it, e.g. “Ral” for “Rally 1”. A "
+                       "game that uses the display replaces the name. It "
+                       "stays until something else writes to the display."))
+        row.set_active(bool(config.get_setting(PRESET_ON_DISPLAY, False)))
+        row.connect("notify::active", lambda r, _p: self._set_preset_on_display(
+            r.get_active()))
+        self.preset_display_row = row
+        group.add(row)
+        return group
+
+    def _set_preset_on_display(self, on):
+        if on != bool(config.get_setting(PRESET_ON_DISPLAY, False)):
+            log.info("Preset name on the wheel display: %s", "on" if on else "off")
+            config.set_setting(PRESET_ON_DISPLAY, on or None)
 
     def _display_group(self):
         """A test of the display of the steering wheel: whether there is
