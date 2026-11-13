@@ -118,10 +118,7 @@ class AxisDiagnostics:
     def _set_hidden(self, axis, hide):
         """Hide the axis or show it again, here and on the pedals tab (the
         window saves the role and rebuilds both)."""
-        if hide:
-            self.window._set_axis_role(axis.key, "hidden")
-        else:
-            self.window._show_axis_again(axis.key)
+        self.window._set_axis_hidden(axis.key, hide)
 
     def reset(self):
         self.window.inputs.reset_measurements()

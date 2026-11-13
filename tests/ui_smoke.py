@@ -1680,6 +1680,40 @@ def steps(win):
         check(win.steer_label.get_label() not in ("", "—"),
               f"steering angle shown: {win.steer_label.get_label()!r}"))
 
+    # -- hiding an axis on the pedals tab: the eye, not a role --------------
+    def role_lists():
+        return [w for w in walk(win.axes_flow) if isinstance(w, Gtk.DropDown)]
+
+    def pedals_hide():
+        items = role_lists()[0].get_model()
+        texts = [items.get_string(i) for i in range(items.get_n_items())]
+        check("Hidden" not in texts, f"hiding is no role: {texts}")
+        win._set_axis_role("FANATEC Pedals:2", "brake")
+    yield "pedals hide", pedals_hide
+    yield "pedals hide eye", lambda: next(
+        w for w in walk(win.axes_flow) if isinstance(w, Gtk.Button)
+        and w.get_icon_name() == "view-conceal-symbolic"
+        and "Brake" in [x.get_label() for x in walk(w.get_parent())
+                        if isinstance(x, Gtk.Label)]).emit("clicked")
+    def pedals_hidden():
+        check(win.axis_roles.get("FANATEC Pedals:2") == "hidden"
+              and win.roles_before_hidden.get("FANATEC Pedals:2") == "brake",
+              f"hidden, role kept: {win.axis_roles}")
+        # shown with the hidden axes; its list shows the kept role
+        lists = role_lists()
+        check(len(lists) == 3, f"hidden axis shown on request: {len(lists)}")
+        win._choose_axis_role("FANATEC Pedals:2", "clutch")
+    yield "pedals hidden", pedals_hidden
+    yield "pedals role while hidden", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:2") == "hidden"
+              and win.roles_before_hidden.get("FANATEC Pedals:2") == "clutch",
+              "role changed, still hidden"),
+        win._set_axis_hidden("FANATEC Pedals:2", False))
+    yield "pedals shown again", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:2") == "clutch",
+              f"role back: {win.axis_roles}"),
+        win._set_axis_role("FANATEC Pedals:2", ""))
+
     # -- axis diagnostics on the same axes, no second reader --------------
     def axis_diagnostics():
         hat = inputs.Axis("FANATEC Wheel", 0x10, -1, 1, 0, fuzz=0, flat=0)
