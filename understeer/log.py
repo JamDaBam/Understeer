@@ -71,8 +71,12 @@ def _read(path):
         return None
 
 
-def _driver():
-    return _read("/sys/module/hid_fanatec/version") or "version unknown"
+def _driver(module="/sys/module/hid_fanatec"):
+    """Version of hid-fanatecff and its build (srcversion), which tells
+    drivers built from git apart: they have no version."""
+    text = _read(f"{module}/version") or "version unknown"
+    build = _read(f"{module}/srcversion")
+    return f"{text} (build {build})" if build else text
 
 
 def _distribution():

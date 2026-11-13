@@ -82,10 +82,32 @@ class PreferencesMixin:
         # -- Wheelbase -----------------------------------------------------
         wheel = self._prefs_page("wheelbase", _("Wheelbase"), "understeer-steering-symbolic")
         hardware = Adw.PreferencesGroup(title=_("Hardware"))
+        copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
+                          tooltip_text=_("Copy Device Information"))
+        copy.add_css_class("flat")
+        copy.update_property([Gtk.AccessibleProperty.LABEL],
+                             [_("Copy Device Information")])
+        copy.connect("clicked", lambda b: self._copy_device_info())
+        hardware.set_header_suffix(copy)
         self.base_row = Adw.ActionRow(title=_("Wheelbase"), subtitle_selectable=True)
         self.rim_row = Adw.ActionRow(title=_("Steering Wheel"), subtitle_selectable=True)
         hardware.add(self.base_row)
         hardware.add(self.rim_row)
+        # USB ids and the kernel driver, for when something doesn't work
+        details = Adw.ExpanderRow(title=_("Device Details"),
+                                  subtitle=_("Device name, USB IDs and kernel driver"))
+        self.device_info_rows = {}
+        for key, title in (("device_name", _("Device Name")),
+                           ("vendor_id", _("USB Vendor ID")),
+                           ("product_id", _("USB Product ID")),
+                           ("driver", _("Kernel Driver")),
+                           ("driver_version", _("Driver Version")),
+                           ("driver_build", _("Driver Build"))):
+            row = Adw.ActionRow(title=title, subtitle_selectable=True)
+            row.add_css_class("property")
+            details.add_row(row)
+            self.device_info_rows[key] = row
+        hardware.add(details)
         hardware.add(self._build_mode_row())
         wheel.add(hardware)
         self._show_wheel_info()

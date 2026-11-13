@@ -125,3 +125,13 @@ def test_describe_access_without_settings(tmp_path):
 def test_debug_info():
     info = log.debug_info()
     assert info.startswith("Understeer ") and "Log file:" in info
+
+
+def test_driver_version_and_build(tmp_path):
+    module = tmp_path / "hid_fanatec"
+    assert log._driver(module) == "version unknown"          # not loaded
+    module.mkdir()
+    (module / "srcversion").write_text("B4DFCE6022652E2ABDAE624\n")
+    assert log._driver(module) == "version unknown (build B4DFCE6022652E2ABDAE624)"
+    (module / "version").write_text("0.2.3\n")
+    assert log._driver(module) == "0.2.3 (build B4DFCE6022652E2ABDAE624)"
