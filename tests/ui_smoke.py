@@ -1870,6 +1870,146 @@ def steps(win):
     yield "button diagnostics closed", lambda: check(
         win.button_diagnostics is None, "dialog forgotten when closed")
 
+    # -- LED diagnostics: a Formula V2 with 9 RGB rev LEDs and 3+3 flags ---
+    led_root = scratch / "sysfs" / "leds"
+    led_gone = scratch / "sysfs" / "leds-gone"
+    led_names = ([f"hid-device:0a:RGB:RPM{n}" for n in range(1, 10)]
+                 + [f"hid-device:0a:RGB:{side}FLAG{n}"
+                    for side in "LR" for n in range(1, 4)])
+
+    def led_file(name, file="brightness"):
+        return (led_root / name / file).read_text().strip()
+
+    def led_diagnostics():
+        for name in led_names:
+            folder = led_root / name
+            folder.mkdir(parents=True, exist_ok=True)
+            # as the driver starts them: full brightness, no colour
+            for file, value in (("brightness", 255), ("max_brightness", 255),
+                                ("multi_index", "red green blue"),
+                                ("multi_intensity", "0 0 0")):
+                (folder / file).write_text(f"{value}\n")
+            (folder / "max_brightness").chmod(0o444)
+            (folder / "multi_index").chmod(0o444)
+        capabilities.LEDS_GLOB = str(led_root / "*")
+        win._check_capabilities()
+        win.activate_action("win.led-diagnostics", None)
+    yield "LED diagnostics", led_diagnostics
+
+    def leds_shown():
+        diag = win.led_diagnostics
+        check(diag is not None and win.get_visible_dialog() is diag.dialog,
+              "LED diagnostics is a dialog")
+        check(len(diag.toggles) == 15
+              and not any(t.get_active() for t in diag.toggles.values()),
+              f"15 LEDs, all dark: {len(diag.toggles)}")
+        check(len(diag.color_buttons) == 7, "seven colours")
+        check(diag.test_button.get_visible() and diag.off_button.get_visible()
+              and not diag.problem.get_visible(), "test and All Off offered")
+        first = led_root / led_names[0]
+        diag.toggles[str(first)].set_active(True)
+        check(led_file(led_names[0], "multi_intensity") == "255 255 255"
+              and led_file(led_names[0]) == "255", "LED 1 lit in white")
+        diag.color_buttons["red"].set_active(True)
+        check(led_file(led_names[0], "multi_intensity") == "255 0 0",
+              "lit LED turned red")
+        check(led_file(led_names[1], "multi_intensity") == "0 0 0",
+              "dark LED stays dark")
+        diag.toggles[str(led_root / led_names[12])].set_active(True)
+        check(led_file(led_names[12], "multi_intensity") == "255 0 0",
+              "right flag 1 lit in red")
+        diag.toggles[str(led_root / led_names[12])].set_active(False)
+        check(led_file(led_names[12]) == "0", "right flag 1 off")
+    yield "LED diagnostics shown", leds_shown
+
+    def led_test_cancelled():
+        diag = win.led_diagnostics
+        diag.test_button.emit("clicked")
+        check(diag.running and not diag.column.get_sensitive()
+              and diag.test_button.get_label() == "Stop Test",
+              "test running, LEDs locked")
+        for _ in range(4):
+            diag._step()
+        check(led_file(led_names[2]) == "255"
+              and led_file(led_names[2], "multi_intensity") == "255 255 255",
+              "third LED lit by the test")
+        diag.test_button.emit("clicked")
+        check(not diag.running and diag.column.get_sensitive()
+              and diag.status.get_label() == "Test stopped", "test stopped")
+        check(led_file(led_names[0], "multi_intensity") == "255 0 0"
+              and led_file(led_names[0]) == "255"
+              and led_file(led_names[2], "multi_intensity") == "0 0 0",
+              "LEDs set back as before the test")
+        check(diag.toggles[str(led_root / led_names[0])].get_active(),
+              "LED 1 shown lit again")
+    yield "LED test cancelled", led_test_cancelled
+
+    def led_test_finished():
+        diag = win.led_diagnostics
+        diag.start_test()
+        steps_run = 0
+        while diag._step() and steps_run < 100:
+            steps_run += 1
+        check(not diag.running and diag.status.get_label() == "Test finished",
+              f"test finished after {steps_run} steps: "
+              f"{diag.status.get_label()!r}")
+        check(led_file(led_names[0], "multi_intensity") == "255 0 0",
+              "LED 1 set back after the test")
+        diag.off_button.emit("clicked")
+        check(led_file(led_names[0]) == "0"
+              and not any(t.get_active() for t in diag.toggles.values()),
+              "All Off")
+        diag.toggles[str(led_root / led_names[0])].set_active(True)
+    yield "LED test finished", led_test_finished
+
+    def led_unplugged():
+        diag = win.led_diagnostics
+        diag.start_test()
+        diag._step()
+        led_root.rename(led_gone)           # wheelbase unplugged
+        diag._step()                        # writing fails: looks again
+        check(not diag.running and not diag.toggles
+              and diag.problem.get_visible()
+              and diag.problem.get_label().startswith("No LEDs found"),
+              f"test stopped, no LEDs: {diag.problem.get_label()!r}")
+        check(not diag.test_button.get_visible()
+              and not diag.off_button.get_visible(), "no controls without LEDs")
+        led_gone.rename(led_root)
+        win._check_capabilities()
+        check(len(diag.toggles) == 15, "LEDs back once plugged in")
+        check(not diag.problem.get_visible() and not diag.status.get_visible(),
+              f"no message left once back: {diag.status.get_label()!r}")
+    yield "LED diagnostics unplugged", led_unplugged
+
+    def led_read_only():
+        if os.geteuid() == 0:
+            return                          # root may write anyway
+        diag = win.led_diagnostics
+        for name in led_names:
+            (led_root / name / "brightness").chmod(0o444)
+        win._check_capabilities()
+        check(not any(t.get_sensitive() for t in diag.toggles.values())
+              and not diag.test_button.get_sensitive()
+              and "No permission" in diag.problem.get_label(),
+              f"read only: {diag.problem.get_label()!r}")
+        for name in led_names:
+            (led_root / name / "brightness").chmod(0o644)
+        win._check_capabilities()
+        check(all(t.get_sensitive() for t in diag.toggles.values()),
+              "usable again")
+    yield "LED diagnostics read only", led_read_only
+
+    yield "LED diagnostics close", lambda: win.led_diagnostics.dialog.close()
+
+    def leds_closed():
+        check(win.led_diagnostics is None, "dialog forgotten when closed")
+        check(all(led_file(n, "multi_intensity") == "0 0 0"
+                  and led_file(n) == "255" for n in led_names),
+              "LEDs set back as they were before the dialog")
+        capabilities.LEDS_GLOB = str(scratch / "sysfs" / "none" / "*")
+        win._check_capabilities()
+    yield "LED diagnostics closed", leds_closed
+
     for page in ("general", "wheelbase", "games", "data"):
         yield f"prefs {page}", lambda p=page: win._show_preferences(p)
 

@@ -53,6 +53,13 @@ flowbox > flowboxchild > .tile.diag-tile {
   background-color: @accent_bg_color;
 }
 
+/* LED diagnostics: a small toggle per LED */
+.led-cell {
+  min-width: 36px;
+  min-height: 28px;
+  padding: 0;
+}
+
 .tile-icon {
   color: @accent_color;
   background-color: alpha(@accent_bg_color, 0.14);

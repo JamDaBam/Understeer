@@ -867,6 +867,114 @@ msgstr "Hinzufügen"
 msgid "Program File"
 msgstr "Programmdatei"
 
+#: understeer/ui/led_diagnostics.py:21
+msgid "Cyan"
+msgstr "Cyan"
+
+#: understeer/ui/led_diagnostics.py:22
+msgid "Magenta"
+msgstr "Magenta"
+
+#: understeer/ui/led_diagnostics.py:22
+msgid "White"
+msgstr "Weiß"
+
+#: understeer/ui/led_diagnostics.py:27
+msgid "Left Flag LEDs"
+msgstr "Flaggen-LEDs links"
+
+#: understeer/ui/led_diagnostics.py:29
+msgid "Right Flag LEDs"
+msgstr "Flaggen-LEDs rechts"
+
+#: understeer/ui/led_diagnostics.py:30
+msgid "Wheelbase Rev LEDs"
+msgstr "Drehzahl-LEDs der Wheelbase"
+
+#: understeer/ui/led_diagnostics.py:31
+msgid "Steering Wheel Rev LEDs"
+msgstr "Drehzahl-LEDs des Lenkrads"
+
+#: understeer/ui/led_diagnostics.py:32
+msgid "Rev LEDs"
+msgstr "Drehzahl-LEDs"
+
+#: understeer/ui/led_diagnostics.py:46
+msgid "The LED is not available any more. Is the wheelbase still connected?"
+msgstr "Die LED ist nicht mehr verfügbar. Ist die Wheelbase noch angeschlossen?"
+
+#: understeer/ui/led_diagnostics.py:48
+msgid "No permission to switch the LEDs"
+msgstr "Keine Berechtigung, die LEDs zu schalten"
+
+#: understeer/ui/led_diagnostics.py:49
+msgid "Could not switch the LED"
+msgstr "Die LED konnte nicht geschaltet werden"
+
+#: understeer/ui/led_diagnostics.py:65
+msgid "LED Diagnostics"
+msgstr "LED-Diagnose"
+
+#: understeer/ui/led_diagnostics.py:68
+msgid "All Off"
+msgstr "Alle aus"
+
+#: understeer/ui/led_diagnostics.py:69
+msgid "Switch every LED off"
+msgstr "Alle LEDs ausschalten"
+
+#: understeer/ui/led_diagnostics.py:72
+msgid "Run Test"
+msgstr "Test starten"
+
+#: understeer/ui/led_diagnostics.py:81
+msgid "Switch the LEDs on and off one by one, or run the short test that lights them one after another. When this dialog closes, the LEDs are set back as they were where the driver tells their state."
+msgstr "Schalte die LEDs einzeln ein und aus oder starte den kurzen Test, der sie nacheinander aufleuchten lässt. Beim Schließen dieses Dialogs werden die LEDs wieder so gesetzt, wie sie waren, soweit der Treiber ihren Zustand mitteilt."
+
+#: understeer/ui/led_diagnostics.py:118
+msgid "No LEDs found: no wheelbase connected, or the driver offers none for this wheelbase and wheel."
+msgstr "Keine LEDs gefunden: keine Wheelbase angeschlossen, oder der Treiber bietet für diese Wheelbase und dieses Lenkrad keine an."
+
+#: understeer/ui/led_diagnostics.py:121
+msgid "No permission to switch the LEDs. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
+msgstr "Keine Berechtigung, die LEDs zu schalten. Die udev-Regel von hid-fanatecff erlaubt es den Mitgliedern ihrer Gruppe, meist „games“."
+
+#: understeer/ui/led_diagnostics.py:157
+msgid "Light All in This Colour"
+msgstr "Alle in dieser Farbe einschalten"
+
+#: understeer/ui/led_diagnostics.py:165
+msgid "RGB Colour"
+msgstr "RGB-Farbe"
+
+#: understeer/ui/led_diagnostics.py:166
+msgid "Colour channels: {channels}. LEDs switched on here use the chosen colour."
+msgstr "Farbkanäle: {channels}. Hier eingeschaltete LEDs leuchten in der gewählten Farbe."
+
+#: understeer/ui/led_diagnostics.py:202
+msgid "Stop Test"
+msgstr "Test anhalten"
+
+#: understeer/ui/led_diagnostics.py:253
+msgid "All LEDs switched off"
+msgstr "Alle LEDs ausgeschaltet"
+
+#: understeer/ui/led_diagnostics.py:259
+msgid "Test stopped"
+msgstr "Test angehalten"
+
+#: understeer/ui/led_diagnostics.py:271
+msgid "Test running…"
+msgstr "Test läuft …"
+
+#: understeer/ui/led_diagnostics.py:285
+msgid "Test finished"
+msgstr "Test beendet"
+
+#: understeer/ui/led_diagnostics.py:313
+msgid "Test stopped: the LEDs changed. Was the wheelbase unplugged or the wheel changed?"
+msgstr "Test angehalten: Die LEDs haben sich geändert. Wurde die Wheelbase getrennt oder das Lenkrad gewechselt?"
+
 #: understeer/ui/live_input.py:28
 msgid "Current Angle"
 msgstr "Aktueller Winkel"
@@ -2063,342 +2171,346 @@ msgstr "Understeer konnte sich nicht aktualisieren: {reason}. Deine Version blei
 msgid "Close"
 msgstr "Schließen"
 
-#: understeer/ui/window.py:220
+#: understeer/ui/window.py:224
 msgid "Understeer runs in the background"
 msgstr "Understeer läuft im Hintergrund weiter"
 
-#: understeer/ui/window.py:221
+#: understeer/ui/window.py:225
 msgid "It applies the presets of your games when they start. Open or quit it with its icon in the system tray."
 msgstr "Es wendet die Presets deiner Spiele an, wenn sie starten. Öffnen oder beenden kannst du es über sein Symbol in der Systemleiste."
 
-#: understeer/ui/window.py:274
+#: understeer/ui/window.py:278
 msgid "Slot {n}"
 msgstr "Slot {n}"
 
-#: understeer/ui/window.py:279
+#: understeer/ui/window.py:283
 msgid "Tuning slot on the wheelbase that is being edited"
 msgstr "Tuning-Slot der Wheelbase, der gerade bearbeitet wird"
 
-#: understeer/ui/window.py:293
+#: understeer/ui/window.py:297
 msgid "Main Menu"
 msgstr "Hauptmenü"
 
-#: understeer/ui/window.py:296
+#: understeer/ui/window.py:300
 msgid "Reload from Device"
 msgstr "Vom Gerät neu laden"
 
-#: understeer/ui/window.py:298
+#: understeer/ui/window.py:302
 msgid "Axis Diagnostics…"
 msgstr "Achsendiagnose…"
 
-#: understeer/ui/window.py:299
+#: understeer/ui/window.py:303
 msgid "Button Diagnostics…"
 msgstr "Tastendiagnose…"
 
-#: understeer/ui/window.py:303
+#: understeer/ui/window.py:304
+msgid "LED Diagnostics…"
+msgstr "LED-Diagnose…"
+
+#: understeer/ui/window.py:308
 msgid "Report a Problem…"
 msgstr "Problem melden …"
 
-#: understeer/ui/window.py:304
+#: understeer/ui/window.py:309
 msgid "What's New"
 msgstr "Neuigkeiten"
 
-#: understeer/ui/window.py:305
+#: understeer/ui/window.py:310
 msgid "About Understeer"
 msgstr "Über Understeer"
 
-#: understeer/ui/window.py:315
+#: understeer/ui/window.py:320
 msgid "Undo all changes since the values were loaded or a preset was applied"
 msgstr "Alle Änderungen seit dem Laden oder dem Anwenden eines Presets rückgängig machen"
 
-#: understeer/ui/window.py:341
+#: understeer/ui/window.py:346
 msgid "Discard"
 msgstr "Verwerfen"
 
-#: understeer/ui/window.py:454
+#: understeer/ui/window.py:459
 msgid "{group} (advanced)"
 msgstr "{group} (erweitert)"
 
-#: understeer/ui/window.py:488
+#: understeer/ui/window.py:493
 msgid "Quick Select"
 msgstr "Schnellauswahl"
 
-#: understeer/ui/window.py:495
+#: understeer/ui/window.py:500
 msgid "Use the maximum range of the wheelbase"
 msgstr "Maximalen Bereich der Wheelbase verwenden"
 
-#: understeer/ui/window.py:517
+#: understeer/ui/window.py:522
 msgid "All Versions on GitHub"
 msgstr "Alle Versionen auf GitHub"
 
-#: understeer/ui/window.py:530
+#: understeer/ui/window.py:535
 msgid "{name} by {author}"
 msgstr "{name} von {author}"
 
-#: understeer/ui/window.py:531
+#: understeer/ui/window.py:536
 msgid "Started as a fork of"
 msgstr "Entstanden als Fork von"
 
-#: understeer/ui/window.py:534
+#: understeer/ui/window.py:539
 msgid "Kernel driver"
 msgstr "Kerneltreiber"
 
-#: understeer/ui/window.py:596
+#: understeer/ui/window.py:601
 msgid "New"
 msgstr "Neu"
 
-#: understeer/ui/window.py:842
+#: understeer/ui/window.py:848
 msgid "No Fanatec wheelbase found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr "Keine Fanatec-Wheelbase gefunden. Prüfe, ob sie eingeschaltet und der hid-fanatecff-Treiber geladen ist."
 
-#: understeer/ui/window.py:844
+#: understeer/ui/window.py:850
 msgid "Retry"
 msgstr "Erneut suchen"
 
-#: understeer/ui/window.py:849
+#: understeer/ui/window.py:855
 msgid "Changes need a password each time. Join the “{group}” group to tune live."
 msgstr "Änderungen brauchen jedes Mal ein Passwort. Tritt der Gruppe „{group}“ bei, um live zu tunen."
 
-#: understeer/ui/window.py:852
+#: understeer/ui/window.py:858
 msgid "Join Group"
 msgstr "Gruppe beitreten"
 
-#: understeer/ui/window.py:854
+#: understeer/ui/window.py:860
 msgid "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 msgstr "Melde dich ab und wieder an, um den Beitritt zur Gruppe „{group}“ abzuschließen. Bis dahin brauchen Änderungen ein Passwort."
 
-#: understeer/ui/window.py:861
+#: understeer/ui/window.py:867
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr "Änderungen brauchen jedes Mal ein Passwort. Richte Schreibrechte ein, um live zu tunen."
 
-#: understeer/ui/window.py:884
+#: understeer/ui/window.py:890
 msgid "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 msgstr "Dein Benutzer ist nicht in der Gruppe „{group}“, die der hid-fanatecff-Treiber für die Tuning-Einstellungen verwendet."
 
-#: understeer/ui/window.py:890
+#: understeer/ui/window.py:896
 msgid "Log out and back in to finish joining the “{group}” group."
 msgstr "Melde dich ab und wieder an, um den Beitritt zur Gruppe „{group}“ abzuschließen."
 
-#: understeer/ui/window.py:894
+#: understeer/ui/window.py:900
 msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr "Installiert eine udev-Regel, damit Einstellungen ohne Passwortabfrage geändert werden können und die Live-Eingabe angezeigt werden kann."
 
-#: understeer/ui/window.py:909
+#: understeer/ui/window.py:915
 msgid "Setting up permissions failed"
 msgstr "Einrichten der Berechtigungen fehlgeschlagen"
 
-#: understeer/ui/window.py:912
+#: understeer/ui/window.py:918
 msgid "Added to “{group}”. Log out and back in to tune live."
 msgstr "Zu „{group}“ hinzugefügt. Melde dich ab und wieder an, um live zu tunen."
 
-#: understeer/ui/window.py:956
+#: understeer/ui/window.py:962
 msgid "Wheelbase connected"
 msgstr "Wheelbase verbunden"
 
-#: understeer/ui/window.py:958
+#: understeer/ui/window.py:964
 msgid "Wheelbase disconnected"
 msgstr "Wheelbase getrennt"
 
-#: understeer/ui/window.py:970
+#: understeer/ui/window.py:976
 msgid "No device"
 msgstr "Kein Gerät"
 
-#: understeer/ui/window.py:993
+#: understeer/ui/window.py:999
 msgid "In sync with device"
 msgstr "Mit Gerät synchron"
 
-#: understeer/ui/window.py:1006
+#: understeer/ui/window.py:1012
 msgid "Writing…"
 msgstr "Schreibe …"
 
-#: understeer/ui/window.py:1041
+#: understeer/ui/window.py:1047
 msgid "Write failed: {names}"
 msgstr "Schreiben fehlgeschlagen: {names}"
 
-#: understeer/ui/window.py:1043
+#: understeer/ui/window.py:1049
 msgid "Could not write: {names}"
 msgstr "Konnte nicht schreiben: {names}"
 
-#: understeer/ui/window.py:1061
+#: understeer/ui/window.py:1067
 msgid "Pending changes: {n}"
 msgstr "Ausstehende Änderungen: {n}"
 
-#: understeer/ui/window.py:1063
+#: understeer/ui/window.py:1069
 msgid "Changes not applied yet"
 msgstr "Änderungen noch nicht übernommen"
 
-#: understeer/ui/window.py:1110
+#: understeer/ui/window.py:1116
 msgid "Changes undone"
 msgstr "Änderungen rückgängig gemacht"
 
-#: understeer/ui/window.py:1214
+#: understeer/ui/window.py:1220
 msgid "Slot changed on the wheelbase: {name}. Unapplied changes were discarded."
 msgstr "Slot an der Wheelbase gewechselt: {name}. Nicht übernommene Änderungen wurden verworfen."
 
-#: understeer/ui/window.py:1216
+#: understeer/ui/window.py:1222
 msgid "Slot changed on the wheelbase: {name}"
 msgstr "Slot an der Wheelbase gewechselt: {name}"
 
-#: understeer/ui/window.py:1238
+#: understeer/ui/window.py:1244
 msgid "Unknown wheel (ID {id})"
 msgstr "Unbekanntes Lenkrad (ID {id})"
 
-#: understeer/ui/window.py:1270
+#: understeer/ui/window.py:1290
 msgid "Steering wheel changed: {name}"
 msgstr "Lenkrad gewechselt: {name}"
 
-#: understeer/ui/window.py:1282
+#: understeer/ui/window.py:1302
 msgid "Firmware {version}"
 msgstr "Firmware {version}"
 
-#: understeer/ui/window.py:1283
+#: understeer/ui/window.py:1303
 msgid "Firmware: {state}"
 msgstr "Firmware: {state}"
 
-#: understeer/ui/window.py:1286
+#: understeer/ui/window.py:1306
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: understeer/ui/window.py:1305
+#: understeer/ui/window.py:1325
 msgid "Not supported by the installed driver"
 msgstr "Vom installierten Treiber nicht unterstützt"
 
-#: understeer/ui/window.py:1306
+#: understeer/ui/window.py:1326
 msgid "Not available"
 msgstr "Nicht verfügbar"
 
-#: understeer/ui/window.py:1307
+#: understeer/ui/window.py:1327
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: understeer/ui/window.py:1308
+#: understeer/ui/window.py:1328
 msgid "not connected"
 msgstr "nicht verbunden"
 
-#: understeer/ui/window.py:1309
+#: understeer/ui/window.py:1329
 msgid "no steering wheel reported"
 msgstr "kein Lenkrad gemeldet"
 
-#: understeer/ui/window.py:1310
+#: understeer/ui/window.py:1330
 msgid "could not be read"
 msgstr "nicht lesbar"
 
-#: understeer/ui/window.py:1311
+#: understeer/ui/window.py:1331
 msgid "hid-fanatecff not loaded"
 msgstr "hid-fanatecff nicht geladen"
 
-#: understeer/ui/window.py:1312
+#: understeer/ui/window.py:1332
 msgid "not known to Understeer"
 msgstr "Understeer unbekannt"
 
-#: understeer/ui/window.py:1313
+#: understeer/ui/window.py:1333
 msgid "not reported by the driver"
 msgstr "vom Treiber nicht gemeldet"
 
-#: understeer/ui/window.py:1314
+#: understeer/ui/window.py:1334
 msgid "invalid value"
 msgstr "ungültiger Wert"
 
-#: understeer/ui/window.py:1326
+#: understeer/ui/window.py:1346
 msgid "Device information copied"
 msgstr "Geräteinformationen kopiert"
 
-#: understeer/ui/window.py:1381
+#: understeer/ui/window.py:1401
 msgid "Could not switch the tuning menu"
 msgstr "Das Tuning-Menü konnte nicht umgeschaltet werden"
 
-#: understeer/ui/window.py:1413
+#: understeer/ui/window.py:1433
 msgid "Tuning menu changed on the wheelbase: {mode}"
 msgstr "Tuning-Menü an der Wheelbase umgeschaltet: {mode}"
 
-#: understeer/ui/window.py:1414
+#: understeer/ui/window.py:1434
 msgid "Advanced"
 msgstr "Erweitert"
 
-#: understeer/ui/window.py:1434
+#: understeer/ui/window.py:1454
 msgid "Enter up to three characters."
 msgstr "Gib bis zu drei Zeichen ein."
 
-#: understeer/ui/window.py:1436
+#: understeer/ui/window.py:1456
 msgid "“{character}” can't be shown on the display."
 msgstr "„{character}“ kann auf der Anzeige nicht dargestellt werden."
 
-#: understeer/ui/window.py:1439
+#: understeer/ui/window.py:1459
 msgid "A point or comma has to follow a character."
 msgstr "Ein Punkt oder Komma muss auf ein Zeichen folgen."
 
-#: understeer/ui/window.py:1440
+#: understeer/ui/window.py:1460
 msgid "Only three characters fit on the display."
 msgstr "Auf die Anzeige passen nur drei Zeichen."
 
-#: understeer/ui/window.py:1452
+#: understeer/ui/window.py:1472
 msgid "No display output: no wheelbase connected, or the driver offers none."
 msgstr "Keine Anzeige verfügbar: keine Wheelbase angeschlossen, oder der Treiber bietet keine an."
 
-#: understeer/ui/window.py:1455
+#: understeer/ui/window.py:1475
 msgid "No permission to write to the display. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 msgstr "Keine Berechtigung, auf die Anzeige zu schreiben. Die udev-Regel von hid-fanatecff erlaubt es den Mitgliedern ihrer Gruppe, meist „games“."
 
-#: understeer/ui/window.py:1461
+#: understeer/ui/window.py:1481
 msgid "Digits, letters except K, M, V, W and X, - _ [ ] and a space for a dark position. A point or comma after a character lights its point."
 msgstr "Ziffern, Buchstaben außer K, M, V, W und X, - _ [ ] und ein Leerzeichen für eine dunkle Stelle. Ein Punkt oder Komma nach einem Zeichen schaltet dessen Punkt ein."
 
-#: understeer/ui/window.py:1483
+#: understeer/ui/window.py:1503
 msgid "Sent to the display: {text}"
 msgstr "An die Anzeige gesendet: {text}"
 
-#: understeer/ui/window.py:1491
+#: understeer/ui/window.py:1511
 msgid "Display cleared"
 msgstr "Anzeige geleert"
 
-#: understeer/ui/window.py:1521
+#: understeer/ui/window.py:1541
 msgid "The display is not available any more. Is the wheelbase still connected?"
 msgstr "Die Anzeige ist nicht mehr verfügbar. Ist die Wheelbase noch angeschlossen?"
 
-#: understeer/ui/window.py:1523
+#: understeer/ui/window.py:1543
 msgid "No permission to write to the display"
 msgstr "Keine Berechtigung, auf die Anzeige zu schreiben"
 
-#: understeer/ui/window.py:1524
+#: understeer/ui/window.py:1544
 msgid "Could not write to the display"
 msgstr "Konnte nicht auf die Anzeige schreiben"
 
-#: understeer/ui/window.py:1566
+#: understeer/ui/window.py:1586
 msgid "The driver can only switch to slots 1–{n}. Choose this slot on the wheelbase."
 msgstr "Der Treiber kann nur auf die Slots 1–{n} umschalten. Wähle diesen Slot an der Wheelbase."
 
-#: understeer/ui/window.py:1568
+#: understeer/ui/window.py:1588
 msgid "Could not switch slot"
 msgstr "Slot konnte nicht gewechselt werden"
 
-#: understeer/ui/window.py:1582
+#: understeer/ui/window.py:1602
 msgid "Could not send rumble"
 msgstr "Vibration konnte nicht gesendet werden"
 
-#: understeer/ui/window.py:1595
+#: understeer/ui/window.py:1615
 msgid "Permissions set up — changes now apply live"
 msgstr "Berechtigungen eingerichtet – Änderungen werden jetzt live übernommen"
 
-#: understeer/ui/window.py:1643
+#: understeer/ui/window.py:1663
 msgid "Reset All Tuning Slots?"
 msgstr "Alle Tuning-Slots zurücksetzen?"
 
-#: understeer/ui/window.py:1644
+#: understeer/ui/window.py:1664
 msgid "All tuning slots stored on the wheelbase will be cleared. This cannot be undone."
 msgstr "Alle auf der Wheelbase gespeicherten Tuning-Slots werden gelöscht. Das kann nicht rückgängig gemacht werden."
 
-#: understeer/ui/window.py:1647
+#: understeer/ui/window.py:1667
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: understeer/ui/window.py:1657
+#: understeer/ui/window.py:1677
 msgid "Not Available"
 msgstr "Nicht verfügbar"
 
-#: understeer/ui/window.py:1658
+#: understeer/ui/window.py:1678
 msgid "This wheelbase does not support resetting."
 msgstr "Diese Wheelbase unterstützt kein Zurücksetzen."
 
-#: understeer/ui/window.py:1660
+#: understeer/ui/window.py:1680
 msgid "Could not reset the tuning slots"
 msgstr "Die Tuning-Slots konnten nicht zurückgesetzt werden"
