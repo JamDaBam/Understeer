@@ -1680,6 +1680,109 @@ def steps(win):
         check(win.steer_label.get_label() not in ("", "—"),
               f"steering angle shown: {win.steer_label.get_label()!r}"))
 
+    # -- hiding an axis on the pedals tab: the eye, not a role --------------
+    def role_lists():
+        return [w for w in walk(win.axes_flow) if isinstance(w, Gtk.DropDown)]
+
+    def pedals_hide():
+        items = role_lists()[0].get_model()
+        texts = [items.get_string(i) for i in range(items.get_n_items())]
+        check("Hidden" not in texts, f"hiding is no role: {texts}")
+        win._set_axis_role("FANATEC Pedals:2", "brake")
+    yield "pedals hide", pedals_hide
+    yield "pedals hide eye", lambda: next(
+        w for w in walk(win.axes_flow) if isinstance(w, Gtk.Button)
+        and w.get_icon_name() == "view-conceal-symbolic"
+        and "Brake" in [x.get_label() for x in walk(w.get_parent())
+                        if isinstance(x, Gtk.Label)]).emit("clicked")
+    def pedals_hidden():
+        check(win.axis_roles.get("FANATEC Pedals:2") == "hidden"
+              and win.roles_before_hidden.get("FANATEC Pedals:2") == "brake",
+              f"hidden, role kept: {win.axis_roles}")
+        # shown with the hidden axes; its list shows the kept role
+        lists = role_lists()
+        check(len(lists) == 3, f"hidden axis shown on request: {len(lists)}")
+        win._choose_axis_role("FANATEC Pedals:2", "clutch")
+    yield "pedals hidden", pedals_hidden
+    yield "pedals role while hidden", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:2") == "hidden"
+              and win.roles_before_hidden.get("FANATEC Pedals:2") == "clutch",
+              "role changed, still hidden"),
+        win._set_axis_hidden("FANATEC Pedals:2", False))
+    yield "pedals shown again", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:2") == "clutch",
+              f"role back: {win.axis_roles}"),
+        win._set_axis_role("FANATEC Pedals:2", ""))
+
+    # -- axis diagnostics on the same axes, no second reader --------------
+    def axis_diagnostics():
+        hat = inputs.Axis("FANATEC Wheel", 0x10, -1, 1, 0, fuzz=0, flat=0)
+        win.inputs.all_axes = dict(win.inputs.axes)
+        win.inputs.all_axes[hat.key] = hat
+        win.inputs.devices = ["FANATEC Wheel", "FANATEC Pedals"]
+        win.activate_action("win.axis-diagnostics", None)
+    yield "axis diagnostics", axis_diagnostics
+
+    def diagnostics_shown():
+        diag = win.axis_diagnostics
+        check(diag is not None and win.get_visible_dialog() is diag.dialog,
+              "diagnostics is a dialog")
+        check(set(diag.widgets) == set(win.inputs.all_axes),
+              f"a card per axis: {sorted(diag.widgets)}")
+        throttle = win.inputs.all_axes["FANATEC Pedals:1"]
+        throttle.update(0)
+        throttle.update(65535)
+        win._update_inputs()
+        w = diag.widgets[throttle.key]
+        check(w["observed"].get_label() == "0 … 65535 (100 %)",
+              f"observed range: {w['observed'].get_label()}")
+        check(w["status"].get_label() == "Full range reached",
+              f"status: {w['status'].get_label()}")
+        diag.reset()
+        check(w["observed"].get_label() == "65535 … 65535 (0 %)",
+              f"reset: {w['observed'].get_label()}")
+    yield "axis diagnostics shown", diagnostics_shown
+
+    def diagnostics_hide():
+        # An assigned axis keeps its role while hidden
+        win._set_axis_role("FANATEC Pedals:1", "throttle")
+        diag = win.axis_diagnostics
+        diag.widgets["FANATEC Pedals:1"]["hide"].emit("clicked")
+    yield "axis diagnostics hide", diagnostics_hide
+    yield "axis diagnostics hidden", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:1") == "hidden",
+              "hidden in the saved roles"),
+        check("FANATEC Pedals:1" not in win.axis_diagnostics.widgets,
+              "hidden in the diagnostics"),
+        check(win.axis_diagnostics.hidden_box.get_visible(),
+              "switch to show hidden axes"),
+        win.axis_diagnostics.hidden_switch.set_active(True))
+    yield "axis diagnostics show hidden", lambda: (
+        check("FANATEC Pedals:1" in win.axis_diagnostics.widgets,
+              "hidden axis shown on request"),
+        win.axis_diagnostics.widgets["FANATEC Pedals:1"]["hide"].emit("clicked"))
+    yield "axis diagnostics unhidden", lambda: (
+        check(win.axis_roles.get("FANATEC Pedals:1") == "throttle",
+              f"role back: {win.axis_roles.get('FANATEC Pedals:1')}"),
+        check(config.load_axis_roles().get("FANATEC Pedals:1") == "throttle"
+              and not config.load_roles_before_hidden(), "role saved"),
+        win._set_axis_role("FANATEC Pedals:1", ""))
+
+    def diagnostics_unplugged():
+        for key in [k for k in win.inputs.all_axes if k.startswith("FANATEC Pedals")]:
+            win.inputs.all_axes.pop(key)
+            win.inputs.axes.pop(key, None)
+        win.inputs.devices.remove("FANATEC Pedals")
+        win._on_input_gone()
+    yield "axis diagnostics unplugged", diagnostics_unplugged
+    yield "axis diagnostics after unplug", lambda: (
+        check(all(k.startswith("FANATEC Wheel")
+                  for k in win.axis_diagnostics.widgets),
+              f"pedal cards gone: {sorted(win.axis_diagnostics.widgets)}"),
+        win.axis_diagnostics.dialog.close())
+    yield "axis diagnostics closed", lambda: check(
+        win.axis_diagnostics is None, "dialog forgotten when closed")
+
     for page in ("general", "wheelbase", "games", "data"):
         yield f"prefs {page}", lambda p=page: win._show_preferences(p)
 

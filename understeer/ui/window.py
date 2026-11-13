@@ -99,9 +99,11 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.inputs = InputMonitor(self._on_input, self._on_input_gone)
         self.axis_roles = config.load_axis_roles()
+        self.roles_before_hidden = config.load_roles_before_hidden()
         self.show_hidden_axes = False
         self.axis_widgets = {}   # axis key -> (level bar, value label, max label)
         self._input_timer = 0
+        self.axis_diagnostics = None   # the open AxisDiagnostics dialog
         self._open_groups = set()   # advanced groups the user opened
         self._group_summaries = []  # updates their one-line values
 
@@ -292,6 +294,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         device = Gio.Menu()
         device.append(_("Reload from Device"), "win.reload")
         device.append(_("Save as Preset…"), "win.save-preset")
+        device.append(_("Axis Diagnostics…"), "win.axis-diagnostics")
         menu.append_section(None, device)
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
@@ -634,6 +637,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         add("about", lambda *a: self._show_about())
         add("whats-new", lambda *a: self._show_whats_new())
         add("report", lambda *a: ReportDialog(self))
+        add("axis-diagnostics", lambda *a: self._show_axis_diagnostics())
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])

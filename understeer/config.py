@@ -85,13 +85,31 @@ def migrate_config():
             pass
 
 
+# In axes.json: {axis key: role it had before it was hidden}, so showing it
+# again brings the role back. Not an axis key (those hold a colon); older
+# versions skip it, as they only read text values.
+BEFORE_HIDDEN_KEY = "before_hidden"
+
+
 def load_axis_roles():
     """{axis key: role} as the user assigned them."""
     return {k: v for k, v in _read_json(AXES_FILE).items() if isinstance(v, str)}
 
 
-def save_axis_roles(roles):
-    _save_json(AXES_FILE, roles)
+def load_roles_before_hidden():
+    """{axis key: role} of the hidden axes that had a role before."""
+    data = _read_json(AXES_FILE).get(BEFORE_HIDDEN_KEY)
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items()
+            if isinstance(k, str) and isinstance(v, str) and v}
+
+
+def save_axis_roles(roles, before_hidden=None):
+    data = dict(roles)
+    if before_hidden:
+        data[BEFORE_HIDDEN_KEY] = dict(before_hidden)
+    _save_json(AXES_FILE, data)
 
 
 def load_slot_names(model):

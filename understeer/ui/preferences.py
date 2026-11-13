@@ -484,6 +484,7 @@ class PreferencesMixin:
         self.layout = layout if layout in LAYOUTS else "full"
         self._apply_layout()
         self.axis_roles = config.load_axis_roles()
+        self.roles_before_hidden = config.load_roles_before_hidden()
 
         def rebuild():
             self.relocalize()

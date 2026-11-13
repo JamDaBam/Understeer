@@ -49,6 +49,16 @@ def section(column, title, description=None, suffix=None):
         column.append(desc)
 
 
+def level_bar(**props):
+    """A bar for a value 0..1, in the accent colour all the way (GTK
+    colours a full bar differently)."""
+    bar = Gtk.LevelBar(min_value=0, max_value=1, **props)
+    for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
+                   Gtk.LEVEL_BAR_OFFSET_FULL):
+        bar.remove_offset_value(offset)
+    return bar
+
+
 def dashed_tile(icon, title, hint=None, action=None, clicked=None):
     """A dashed tile that makes something new: action is the name of the
     action it starts, or clicked() is called."""

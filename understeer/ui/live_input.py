@@ -5,19 +5,10 @@ from .. import config
 from ..i18n import _
 from ..inputs import AXIS_ROLES
 from . import layout
+from .axis_diagnostics import AxisDiagnostics
 from .live import WheelView
 
 STRIP_PEDALS = 4        # pedals shown in the live strip
-
-
-def _level_bar(**props):
-    """A bar for pedal travel 0..1, in the accent colour all the way (GTK
-    colours a full bar differently)."""
-    bar = Gtk.LevelBar(min_value=0, max_value=1, **props)
-    for offset in (Gtk.LEVEL_BAR_OFFSET_LOW, Gtk.LEVEL_BAR_OFFSET_HIGH,
-                   Gtk.LEVEL_BAR_OFFSET_FULL):
-        bar.remove_offset_value(offset)
-    return bar
 
 
 class LiveInputMixin:
@@ -91,6 +82,8 @@ class LiveInputMixin:
             return          # nobody sees the live display; show_again() starts it
         self.inputs.start()
         self._rebuild_axes_list()
+        if self.axis_diagnostics:
+            self.axis_diagnostics.rebuild()
         self._update_inputs()
         self._update_permission_row()
 
@@ -113,36 +106,51 @@ class LiveInputMixin:
             self._rebuild_strip_pedals(axes)
             return
 
-        role_keys = [k for k, _l in AXIS_ROLES]
+        # Hiding is not a role: the eye hides an axis, the list holds the
+        # roles only; a hidden axis keeps its role (roles_before_hidden).
+        choices = [(k, l) for k, l in AXIS_ROLES if k != "hidden"]
+        role_keys = [k for k, _l in choices]
         hidden = 0
         for axis in axes:
-            role = self.axis_roles.get(axis.key, "")
-            if role == "hidden":
+            is_hidden = self.axis_roles.get(axis.key) == "hidden"
+            if is_hidden:
                 hidden += 1
                 if not self.show_hidden_axes:
                     continue
-            label = dict(AXIS_ROLES).get(role) if role and role != "hidden" else None
+            role = self._axis_role(axis.key)
+            label = dict(AXIS_ROLES).get(role) if role else None
             pedal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             pedal.add_css_class("pedal")
+            if is_hidden:
+                pedal.add_css_class("dim-label")
             name = Gtk.Label(label=_(label) if label else
                              _("Axis {name}").format(name=axis.name))
             name.add_css_class("heading")
-            bar = _level_bar(orientation=Gtk.Orientation.VERTICAL,
+            eye = Gtk.Button(icon_name="view-reveal-symbolic" if is_hidden
+                             else "view-conceal-symbolic",
+                             valign=Gtk.Align.CENTER,
+                             css_classes=["flat", "circular"])
+            eye.set_tooltip_text(_("Show this axis again") if is_hidden
+                                 else _("Hide this axis"))
+            eye.connect("clicked", lambda b, k=axis.key, h=is_hidden:
+                        self._set_axis_hidden(k, not h))
+            head = Gtk.CenterBox(center_widget=name, end_widget=eye)
+            bar = layout.level_bar(orientation=Gtk.Orientation.VERTICAL,
                              inverted=True, halign=Gtk.Align.CENTER)
             value = Gtk.Label()
             value.add_css_class("pedal-value")
             peak = Gtk.Label()
             peak.add_css_class("dim-label")
             choose = Gtk.DropDown.new_from_strings(
-                [_(l) for _k, l in AXIS_ROLES])
+                [_(l) for _k, l in choices])
             choose.set_selected(role_keys.index(role) if role in role_keys else 0)
             choose.set_tooltip_text(_("What this axis is"))
             choose.connect("notify::selected", lambda d, _p, k=axis.key:
-                           self._set_axis_role(k, role_keys[d.get_selected()]))
+                           self._choose_axis_role(k, role_keys[d.get_selected()]))
             source = Gtk.Label(label=f"{axis.device} · {axis.name}")
             source.set_ellipsize(Pango.EllipsizeMode.END)
             source.add_css_class("tile-id")
-            for w in (name, bar, value, peak, choose, source):
+            for w in (head, bar, value, peak, choose, source):
                 pedal.append(w)
             self.axes_flow.append(pedal)
             self.axis_widgets[axis.key] = (bar, value, peak)
@@ -177,7 +185,7 @@ class LiveInputMixin:
             name = Gtk.Label(xalign=0, label=_(dict(AXIS_ROLES)[role]) if role
                              else _("Axis {name}").format(name=axis.name))
             name.add_css_class("dim-label")
-            bar = _level_bar(css_classes=["strip-bar"])
+            bar = layout.level_bar(css_classes=["strip-bar"])
             value = Gtk.Label(xalign=0)
             value.add_css_class("strip-value")
             for w in (name, bar, value):
@@ -186,13 +194,57 @@ class LiveInputMixin:
             self.strip_widgets[axis.key] = (bar, value)
 
     def _set_axis_role(self, key, role):
+        """Give the axis a role; hiding it keeps its role for showing it
+        again (_show_axis_again)."""
+        old = self.axis_roles.get(key, "")
+        if role == "hidden":
+            if old and old != "hidden":
+                self.roles_before_hidden[key] = old
+        else:
+            self.roles_before_hidden.pop(key, None)
         if role:
             self.axis_roles[key] = role
         else:
             self.axis_roles.pop(key, None)
-        config.save_axis_roles(self.axis_roles)
-        # Rebuild after the dropdown's own signal has finished.
+        self._axis_roles_changed()
+
+    def _axis_roles_changed(self):
+        """Save the roles and show them on the pedals tab and in the axis
+        diagnostics, after the signal of the list or button has finished."""
+        config.save_axis_roles(self.axis_roles, self.roles_before_hidden)
         GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+        if self.axis_diagnostics:       # it shows the roles as names
+            GLib.idle_add(lambda: self.axis_diagnostics and
+                          self.axis_diagnostics.rebuild() and False)
+
+    def _show_axis_again(self, key):
+        """A hidden axis shown again, with the role it had before."""
+        self._set_axis_role(key, self.roles_before_hidden.get(key, ""))
+
+    def _axis_role(self, key):
+        """The role of the axis, also while it is hidden; "" if none."""
+        role = self.axis_roles.get(key, "")
+        if role == "hidden":
+            return self.roles_before_hidden.get(key, "")
+        return role
+
+    def _set_axis_hidden(self, key, hide):
+        """The eye on the pedals tab and in the axis diagnostics."""
+        if hide:
+            self._set_axis_role(key, "hidden")
+        else:
+            self._show_axis_again(key)
+
+    def _choose_axis_role(self, key, role):
+        """A role chosen in the list; a hidden axis stays hidden."""
+        if self.axis_roles.get(key) != "hidden":
+            self._set_axis_role(key, role)
+            return
+        if role:
+            self.roles_before_hidden[key] = role
+        else:
+            self.roles_before_hidden.pop(key, None)
+        self._axis_roles_changed()
 
     def _toggle_hidden(self, show):
         if show != self.show_hidden_axes:
@@ -207,6 +259,17 @@ class LiveInputMixin:
     def _on_input_gone(self):
         """Pedals (or the wheelbase) unplugged: their bars go."""
         GLib.idle_add(lambda: self._rebuild_axes_list() and False)
+        if self.axis_diagnostics:
+            GLib.idle_add(lambda: self.axis_diagnostics and
+                          self.axis_diagnostics.rebuild() and False)
+
+    def _show_axis_diagnostics(self):
+        """The axis diagnostics dialog, on the axes read here (no second
+        reader of the input devices)."""
+        if self.axis_diagnostics:
+            self.axis_diagnostics.dialog.present(self)
+        else:
+            AxisDiagnostics(self)
 
     def _on_input(self):
         # Wheels report up to 1000 updates per second; redraw at ~30 fps.
@@ -241,4 +304,6 @@ class LiveInputMixin:
             if a:
                 bar.set_value(a.fraction())
                 value.set_label(f"{a.fraction() * 100:.0f} %")
+        if self.axis_diagnostics:
+            self.axis_diagnostics.update()
         return GLib.SOURCE_REMOVE

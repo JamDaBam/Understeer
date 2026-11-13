@@ -60,6 +60,25 @@ def test_files_without_a_preset(home, content):
         config.read_preset(cfg / "bad.json")
 
 
+def test_role_before_hidden_is_kept(home):
+    config.save_axis_roles({"Pedals:1": "hidden"}, {"Pedals:1": "handbrake"})
+    assert config.load_axis_roles() == {"Pedals:1": "hidden"}
+    assert config.load_roles_before_hidden() == {"Pedals:1": "handbrake"}
+    config.save_axis_roles({"Pedals:1": "handbrake"}, {})
+    assert config.load_roles_before_hidden() == {}
+    assert "before_hidden" not in config.AXES_FILE.read_text()
+
+
+def test_broken_roles_before_hidden_are_ignored(home):
+    config.AXES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    config.AXES_FILE.write_text('{"Pedals:1": "hidden", "before_hidden": ["x"]}')
+    assert config.load_roles_before_hidden() == {}
+    config.AXES_FILE.write_text(
+        '{"before_hidden": {"Pedals:1": 3, "Pedals:2": "brake", "Pedals:3": ""}}')
+    assert config.load_roles_before_hidden() == {"Pedals:2": "brake"}
+    assert config.load_axis_roles() == {}
+
+
 def test_axis_roles_are_no_preset(home):
     assert config.load_axis_roles() == {}
     config.save_axis_roles({"Pedals:1": "brake"})
