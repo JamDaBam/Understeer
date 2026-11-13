@@ -389,7 +389,9 @@ class PresetsMixin:
         now (chosen here, on the wheelbase or after switching the tuning
         menu), the preset active before stays with the slot it was written
         to, and the preset last active in the new slot, if any, is active
-        again. Only for this session, like the active preset itself.
+        again. Only for this session, like the active preset itself. With
+        the option on, the display shows the name of that preset, or is
+        cleared.
 
         Slots are told apart by the mode of the tuning menu too: the
         Standard menu has setups of its own.
@@ -407,10 +409,10 @@ class PresetsMixin:
             self._slot_presets[old] = self.active_preset
         else:
             self._slot_presets.pop(old, None)
-        path, values = self._slot_presets.get(key), {}
+        path, name, values = self._slot_presets.get(key), None, {}
         if path is not None:
             try:
-                _name, values = self._read_preset(path)
+                name, values = self._read_preset(path)
             except (OSError, ValueError):
                 log.info("Preset %s of slot %s is gone", path.name, slot or "auto")
                 del self._slot_presets[key]
@@ -419,6 +421,7 @@ class PresetsMixin:
             log.info("Slot %s: preset %s", slot or "auto",
                      path.name if path else "none")
             self._set_active_preset(path, values)
+        self._show_preset_name(name)        # or clear the display
 
     def _set_active_preset(self, path, values):
         self.active_preset = pathlib.Path(path) if path else None
