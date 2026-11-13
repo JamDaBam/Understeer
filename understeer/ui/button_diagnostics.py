@@ -4,9 +4,10 @@ in this test; the details of the button pressed last in a line above.
 
 Read only. It shows the buttons of the window's InputMonitor (window.inputs)
 and opens no input device itself; the window calls update() with its live
-display and rebuild() when the devices change. Nothing is remapped.
+display and rebuild() when the devices change. Nothing is remapped. A tab
+of the Diagnostics view (see diagnostics_page).
 """
-from gi.repository import Adw, Gtk
+from gi.repository import Gtk
 
 from ..i18n import _
 from ..inputs import sdl_order
@@ -61,7 +62,7 @@ def numbered(buttons, devices):
 
 
 class ButtonDiagnostics:
-    """The dialog; window.button_diagnostics while it is open."""
+    """The page; window.button_diagnostics."""
 
     def __init__(self, window):
         self.window = window
@@ -69,26 +70,15 @@ class ButtonDiagnostics:
         self.shown = {}         # button key -> (pressed, presses) on screen
         self.numbers = {}       # button key -> number shown
 
-        self.dialog = window.fit_dialog(
-            Adw.Dialog(title=_("Button Diagnostics")))
-        view = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         reset = Gtk.Button(label=_("Reset Button Test"))
         reset.set_tooltip_text(_("Count every button as untested again"))
         reset.connect("clicked", lambda b: self.reset())
-        header.pack_start(reset)
-        view.add_top_bar(header)
-
-        outer = layout.margins(
-            Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6), 18)
-        intro = Gtk.Label(
-            label=_("Press every button once. A button lights up while it is "
-                    "held down and turns green once it was pressed. Hover "
-                    "over a button for its name and code. Read only: no "
-                    "button is remapped."),
-            xalign=0, wrap=True)
-        intro.add_css_class("dim-label")
-        outer.append(intro)
+        self.page, outer = layout.scroll_page()
+        layout.page_head(
+            outer, _("Press every button once. A button lights up while it is "
+                     "held down and turns green once it was pressed. Hover "
+                     "over a button for its name and code. Read only: no "
+                     "button is remapped."), [reset])
         self.problem = Gtk.Label(xalign=0, wrap=True)
         self.problem.add_css_class("warning")
         outer.append(self.problem)
@@ -101,20 +91,8 @@ class ButtonDiagnostics:
         outer.append(self.held)
         self.column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         outer.append(self.column)
-        clamp = Adw.Clamp(maximum_size=1100, tightening_threshold=1100,
-                          child=outer)
-        view.set_content(Gtk.ScrolledWindow(
-            child=clamp, hscrollbar_policy=Gtk.PolicyType.NEVER))
-        self.dialog.set_child(view)
-        self.dialog.connect("closed", lambda d: self._closed())
-
         window.button_diagnostics = self
         self.rebuild()
-        self.dialog.present(window)
-
-    def _closed(self):
-        if self.window.button_diagnostics is self:
-            self.window.button_diagnostics = None
 
     def reset(self):
         self.window.inputs.reset_buttons()

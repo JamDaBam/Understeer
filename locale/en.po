@@ -51,227 +51,231 @@ msgstr "Presets"
 msgid "Games"
 msgstr "Games"
 
-#: understeer/settings.py:22
+#: understeer/settings.py:18
+msgid "Diagnostics"
+msgstr "Diagnostics"
+
+#: understeer/settings.py:23
 msgid "Steering & Force Feedback"
 msgstr "Steering & Force Feedback"
 
-#: understeer/settings.py:23
+#: understeer/settings.py:24
 msgid "Wheel Feel"
 msgstr "Wheel Feel"
 
-#: understeer/settings.py:24
+#: understeer/settings.py:25
 msgid "Pedals & Paddles"
 msgstr "Pedals & Paddles"
 
-#: understeer/settings.py:33
+#: understeer/settings.py:34
 msgid "Off"
 msgstr "Off"
 
-#: understeer/settings.py:35
+#: understeer/settings.py:36
 msgid "Counter-steer {n}"
 msgstr "Counter-steer {n}"
 
-#: understeer/settings.py:36
+#: understeer/settings.py:37
 msgid "Centering +{n}"
 msgstr "Centering +{n}"
 
-#: understeer/settings.py:43
+#: understeer/settings.py:44
 msgid "Always on"
 msgstr "Always on"
 
-#: understeer/settings.py:53
+#: understeer/settings.py:54
 msgid "Rotation"
 msgstr "Rotation"
 
-#: understeer/settings.py:54
+#: understeer/settings.py:55
 msgid "Steering Angle"
 msgstr "Steering Angle"
 
-#: understeer/settings.py:55
+#: understeer/settings.py:56
 msgid "Total wheel rotation in degrees. Auto uses the maximum range of the wheelbase."
 msgstr "Total wheel rotation in degrees. Auto uses the maximum range of the wheelbase."
 
-#: understeer/settings.py:59
+#: understeer/settings.py:60
 msgid "Force Feedback"
 msgstr "Force Feedback"
 
-#: understeer/settings.py:60
+#: understeer/settings.py:61
 msgid "Force Feedback Strength"
 msgstr "Force Feedback Strength"
 
-#: understeer/settings.py:61
+#: understeer/settings.py:62
 msgid "Master force feedback output of the wheelbase."
 msgstr "Master force feedback output of the wheelbase."
 
-#: understeer/settings.py:64
+#: understeer/settings.py:65
 msgid "Force Effects"
 msgstr "Force Effects"
 
-#: understeer/settings.py:65
+#: understeer/settings.py:66
 msgid "Strength of constant-force effects, the core of the game's force feedback."
 msgstr "Strength of constant-force effects, the core of the game's force feedback."
 
-#: understeer/settings.py:69
+#: understeer/settings.py:70
 msgid "Spring Effects"
 msgstr "Spring Effects"
 
-#: understeer/settings.py:70
+#: understeer/settings.py:71
 msgid "Strength of centering spring effects sent by the game."
 msgstr "Strength of centering spring effects sent by the game."
 
-#: understeer/settings.py:73
+#: understeer/settings.py:74
 msgid "Damper Effects"
 msgstr "Damper Effects"
 
-#: understeer/settings.py:74
+#: understeer/settings.py:75
 msgid "Strength of damper effects sent by the game."
 msgstr "Strength of damper effects sent by the game."
 
-#: understeer/settings.py:76
+#: understeer/settings.py:77
 msgid "Signal"
 msgstr "Signal"
 
-#: understeer/settings.py:77
+#: understeer/settings.py:78
 msgid "Force Feedback Scaling"
 msgstr "Force Feedback Scaling"
 
-#: understeer/settings.py:78
+#: understeer/settings.py:79
 msgid "Linear"
 msgstr "Linear"
 
-#: understeer/settings.py:78
+#: understeer/settings.py:79
 msgid "Peak"
 msgstr "Peak"
 
-#: understeer/settings.py:79
+#: understeer/settings.py:80
 msgid "Linear keeps a constant taper. Peak scales to the strongest force (default)."
 msgstr "Linear keeps a constant taper. Peak scales to the strongest force (default)."
 
-#: understeer/settings.py:83
+#: understeer/settings.py:84
 msgid "Force Effect Intensity"
 msgstr "Force Effect Intensity"
 
-#: understeer/settings.py:84
+#: understeer/settings.py:85
 msgid "Filters the force feedback signal. Higher values give sharper details."
 msgstr "Filters the force feedback signal. Higher values give sharper details."
 
-#: understeer/settings.py:88
+#: understeer/settings.py:89
 msgid "Interpolation Filter"
 msgstr "Interpolation Filter"
 
-#: understeer/settings.py:89
+#: understeer/settings.py:90
 msgid "Smooths between force feedback updates. 0 turns it off."
 msgstr "Smooths between force feedback updates. 0 turns it off."
 
-#: understeer/settings.py:92
+#: understeer/settings.py:93
 msgid "Natural Feel"
 msgstr "Natural Feel"
 
-#: understeer/settings.py:93
+#: understeer/settings.py:94
 msgid "Natural Damper"
 msgstr "Natural Damper"
 
-#: understeer/settings.py:94
+#: understeer/settings.py:95
 msgid "Mechanical damping added by the wheelbase itself, independent of the game."
 msgstr "Mechanical damping added by the wheelbase itself, independent of the game."
 
-#: understeer/settings.py:98
+#: understeer/settings.py:99
 msgid "Natural Friction"
 msgstr "Natural Friction"
 
-#: understeer/settings.py:99
+#: understeer/settings.py:100
 msgid "Mechanical friction added by the wheelbase itself, independent of the game."
 msgstr "Mechanical friction added by the wheelbase itself, independent of the game."
 
-#: understeer/settings.py:103
+#: understeer/settings.py:104
 msgid "Natural Inertia"
 msgstr "Natural Inertia"
 
-#: understeer/settings.py:104
+#: understeer/settings.py:105
 msgid "Mechanical inertia added by the wheelbase itself, independent of the game."
 msgstr "Mechanical inertia added by the wheelbase itself, independent of the game."
 
-#: understeer/settings.py:107
+#: understeer/settings.py:108
 msgid "Effects"
 msgstr "Effects"
 
-#: understeer/settings.py:108
+#: understeer/settings.py:109
 msgid "Wheel Vibration"
 msgstr "Wheel Vibration"
 
-#: understeer/settings.py:109
+#: understeer/settings.py:110
 msgid "Strength of the rumble on curbs and impacts."
 msgstr "Strength of the rumble on curbs and impacts."
 
-#: understeer/settings.py:112
+#: understeer/settings.py:113
 msgid "Drift Mode"
 msgstr "Drift Mode"
 
-#: understeer/settings.py:113
+#: understeer/settings.py:114
 msgid "Negative values help with counter-steering, positive values add centering force. 0 turns it off."
 msgstr "Negative values help with counter-steering, positive values add centering force. 0 turns it off."
 
-#: understeer/settings.py:117
+#: understeer/settings.py:118
 msgid "Load Cell Brake"
 msgstr "Load Cell Brake"
 
-#: understeer/settings.py:118
+#: understeer/settings.py:119
 msgid "Brake Force"
 msgstr "Brake Force"
 
-#: understeer/settings.py:119
+#: understeer/settings.py:120
 msgid "Pedal stiffness. Higher values need more force for full braking. Requires a load cell brake."
 msgstr "Pedal stiffness. Higher values need more force for full braking. Requires a load cell brake."
 
-#: understeer/settings.py:123
+#: understeer/settings.py:124
 msgid "Brake Level Indicator"
 msgstr "Brake Level Indicator"
 
-#: understeer/settings.py:124
+#: understeer/settings.py:125
 msgid "Brake force at which the LED lights up."
 msgstr "Brake force at which the LED lights up."
 
-#: understeer/settings.py:126
+#: understeer/settings.py:127
 msgid "Vibration"
 msgstr "Vibration"
 
-#: understeer/settings.py:127
+#: understeer/settings.py:128
 msgid "FullForce"
 msgstr "FullForce"
 
-#: understeer/settings.py:128
+#: understeer/settings.py:129
 msgid "Pedal vibration routed through the wheel motor. Requires a game with FullForce support."
 msgstr "Pedal vibration routed through the wheel motor. Requires a game with FullForce support."
 
-#: understeer/settings.py:132
+#: understeer/settings.py:133
 msgid "Analogue Paddles"
 msgstr "Analogue Paddles"
 
-#: understeer/settings.py:133
+#: understeer/settings.py:134
 msgid "Paddle Mode"
 msgstr "Paddle Mode"
 
-#: understeer/settings.py:134
+#: understeer/settings.py:135
 msgid "Independent (CbP)"
 msgstr "Independent (CbP)"
 
-#: understeer/settings.py:135
+#: understeer/settings.py:136
 msgid "Clutch / Handbrake (CH)"
 msgstr "Clutch / Handbrake (CH)"
 
-#: understeer/settings.py:136
+#: understeer/settings.py:137
 msgid "Brake / Throttle (Bt)"
 msgstr "Brake / Throttle (Bt)"
 
-#: understeer/settings.py:137
+#: understeer/settings.py:138
 msgid "Analogue Axes (AnA)"
 msgstr "Analogue Axes (AnA)"
 
-#: understeer/settings.py:138
+#: understeer/settings.py:139
 msgid "How the analogue clutch paddles behave. Read-only on wheels with a physical mode switch."
 msgstr "How the analogue clutch paddles behave. Read-only on wheels with a physical mode switch."
 
-#: understeer/settings.py:166
+#: understeer/settings.py:167
 msgid "Auto"
 msgstr "Auto"
 
@@ -363,143 +367,135 @@ msgstr "Purple"
 msgid "Slate"
 msgstr "Slate"
 
-#: understeer/ui/axis_diagnostics.py:21
+#: understeer/ui/axis_diagnostics.py:22
 msgid "No range reported"
 msgstr "No range reported"
 
-#: understeer/ui/axis_diagnostics.py:23
+#: understeer/ui/axis_diagnostics.py:24
 msgid "Not moved yet"
 msgstr "Not moved yet"
 
-#: understeer/ui/axis_diagnostics.py:25
+#: understeer/ui/axis_diagnostics.py:26
 msgid "Full range reached"
 msgstr "Full range reached"
 
-#: understeer/ui/axis_diagnostics.py:27
+#: understeer/ui/axis_diagnostics.py:28
 msgid "Maximum not reached"
 msgstr "Maximum not reached"
 
-#: understeer/ui/axis_diagnostics.py:29
+#: understeer/ui/axis_diagnostics.py:30
 msgid "Minimum not reached"
 msgstr "Minimum not reached"
 
-#: understeer/ui/axis_diagnostics.py:30
+#: understeer/ui/axis_diagnostics.py:31
 msgid "Neither end reached"
 msgstr "Neither end reached"
 
-#: understeer/ui/axis_diagnostics.py:42
+#: understeer/ui/axis_diagnostics.py:43
 msgid "Axis {name}"
 msgstr "Axis {name}"
 
-#: understeer/ui/axis_diagnostics.py:64
-msgid "Axis Diagnostics"
-msgstr "Axis Diagnostics"
-
-#: understeer/ui/axis_diagnostics.py:67
+#: understeer/ui/axis_diagnostics.py:65
 msgid "Reset Measurements"
 msgstr "Reset Measurements"
 
-#: understeer/ui/axis_diagnostics.py:68
+#: understeer/ui/axis_diagnostics.py:66
 msgid "Start the observed ranges anew"
 msgstr "Start the observed ranges anew"
 
-#: understeer/ui/axis_diagnostics.py:76
+#: understeer/ui/axis_diagnostics.py:70
 msgid "Move every axis to both ends. Observed shows the lowest and highest value since the last reset. Read only: nothing is changed on the device."
 msgstr "Move every axis to both ends. Observed shows the lowest and highest value since the last reset. Read only: nothing is changed on the device."
 
-#: understeer/ui/axis_diagnostics.py:137
+#: understeer/ui/axis_diagnostics.py:116
 msgid "No read access to {devices}. Set up permissions in the preferences."
 msgstr "No read access to {devices}. Set up permissions in the preferences."
 
-#: understeer/ui/axis_diagnostics.py:147
+#: understeer/ui/axis_diagnostics.py:126
 msgid "Show hidden axes ({n})"
 msgstr "Show hidden axes ({n})"
 
-#: understeer/ui/axis_diagnostics.py:177
+#: understeer/ui/axis_diagnostics.py:156
 msgid "Name and code the driver reports"
 msgstr "Name and code the driver reports"
 
-#: understeer/ui/axis_diagnostics.py:188
+#: understeer/ui/axis_diagnostics.py:167
 msgid "Show this axis again"
 msgstr "Show this axis again"
 
-#: understeer/ui/axis_diagnostics.py:189
+#: understeer/ui/axis_diagnostics.py:168
 msgid "Hide this axis"
 msgstr "Hide this axis"
 
-#: understeer/ui/axis_diagnostics.py:202
+#: understeer/ui/axis_diagnostics.py:181
 msgid "Normalized"
 msgstr "Normalized"
 
-#: understeer/ui/axis_diagnostics.py:209
+#: understeer/ui/axis_diagnostics.py:188
 msgid "Raw"
 msgstr "Raw"
 
-#: understeer/ui/axis_diagnostics.py:210
+#: understeer/ui/axis_diagnostics.py:189
 msgid "Device range"
 msgstr "Device range"
 
-#: understeer/ui/axis_diagnostics.py:211
+#: understeer/ui/axis_diagnostics.py:190
 msgid "Observed"
 msgstr "Observed"
 
-#: understeer/ui/axis_diagnostics.py:212
+#: understeer/ui/axis_diagnostics.py:191
 msgid "Flat (deadzone)"
 msgstr "Flat (deadzone)"
 
-#: understeer/ui/axis_diagnostics.py:212
+#: understeer/ui/axis_diagnostics.py:191
 msgid "Fuzz"
 msgstr "Fuzz"
 
-#: understeer/ui/axis_diagnostics.py:213
+#: understeer/ui/axis_diagnostics.py:192
 msgid "Resolution"
 msgstr "Resolution"
 
-#: understeer/ui/axis_diagnostics.py:214
+#: understeer/ui/axis_diagnostics.py:193
 msgid "Not reported"
 msgstr "Not reported"
 
-#: understeer/ui/button_diagnostics.py:19
+#: understeer/ui/button_diagnostics.py:20
 msgid "{tested} of {total} buttons tested"
 msgstr "{tested} of {total} buttons tested"
 
-#: understeer/ui/button_diagnostics.py:27
+#: understeer/ui/button_diagnostics.py:28
 msgid "No button held down"
 msgstr "No button held down"
 
-#: understeer/ui/button_diagnostics.py:28
+#: understeer/ui/button_diagnostics.py:29
 msgid "Held down: {buttons}"
 msgstr "Held down: {buttons}"
 
-#: understeer/ui/button_diagnostics.py:29
+#: understeer/ui/button_diagnostics.py:30
 msgid "Button {n}"
 msgstr "Button {n}"
 
-#: understeer/ui/button_diagnostics.py:44
+#: understeer/ui/button_diagnostics.py:45
 msgid "Press a button to see its name and code"
 msgstr "Press a button to see its name and code"
 
-#: understeer/ui/button_diagnostics.py:45
+#: understeer/ui/button_diagnostics.py:46
 msgid "Last pressed: {button} · pressed {n}×"
 msgstr "Last pressed: {button} · pressed {n}×"
 
 #: understeer/ui/button_diagnostics.py:73
-msgid "Button Diagnostics"
-msgstr "Button Diagnostics"
-
-#: understeer/ui/button_diagnostics.py:76
 msgid "Reset Button Test"
 msgstr "Reset Button Test"
 
-#: understeer/ui/button_diagnostics.py:77
+#: understeer/ui/button_diagnostics.py:74
 msgid "Count every button as untested again"
 msgstr "Count every button as untested again"
 
-#: understeer/ui/button_diagnostics.py:85
+#: understeer/ui/button_diagnostics.py:78
 msgid "Press every button once. A button lights up while it is held down and turns green once it was pressed. Hover over a button for its name and code. Read only: no button is remapped."
 msgstr "Press every button once. A button lights up while it is held down and turns green once it was pressed. Hover over a button for its name and code. Read only: no button is remapped."
 
-#: understeer/ui/button_diagnostics.py:138
+#: understeer/ui/button_diagnostics.py:116
 msgid "The input devices report no buttons."
 msgstr "The input devices report no buttons."
 
@@ -598,6 +594,18 @@ msgstr "By {author}"
 #: understeer/ui/cover_search.py:391
 msgid "Cover from SteamGridDB set"
 msgstr "Cover from SteamGridDB set"
+
+#: understeer/ui/diagnostics_page.py:18
+msgid "Axes"
+msgstr "Axes"
+
+#: understeer/ui/diagnostics_page.py:19
+msgid "Buttons"
+msgstr "Buttons"
+
+#: understeer/ui/diagnostics_page.py:20
+msgid "LEDs"
+msgstr "LEDs"
 
 #: understeer/ui/games_page.py:48
 msgid "Delete"
@@ -867,151 +875,147 @@ msgstr "Add"
 msgid "Program File"
 msgstr "Program File"
 
-#: understeer/ui/led_diagnostics.py:21
+#: understeer/ui/led_diagnostics.py:22
 msgid "Cyan"
 msgstr "Cyan"
 
-#: understeer/ui/led_diagnostics.py:22
+#: understeer/ui/led_diagnostics.py:23
 msgid "Magenta"
 msgstr "Magenta"
 
-#: understeer/ui/led_diagnostics.py:22
+#: understeer/ui/led_diagnostics.py:23
 msgid "White"
 msgstr "White"
 
-#: understeer/ui/led_diagnostics.py:27
+#: understeer/ui/led_diagnostics.py:28
 msgid "Left Flag LEDs"
 msgstr "Left Flag LEDs"
 
-#: understeer/ui/led_diagnostics.py:29
+#: understeer/ui/led_diagnostics.py:30
 msgid "Right Flag LEDs"
 msgstr "Right Flag LEDs"
 
-#: understeer/ui/led_diagnostics.py:30
+#: understeer/ui/led_diagnostics.py:31
 msgid "Wheelbase Rev LEDs"
 msgstr "Wheelbase Rev LEDs"
 
-#: understeer/ui/led_diagnostics.py:31
+#: understeer/ui/led_diagnostics.py:32
 msgid "Steering Wheel Rev LEDs"
 msgstr "Steering Wheel Rev LEDs"
 
-#: understeer/ui/led_diagnostics.py:32
+#: understeer/ui/led_diagnostics.py:33
 msgid "Rev LEDs"
 msgstr "Rev LEDs"
 
-#: understeer/ui/led_diagnostics.py:46
+#: understeer/ui/led_diagnostics.py:47
 msgid "The LED is not available any more. Is the wheelbase still connected?"
 msgstr "The LED is not available any more. Is the wheelbase still connected?"
 
-#: understeer/ui/led_diagnostics.py:48
+#: understeer/ui/led_diagnostics.py:49
 msgid "No permission to switch the LEDs"
 msgstr "No permission to switch the LEDs"
 
-#: understeer/ui/led_diagnostics.py:49
+#: understeer/ui/led_diagnostics.py:50
 msgid "Could not switch the LED"
 msgstr "Could not switch the LED"
 
-#: understeer/ui/led_diagnostics.py:65
-msgid "LED Diagnostics"
-msgstr "LED Diagnostics"
-
-#: understeer/ui/led_diagnostics.py:68
+#: understeer/ui/led_diagnostics.py:67
 msgid "All Off"
 msgstr "All Off"
 
-#: understeer/ui/led_diagnostics.py:69
+#: understeer/ui/led_diagnostics.py:68
 msgid "Switch every LED off"
 msgstr "Switch every LED off"
 
-#: understeer/ui/led_diagnostics.py:72
+#: understeer/ui/led_diagnostics.py:70
 msgid "Run Test"
 msgstr "Run Test"
 
-#: understeer/ui/led_diagnostics.py:81
-msgid "Switch the LEDs on and off one by one, or run the short test that lights them one after another. When this dialog closes, the LEDs are set back as they were where the driver tells their state."
-msgstr "Switch the LEDs on and off one by one, or run the short test that lights them one after another. When this dialog closes, the LEDs are set back as they were where the driver tells their state."
+#: understeer/ui/led_diagnostics.py:75
+msgid "Switch the LEDs on and off one by one, or run the short test that lights them one after another. When you leave this tab, the LEDs are set back as they were where the driver tells their state."
+msgstr "Switch the LEDs on and off one by one, or run the short test that lights them one after another. When you leave this tab, the LEDs are set back as they were where the driver tells their state."
 
-#: understeer/ui/led_diagnostics.py:118
+#: understeer/ui/led_diagnostics.py:101
 msgid "No LEDs found: no wheelbase connected, or the driver offers none for this wheelbase and wheel."
 msgstr "No LEDs found: no wheelbase connected, or the driver offers none for this wheelbase and wheel."
 
-#: understeer/ui/led_diagnostics.py:121
+#: understeer/ui/led_diagnostics.py:104
 msgid "No permission to switch the LEDs. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 msgstr "No permission to switch the LEDs. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 
-#: understeer/ui/led_diagnostics.py:157
+#: understeer/ui/led_diagnostics.py:140
 msgid "Light All in This Colour"
 msgstr "Light All in This Colour"
 
-#: understeer/ui/led_diagnostics.py:165
+#: understeer/ui/led_diagnostics.py:148
 msgid "RGB Colour"
 msgstr "RGB Colour"
 
-#: understeer/ui/led_diagnostics.py:166
+#: understeer/ui/led_diagnostics.py:149
 msgid "Colour channels: {channels}. LEDs switched on here use the chosen colour."
 msgstr "Colour channels: {channels}. LEDs switched on here use the chosen colour."
 
-#: understeer/ui/led_diagnostics.py:202
+#: understeer/ui/led_diagnostics.py:185
 msgid "Stop Test"
 msgstr "Stop Test"
 
-#: understeer/ui/led_diagnostics.py:253
+#: understeer/ui/led_diagnostics.py:236
 msgid "All LEDs switched off"
 msgstr "All LEDs switched off"
 
-#: understeer/ui/led_diagnostics.py:259
+#: understeer/ui/led_diagnostics.py:242
 msgid "Test stopped"
 msgstr "Test stopped"
 
-#: understeer/ui/led_diagnostics.py:271
+#: understeer/ui/led_diagnostics.py:254
 msgid "Test running…"
 msgstr "Test running…"
 
-#: understeer/ui/led_diagnostics.py:285
+#: understeer/ui/led_diagnostics.py:268
 msgid "Test finished"
 msgstr "Test finished"
 
-#: understeer/ui/led_diagnostics.py:313
+#: understeer/ui/led_diagnostics.py:298
 msgid "Test stopped: the LEDs changed. Was the wheelbase unplugged or the wheel changed?"
 msgstr "Test stopped: the LEDs changed. Was the wheelbase unplugged or the wheel changed?"
 
-#: understeer/ui/live_input.py:28
+#: understeer/ui/live_input.py:26
 msgid "Current Angle"
 msgstr "Current Angle"
 
-#: understeer/ui/live_input.py:56
+#: understeer/ui/live_input.py:54
 msgid "Reset Max"
 msgstr "Reset Max"
 
-#: understeer/ui/live_input.py:59
+#: understeer/ui/live_input.py:57
 msgid "Pedal Axes"
 msgstr "Pedal Axes"
 
-#: understeer/ui/live_input.py:60
+#: understeer/ui/live_input.py:58
 msgid "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
 msgstr "Press a pedal to see which bar moves and choose what it is. Max shows the highest value since the last reset."
 
-#: understeer/ui/live_input.py:95
+#: understeer/ui/live_input.py:93
 msgid "No read access to the input device. Set up permissions in the preferences."
 msgstr "No read access to the input device. Set up permissions in the preferences."
 
-#: understeer/ui/live_input.py:97
+#: understeer/ui/live_input.py:95
 msgid "No Fanatec input device found."
 msgstr "No Fanatec input device found."
 
-#: understeer/ui/live_input.py:150
+#: understeer/ui/live_input.py:148
 msgid "What this axis is"
 msgstr "What this axis is"
 
-#: understeer/ui/live_input.py:181
+#: understeer/ui/live_input.py:179
 msgid "No pedals found"
 msgstr "No pedals found"
 
-#: understeer/ui/live_input.py:303
+#: understeer/ui/live_input.py:285
 msgid "Turn the wheel to see the angle"
 msgstr "Turn the wheel to see the angle"
 
-#: understeer/ui/live_input.py:315
+#: understeer/ui/live_input.py:297
 msgid "Max {n} %"
 msgstr "Max {n} %"
 
@@ -2171,346 +2175,334 @@ msgstr "Understeer could not update itself: {reason}. Your version stays as it i
 msgid "Close"
 msgstr "Close"
 
-#: understeer/ui/window.py:224
+#: understeer/ui/window.py:225
 msgid "Understeer runs in the background"
 msgstr "Understeer runs in the background"
 
-#: understeer/ui/window.py:225
+#: understeer/ui/window.py:226
 msgid "It applies the presets of your games when they start. Open or quit it with its icon in the system tray."
 msgstr "It applies the presets of your games when they start. Open or quit it with its icon in the system tray."
 
-#: understeer/ui/window.py:278
+#: understeer/ui/window.py:280
 msgid "Slot {n}"
 msgstr "Slot {n}"
 
-#: understeer/ui/window.py:283
+#: understeer/ui/window.py:285
 msgid "Tuning slot on the wheelbase that is being edited"
 msgstr "Tuning slot on the wheelbase that is being edited"
 
-#: understeer/ui/window.py:297
+#: understeer/ui/window.py:299
 msgid "Main Menu"
 msgstr "Main Menu"
 
-#: understeer/ui/window.py:300
+#: understeer/ui/window.py:302
 msgid "Reload from Device"
 msgstr "Reload from Device"
 
-#: understeer/ui/window.py:302
-msgid "Axis Diagnostics…"
-msgstr "Axis Diagnostics…"
-
-#: understeer/ui/window.py:303
-msgid "Button Diagnostics…"
-msgstr "Button Diagnostics…"
-
-#: understeer/ui/window.py:304
-msgid "LED Diagnostics…"
-msgstr "LED Diagnostics…"
-
-#: understeer/ui/window.py:308
+#: understeer/ui/window.py:307
 msgid "Report a Problem…"
 msgstr "Report a Problem…"
 
-#: understeer/ui/window.py:309
+#: understeer/ui/window.py:308
 msgid "What's New"
 msgstr "What's New"
 
-#: understeer/ui/window.py:310
+#: understeer/ui/window.py:309
 msgid "About Understeer"
 msgstr "About Understeer"
 
-#: understeer/ui/window.py:320
+#: understeer/ui/window.py:319
 msgid "Undo all changes since the values were loaded or a preset was applied"
 msgstr "Undo all changes since the values were loaded or a preset was applied"
 
-#: understeer/ui/window.py:346
+#: understeer/ui/window.py:345
 msgid "Discard"
 msgstr "Discard"
 
-#: understeer/ui/window.py:459
+#: understeer/ui/window.py:451
 msgid "{group} (advanced)"
 msgstr "{group} (advanced)"
 
-#: understeer/ui/window.py:493
+#: understeer/ui/window.py:485
 msgid "Quick Select"
 msgstr "Quick Select"
 
-#: understeer/ui/window.py:500
+#: understeer/ui/window.py:492
 msgid "Use the maximum range of the wheelbase"
 msgstr "Use the maximum range of the wheelbase"
 
-#: understeer/ui/window.py:522
+#: understeer/ui/window.py:514
 msgid "All Versions on GitHub"
 msgstr "All Versions on GitHub"
 
-#: understeer/ui/window.py:535
+#: understeer/ui/window.py:527
 msgid "{name} by {author}"
 msgstr "{name} by {author}"
 
-#: understeer/ui/window.py:536
+#: understeer/ui/window.py:528
 msgid "Started as a fork of"
 msgstr "Started as a fork of"
 
-#: understeer/ui/window.py:539
+#: understeer/ui/window.py:531
 msgid "Kernel driver"
 msgstr "Kernel driver"
 
-#: understeer/ui/window.py:601
+#: understeer/ui/window.py:593
 msgid "New"
 msgstr "New"
 
-#: understeer/ui/window.py:848
+#: understeer/ui/window.py:837
 msgid "No Fanatec wheelbase found. Check that it is switched on and the hid-fanatecff driver is loaded."
 msgstr "No Fanatec wheelbase found. Check that it is switched on and the hid-fanatecff driver is loaded."
 
-#: understeer/ui/window.py:850
+#: understeer/ui/window.py:839
 msgid "Retry"
 msgstr "Retry"
 
-#: understeer/ui/window.py:855
+#: understeer/ui/window.py:844
 msgid "Changes need a password each time. Join the “{group}” group to tune live."
 msgstr "Changes need a password each time. Join the “{group}” group to tune live."
 
-#: understeer/ui/window.py:858
+#: understeer/ui/window.py:847
 msgid "Join Group"
 msgstr "Join Group"
 
-#: understeer/ui/window.py:860
+#: understeer/ui/window.py:849
 msgid "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 msgstr "Log out and back in to finish joining the “{group}” group. Until then, changes need a password."
 
-#: understeer/ui/window.py:867
+#: understeer/ui/window.py:856
 msgid "Changes need a password each time. Set up write permissions to tune live."
 msgstr "Changes need a password each time. Set up write permissions to tune live."
 
-#: understeer/ui/window.py:890
+#: understeer/ui/window.py:879
 msgid "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 msgstr "Your user is not in the “{group}” group that the hid-fanatecff driver uses for the tuning settings."
 
-#: understeer/ui/window.py:896
+#: understeer/ui/window.py:885
 msgid "Log out and back in to finish joining the “{group}” group."
 msgstr "Log out and back in to finish joining the “{group}” group."
 
-#: understeer/ui/window.py:900
+#: understeer/ui/window.py:889
 msgid "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 msgstr "Installs a udev rule so settings can be changed without a password prompt and live input can be shown."
 
-#: understeer/ui/window.py:915
+#: understeer/ui/window.py:904
 msgid "Setting up permissions failed"
 msgstr "Setting up permissions failed"
 
-#: understeer/ui/window.py:918
+#: understeer/ui/window.py:907
 msgid "Added to “{group}”. Log out and back in to tune live."
 msgstr "Added to “{group}”. Log out and back in to tune live."
 
-#: understeer/ui/window.py:962
+#: understeer/ui/window.py:951
 msgid "Wheelbase connected"
 msgstr "Wheelbase connected"
 
-#: understeer/ui/window.py:964
+#: understeer/ui/window.py:953
 msgid "Wheelbase disconnected"
 msgstr "Wheelbase disconnected"
 
-#: understeer/ui/window.py:976
+#: understeer/ui/window.py:965
 msgid "No device"
 msgstr "No device"
 
-#: understeer/ui/window.py:999
+#: understeer/ui/window.py:988
 msgid "In sync with device"
 msgstr "In sync with device"
 
-#: understeer/ui/window.py:1012
+#: understeer/ui/window.py:1001
 msgid "Writing…"
 msgstr "Writing…"
 
-#: understeer/ui/window.py:1047
+#: understeer/ui/window.py:1036
 msgid "Write failed: {names}"
 msgstr "Write failed: {names}"
 
-#: understeer/ui/window.py:1049
+#: understeer/ui/window.py:1038
 msgid "Could not write: {names}"
 msgstr "Could not write: {names}"
 
-#: understeer/ui/window.py:1067
+#: understeer/ui/window.py:1056
 msgid "Pending changes: {n}"
 msgstr "Pending changes: {n}"
 
-#: understeer/ui/window.py:1069
+#: understeer/ui/window.py:1058
 msgid "Changes not applied yet"
 msgstr "Changes not applied yet"
 
-#: understeer/ui/window.py:1116
+#: understeer/ui/window.py:1105
 msgid "Changes undone"
 msgstr "Changes undone"
 
-#: understeer/ui/window.py:1220
+#: understeer/ui/window.py:1209
 msgid "Slot changed on the wheelbase: {name}. Unapplied changes were discarded."
 msgstr "Slot changed on the wheelbase: {name}. Unapplied changes were discarded."
 
-#: understeer/ui/window.py:1222
+#: understeer/ui/window.py:1211
 msgid "Slot changed on the wheelbase: {name}"
 msgstr "Slot changed on the wheelbase: {name}"
 
-#: understeer/ui/window.py:1244
+#: understeer/ui/window.py:1233
 msgid "Unknown wheel (ID {id})"
 msgstr "Unknown wheel (ID {id})"
 
-#: understeer/ui/window.py:1290
+#: understeer/ui/window.py:1267
 msgid "Steering wheel changed: {name}"
 msgstr "Steering wheel changed: {name}"
 
-#: understeer/ui/window.py:1302
+#: understeer/ui/window.py:1279
 msgid "Firmware {version}"
 msgstr "Firmware {version}"
 
-#: understeer/ui/window.py:1303
+#: understeer/ui/window.py:1280
 msgid "Firmware: {state}"
 msgstr "Firmware: {state}"
 
-#: understeer/ui/window.py:1306
+#: understeer/ui/window.py:1283
 msgid "Not connected"
 msgstr "Not connected"
 
-#: understeer/ui/window.py:1325
+#: understeer/ui/window.py:1302
 msgid "Not supported by the installed driver"
 msgstr "Not supported by the installed driver"
 
-#: understeer/ui/window.py:1326
+#: understeer/ui/window.py:1303
 msgid "Not available"
 msgstr "Not available"
 
-#: understeer/ui/window.py:1327
+#: understeer/ui/window.py:1304
 msgid "Unknown"
 msgstr "Unknown"
 
-#: understeer/ui/window.py:1328
+#: understeer/ui/window.py:1305
 msgid "not connected"
 msgstr "not connected"
 
-#: understeer/ui/window.py:1329
+#: understeer/ui/window.py:1306
 msgid "no steering wheel reported"
 msgstr "no steering wheel reported"
 
-#: understeer/ui/window.py:1330
+#: understeer/ui/window.py:1307
 msgid "could not be read"
 msgstr "could not be read"
 
-#: understeer/ui/window.py:1331
+#: understeer/ui/window.py:1308
 msgid "hid-fanatecff not loaded"
 msgstr "hid-fanatecff not loaded"
 
-#: understeer/ui/window.py:1332
+#: understeer/ui/window.py:1309
 msgid "not known to Understeer"
 msgstr "not known to Understeer"
 
-#: understeer/ui/window.py:1333
+#: understeer/ui/window.py:1310
 msgid "not reported by the driver"
 msgstr "not reported by the driver"
 
-#: understeer/ui/window.py:1334
+#: understeer/ui/window.py:1311
 msgid "invalid value"
 msgstr "invalid value"
 
-#: understeer/ui/window.py:1346
+#: understeer/ui/window.py:1323
 msgid "Device information copied"
 msgstr "Device information copied"
 
-#: understeer/ui/window.py:1401
+#: understeer/ui/window.py:1378
 msgid "Could not switch the tuning menu"
 msgstr "Could not switch the tuning menu"
 
-#: understeer/ui/window.py:1433
+#: understeer/ui/window.py:1410
 msgid "Tuning menu changed on the wheelbase: {mode}"
 msgstr "Tuning menu changed on the wheelbase: {mode}"
 
-#: understeer/ui/window.py:1434
+#: understeer/ui/window.py:1411
 msgid "Advanced"
 msgstr "Advanced"
 
-#: understeer/ui/window.py:1454
+#: understeer/ui/window.py:1431
 msgid "Enter up to three characters."
 msgstr "Enter up to three characters."
 
-#: understeer/ui/window.py:1456
+#: understeer/ui/window.py:1433
 msgid "“{character}” can't be shown on the display."
 msgstr "“{character}” can't be shown on the display."
 
-#: understeer/ui/window.py:1459
+#: understeer/ui/window.py:1436
 msgid "A point or comma has to follow a character."
 msgstr "A point or comma has to follow a character."
 
-#: understeer/ui/window.py:1460
+#: understeer/ui/window.py:1437
 msgid "Only three characters fit on the display."
 msgstr "Only three characters fit on the display."
 
-#: understeer/ui/window.py:1472
+#: understeer/ui/window.py:1449
 msgid "No display output: no wheelbase connected, or the driver offers none."
 msgstr "No display output: no wheelbase connected, or the driver offers none."
 
-#: understeer/ui/window.py:1475
+#: understeer/ui/window.py:1452
 msgid "No permission to write to the display. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 msgstr "No permission to write to the display. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 
-#: understeer/ui/window.py:1481
+#: understeer/ui/window.py:1458
 msgid "Digits, letters except K, M, V, W and X, - _ [ ] and a space for a dark position. A point or comma after a character lights its point."
 msgstr "Digits, letters except K, M, V, W and X, - _ [ ] and a space for a dark position. A point or comma after a character lights its point."
 
-#: understeer/ui/window.py:1503
+#: understeer/ui/window.py:1480
 msgid "Sent to the display: {text}"
 msgstr "Sent to the display: {text}"
 
-#: understeer/ui/window.py:1511
+#: understeer/ui/window.py:1488
 msgid "Display cleared"
 msgstr "Display cleared"
 
-#: understeer/ui/window.py:1541
+#: understeer/ui/window.py:1518
 msgid "The display is not available any more. Is the wheelbase still connected?"
 msgstr "The display is not available any more. Is the wheelbase still connected?"
 
-#: understeer/ui/window.py:1543
+#: understeer/ui/window.py:1520
 msgid "No permission to write to the display"
 msgstr "No permission to write to the display"
 
-#: understeer/ui/window.py:1544
+#: understeer/ui/window.py:1521
 msgid "Could not write to the display"
 msgstr "Could not write to the display"
 
-#: understeer/ui/window.py:1586
+#: understeer/ui/window.py:1563
 msgid "The driver can only switch to slots 1–{n}. Choose this slot on the wheelbase."
 msgstr "The driver can only switch to slots 1–{n}. Choose this slot on the wheelbase."
 
-#: understeer/ui/window.py:1588
+#: understeer/ui/window.py:1565
 msgid "Could not switch slot"
 msgstr "Could not switch slot"
 
-#: understeer/ui/window.py:1602
+#: understeer/ui/window.py:1579
 msgid "Could not send rumble"
 msgstr "Could not send rumble"
 
-#: understeer/ui/window.py:1615
+#: understeer/ui/window.py:1592
 msgid "Permissions set up — changes now apply live"
 msgstr "Permissions set up — changes now apply live"
 
-#: understeer/ui/window.py:1663
+#: understeer/ui/window.py:1640
 msgid "Reset All Tuning Slots?"
 msgstr "Reset All Tuning Slots?"
 
-#: understeer/ui/window.py:1664
+#: understeer/ui/window.py:1641
 msgid "All tuning slots stored on the wheelbase will be cleared. This cannot be undone."
 msgstr "All tuning slots stored on the wheelbase will be cleared. This cannot be undone."
 
-#: understeer/ui/window.py:1667
+#: understeer/ui/window.py:1644
 msgid "Reset"
 msgstr "Reset"
 
-#: understeer/ui/window.py:1677
+#: understeer/ui/window.py:1654
 msgid "Not Available"
 msgstr "Not Available"
 
-#: understeer/ui/window.py:1678
+#: understeer/ui/window.py:1655
 msgid "This wheelbase does not support resetting."
 msgstr "This wheelbase does not support resetting."
 
-#: understeer/ui/window.py:1680
+#: understeer/ui/window.py:1657
 msgid "Could not reset the tuning slots"
 msgstr "Could not reset the tuning slots"

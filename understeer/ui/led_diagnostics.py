@@ -4,10 +4,11 @@ colours and run a short, cancellable test sequence.
 A diagnostic, not telemetry: nothing runs by itself. The LEDs come from the
 window's capabilities (see leds.find()); the window calls hardware_changed()
 when they change, e.g. when the wheelbase is unplugged or another wheel put
-on, which stops a running test. When the dialog closes, the LEDs whose state
-could be read are set back as they were.
+on, which stops a running test. A tab of the Diagnostics view (see
+diagnostics_page): it touches the LEDs only while it is shown. When it is
+left, the LEDs whose state could be read are set back as they were.
 """
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import GLib, Gtk
 
 from .. import leds
 from ..i18n import _
@@ -50,41 +51,32 @@ def result_text(result):
 
 
 class LedDiagnostics:
-    """The dialog; window.led_diagnostics while it is open."""
+    """The page; window.led_diagnostics."""
 
     def __init__(self, window):
         self.window = window
         self.leds = []
         self.toggles = {}       # LED folder -> its toggle button
         self.before = {}        # LED folder -> State when first seen here
+        self.active = False     # shown: see enter() and leave()
         self.color = leds.SWEEP_COLOR
         self.sequence = None
         self._timer = 0
         self._syncing = False
 
-        self.dialog = window.fit_dialog(Adw.Dialog(title=_("LED Diagnostics")))
-        view = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         self.off_button = Gtk.Button(label=_("All Off"))
         self.off_button.set_tooltip_text(_("Switch every LED off"))
         self.off_button.connect("clicked", lambda b: self.all_off())
-        header.pack_start(self.off_button)
         self.test_button = Gtk.Button(label=_("Run Test"))
         self.test_button.add_css_class("suggested-action")
         self.test_button.connect("clicked", lambda b: self._test_clicked())
-        header.pack_end(self.test_button)
-        view.add_top_bar(header)
-
-        outer = layout.margins(
-            Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6), 18)
-        intro = Gtk.Label(
-            label=_("Switch the LEDs on and off one by one, or run the short "
-                    "test that lights them one after another. When this "
-                    "dialog closes, the LEDs are set back as they were where "
-                    "the driver tells their state."),
-            xalign=0, wrap=True)
-        intro.add_css_class("dim-label")
-        outer.append(intro)
+        self.page, outer = layout.scroll_page()
+        layout.page_head(
+            outer, _("Switch the LEDs on and off one by one, or run the short "
+                     "test that lights them one after another. When you "
+                     "leave this tab, the LEDs are set back as they were "
+                     "where the driver tells their state."),
+            [self.off_button, self.test_button])
         self.problem = Gtk.Label(xalign=0, wrap=True)
         self.problem.add_css_class("warning")
         outer.append(self.problem)
@@ -92,16 +84,7 @@ class LedDiagnostics:
         outer.append(self.status)
         self.column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         outer.append(self.column)
-        clamp = Adw.Clamp(maximum_size=900, tightening_threshold=900,
-                          child=outer)
-        view.set_content(Gtk.ScrolledWindow(
-            child=clamp, hscrollbar_policy=Gtk.PolicyType.NEVER))
-        self.dialog.set_child(view)
-        self.dialog.connect("closed", lambda d: self._closed())
-
         window.led_diagnostics = self
-        self.rebuild()
-        self.dialog.present(window)
 
     # -- building ---------------------------------------------------------
     def rebuild(self):
@@ -225,7 +208,7 @@ class LedDiagnostics:
         if result == leds.UNAVAILABLE:
             # Calls hardware_changed() if the LEDs are gone indeed
             self.window._check_capabilities()
-        if self.window.led_diagnostics is self:
+        if self.active:
             self.sync()
 
     def _toggled(self, led, button):
@@ -306,6 +289,8 @@ class LedDiagnostics:
     def hardware_changed(self):
         """The window found other capabilities: unplugged, plugged in again,
         another wheel. A running test stops; the LEDs are shown anew."""
+        if not self.active:
+            return              # enter() looks at them
         was_running = self.running
         self._stop_sequence()
         self.rebuild()
@@ -315,14 +300,20 @@ class LedDiagnostics:
         elif self.leds:
             self._say("")       # LEDs back: an error from before is over
 
-    def close(self):
-        """Close at once, e.g. when the window goes."""
-        self._closed()
-        self.dialog.force_close()
+    def enter(self):
+        """The tab is shown: the LEDs as they are now, kept to set back."""
+        if self.active:
+            return
+        self.active = True
+        self.before = {}
+        self._say("")
+        self.rebuild()
 
-    def _closed(self):
-        if self.window.led_diagnostics is not self:
-            return              # already done
-        self.window.led_diagnostics = None
+    def leave(self):
+        """The tab is left, or the window hidden or rebuilt: no test goes on
+        unseen, the LEDs are set back as they were."""
+        if not self.active:
+            return
+        self.active = False
         self._stop_sequence()
         leds.restore(self.leds, self.before)

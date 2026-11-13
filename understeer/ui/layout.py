@@ -49,6 +49,39 @@ def section(column, title, description=None, suffix=None):
         column.append(desc)
 
 
+def tab_row(stack, tabs):
+    """A row of tab buttons above stack, as above the settings of the
+    Tuning view. tabs: [(key, title, page)]; the first is shown. Returns
+    the row (more widgets can be appended at its end)."""
+    row = Gtk.Box(spacing=2, css_classes=["tab-row"])
+    buttons = {}
+    for key, title, page in tabs:
+        button = Gtk.ToggleButton(label=title, css_classes=["flat", "tab"])
+        if buttons:
+            button.set_group(next(iter(buttons.values())))
+        button.connect("toggled", lambda b, k=key: b.get_active() and
+                       stack.set_visible_child_name(k))
+        buttons[key] = button
+        row.append(button)
+        stack.add_named(page, key)
+    buttons[tabs[0][0]].set_active(True)
+    stack.connect("notify::visible-child-name", lambda s, _p:
+                  buttons[s.get_visible_child_name()].set_active(True))
+    return row
+
+
+def page_head(column, intro, buttons=()):
+    """The line about a page, with its buttons at the end."""
+    head = Gtk.Box(spacing=12)
+    label = Gtk.Label(label=intro, xalign=0, wrap=True, hexpand=True)
+    label.add_css_class("dim-label")
+    head.append(label)
+    for button in buttons:
+        button.set_valign(Gtk.Align.START)
+        head.append(button)
+    column.append(head)
+
+
 def level_bar(**props):
     """A bar for a value 0..1, in the accent colour all the way (GTK
     colours a full bar differently)."""

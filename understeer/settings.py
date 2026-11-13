@@ -15,6 +15,7 @@ VIEWS = [
     ("tuning",   N_("Tuning"),  "understeer-steering-symbolic"),
     ("presets",  N_("Presets"), "document-save-symbolic"),
     ("games",    N_("Games"),   "applications-games-symbolic"),
+    ("diagnostics", N_("Diagnostics"), "applications-engineering-symbolic"),
 ]
 
 # Tabs of the Tuning view; each setting's "page" is one of them.
