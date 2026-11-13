@@ -38,6 +38,8 @@ This application requires the [hid-fanatecff](https://github.com/gotzl/hid-fanat
 
 Understeer needs hid-fanatecff 0.1 or newer; Standard/Advanced mode of the tuning menu needs 0.1.1 and the firmware version of the wheelbase 0.2.3. The steering wheel, its firmware and its LEDs need the current `master` of hid-fanatecff (October 2026 or newer); there is no numbered release with them yet. Understeer works with older versions too and leaves out what they don't offer.
 
+Understeer is developed and tested with a CSL DD (firmware 1537) and a Podium Steering Wheel GT (firmware 8). Other Fanatec hardware should work as far as hid-fanatecff supports it, but hasn't been tried by me.
+
 The AppImage uses Python 3 with PyGObject, GTK 4 and Libadwaita 1.5 or newer from your system, as found for example in Ubuntu 24.04, Fedora 40 and Debian 13.
 
 ## Installation
