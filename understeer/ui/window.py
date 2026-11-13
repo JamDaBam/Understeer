@@ -104,6 +104,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.axis_widgets = {}   # axis key -> (level bar, value label, max label)
         self._input_timer = 0
         self.axis_diagnostics = None   # the open AxisDiagnostics dialog
+        self.button_diagnostics = None  # the open ButtonDiagnostics dialog
         self._open_groups = set()   # advanced groups the user opened
         self._group_summaries = []  # updates their one-line values
 
@@ -295,6 +296,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         device.append(_("Reload from Device"), "win.reload")
         device.append(_("Save as Preset…"), "win.save-preset")
         device.append(_("Axis Diagnostics…"), "win.axis-diagnostics")
+        device.append(_("Button Diagnostics…"), "win.button-diagnostics")
         menu.append_section(None, device)
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
@@ -638,6 +640,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         add("whats-new", lambda *a: self._show_whats_new())
         add("report", lambda *a: ReportDialog(self))
         add("axis-diagnostics", lambda *a: self._show_axis_diagnostics())
+        add("button-diagnostics", lambda *a: self._show_button_diagnostics())
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])

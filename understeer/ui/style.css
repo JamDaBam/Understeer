@@ -33,6 +33,26 @@ flowbox > flowboxchild > .tile.diag-tile {
   padding: 10px 12px;
 }
 
+/* Button diagnostics: a small cell per button, many in a row; green once
+   pressed, in the accent colour while held */
+.button-cell {
+  min-width: 36px;
+  min-height: 28px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  background-color: alpha(currentColor, 0.08);
+}
+
+.button-cell.button-tested {
+  color: @success_fg_color;
+  background-color: @success_bg_color;
+}
+
+.button-cell.button-held {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+}
+
 .tile-icon {
   color: @accent_color;
   background-color: alpha(@accent_bg_color, 0.14);

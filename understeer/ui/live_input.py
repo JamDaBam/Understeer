@@ -6,6 +6,7 @@ from ..i18n import _
 from ..inputs import AXIS_ROLES
 from . import layout
 from .axis_diagnostics import AxisDiagnostics
+from .button_diagnostics import ButtonDiagnostics
 from .live import WheelView
 
 STRIP_PEDALS = 4        # pedals shown in the live strip
@@ -84,6 +85,8 @@ class LiveInputMixin:
         self._rebuild_axes_list()
         if self.axis_diagnostics:
             self.axis_diagnostics.rebuild()
+        if self.button_diagnostics:
+            self.button_diagnostics.rebuild()
         self._update_inputs()
         self._update_permission_row()
 
@@ -262,6 +265,9 @@ class LiveInputMixin:
         if self.axis_diagnostics:
             GLib.idle_add(lambda: self.axis_diagnostics and
                           self.axis_diagnostics.rebuild() and False)
+        if self.button_diagnostics:
+            GLib.idle_add(lambda: self.button_diagnostics and
+                          self.button_diagnostics.rebuild() and False)
 
     def _show_axis_diagnostics(self):
         """The axis diagnostics dialog, on the axes read here (no second
@@ -270,6 +276,14 @@ class LiveInputMixin:
             self.axis_diagnostics.dialog.present(self)
         else:
             AxisDiagnostics(self)
+
+    def _show_button_diagnostics(self):
+        """The button test, on the buttons read here (no second reader of
+        the input devices)."""
+        if self.button_diagnostics:
+            self.button_diagnostics.dialog.present(self)
+        else:
+            ButtonDiagnostics(self)
 
     def _on_input(self):
         # Wheels report up to 1000 updates per second; redraw at ~30 fps.
@@ -306,4 +320,6 @@ class LiveInputMixin:
                 value.set_label(f"{a.fraction() * 100:.0f} %")
         if self.axis_diagnostics:
             self.axis_diagnostics.update()
+        if self.button_diagnostics:
+            self.button_diagnostics.update()
         return GLib.SOURCE_REMOVE
