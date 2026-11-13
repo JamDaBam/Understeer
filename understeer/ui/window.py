@@ -27,6 +27,7 @@ from .live_input import LiveInputMixin
 from .preferences import LAYOUTS, PRESET_ON_DISPLAY, PreferencesMixin
 from .presets import PresetsMixin
 from .update_check import UpdateCheckMixin
+from .led_diagnostics import LedDiagnostics
 from .report_dialog import ReportDialog
 from .setting_tile import SettingTile
 from .dates import date_text
@@ -105,6 +106,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self._input_timer = 0
         self.axis_diagnostics = None   # the open AxisDiagnostics dialog
         self.button_diagnostics = None  # the open ButtonDiagnostics dialog
+        self.led_diagnostics = None     # the open LedDiagnostics dialog
         self._open_groups = set()   # advanced groups the user opened
         self._group_summaries = []  # updates their one-line values
 
@@ -193,6 +195,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         if self._shut_down:
             return
         self._shut_down = True
+        self._close_led_diagnostics()
         self.flush_live()
         self.games_page.key_entry.flush()   # an API key still being typed
         GLib.source_remove(self._watch)
@@ -208,6 +211,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         Watching the wheelbase and the games goes on; the live input
         display stops, nobody sees it.
         """
+        self._close_led_diagnostics()
         self.flush_live()
         self.games_page.key_entry.flush()
         self._in_background = True
@@ -297,6 +301,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         device.append(_("Save as Preset…"), "win.save-preset")
         device.append(_("Axis Diagnostics…"), "win.axis-diagnostics")
         device.append(_("Button Diagnostics…"), "win.button-diagnostics")
+        device.append(_("LED Diagnostics…"), "win.led-diagnostics")
         menu.append_section(None, device)
         app = Gio.Menu()
         app.append(_("Preferences"), "win.preferences")
@@ -641,6 +646,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         add("report", lambda *a: ReportDialog(self))
         add("axis-diagnostics", lambda *a: self._show_axis_diagnostics())
         add("button-diagnostics", lambda *a: self._show_button_diagnostics())
+        add("led-diagnostics", lambda *a: self._show_led_diagnostics())
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.preferences", ["<Control>comma"])
@@ -1255,8 +1261,22 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
             log.info("Hardware functions: %s", capabilities.summary(caps))
             self.capabilities = caps
             self._display_shown = None  # e.g. another wheelbase, or plugged in again
+            if self.led_diagnostics is not None:
+                self.led_diagnostics.hardware_changed()
         self._update_mode_switch()
         self._update_display_group()
+
+    def _close_led_diagnostics(self):
+        """No LED test may go on without a window: stop it, set the LEDs
+        back."""
+        if self.led_diagnostics is not None:
+            self.led_diagnostics.close()
+
+    def _show_led_diagnostics(self):
+        if self.led_diagnostics:
+            self.led_diagnostics.dialog.present(self)
+        else:
+            LedDiagnostics(self)
 
     def _check_wheel(self):
         """Notice a steering wheel being put on or changed."""
