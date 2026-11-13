@@ -1783,6 +1783,80 @@ def steps(win):
     yield "axis diagnostics closed", lambda: check(
         win.axis_diagnostics is None, "dialog forgotten when closed")
 
+    # -- button diagnostics on the same reader ----------------------------
+    def button_diagnostics():
+        win.inputs.devices = ["FANATEC Wheel", "FANATEC Pedals"]
+        win.inputs.buttons = {}
+        for name, code in [("FANATEC Wheel", c) for c in
+                           list(range(0x120, 0x130)) + list(range(0x2c0, 0x2e8))
+                           ] + [("FANATEC Pedals", 0x120)]:
+            b = inputs.Button(name, code)
+            win.inputs.buttons[b.key] = b
+        win.activate_action("win.button-diagnostics", None)
+    yield "button diagnostics", button_diagnostics
+
+    def buttons_shown():
+        diag = win.button_diagnostics
+        check(diag is not None and win.get_visible_dialog() is diag.dialog,
+              "button diagnostics is a dialog")
+        check(set(diag.widgets) == set(win.inputs.buttons),
+              f"a tile per button: {len(diag.widgets)}")
+        check(diag.summary.get_label() == "0 of 57 buttons tested",
+              f"summary: {diag.summary.get_label()}")
+        first = win.inputs.buttons["FANATEC Wheel:key:288"]
+        last = win.inputs.buttons["FANATEC Wheel:key:743"]
+        first.update(1)
+        last.update(1)          # two at once
+        win.inputs.last_button = last.key   # as the monitor does on a press
+        win._update_inputs()
+        check(diag.widgets[first.key].has_css_class("button-held")
+              and diag.widgets[last.key].has_css_class("button-held"),
+              "both held buttons lit")
+        check(diag.last.get_label() == "Last pressed: Button 56 · SDL 55 · "
+              "BTN_TRIGGER_HAPPY40 · 743 · pressed 1×",
+              f"last: {diag.last.get_label()}")
+        check(diag.widgets[last.key].get_label() == "56"
+              and "BTN_TRIGGER_HAPPY40" in
+              diag.widgets[last.key].get_tooltip_text(),
+              "a cell with the number, the name in its tooltip")
+        check(diag.held.get_label() == "Held down: Button 1, Button 56",
+              f"held: {diag.held.get_label()}")
+        first.update(0)
+        win._update_inputs()
+        w = diag.widgets[first.key]
+        check(not w.has_css_class("button-held")
+              and w.has_css_class("button-tested"), "released, tested")
+        check(diag.summary.get_label() == "2 of 57 buttons tested",
+              f"summary: {diag.summary.get_label()}")
+        diag.reset()
+        check(not w.has_css_class("button-tested")
+              and diag.last.get_label() ==
+              "Press a button to see its name and code"
+              and diag.summary.get_label() == "0 of 57 buttons tested",
+              f"reset: {diag.summary.get_label()}")
+        check(diag.widgets[last.key].has_css_class("button-held"),
+              "held button stays lit after the reset")
+    yield "button diagnostics shown", buttons_shown
+
+    def buttons_unplugged():
+        for key in [k for k in win.inputs.buttons if k.startswith("FANATEC Pedals")]:
+            win.inputs.buttons.pop(key)
+        win.inputs.devices.remove("FANATEC Pedals")
+        win._on_input_gone()
+    yield "button diagnostics unplugged", buttons_unplugged
+    yield "button diagnostics after unplug", lambda: (
+        check(all(k.startswith("FANATEC Wheel")
+                  for k in win.button_diagnostics.widgets),
+              f"pedal tiles gone: {len(win.button_diagnostics.widgets)}"),
+        win.inputs.buttons.clear(), win.inputs.devices.clear(),
+        win.button_diagnostics.rebuild(),
+        check(win.button_diagnostics.problem.get_visible()
+              and not win.button_diagnostics.widgets,
+              "no device: a hint, no tiles"),
+        win.button_diagnostics.dialog.close())
+    yield "button diagnostics closed", lambda: check(
+        win.button_diagnostics is None, "dialog forgotten when closed")
+
     for page in ("general", "wheelbase", "games", "data"):
         yield f"prefs {page}", lambda p=page: win._show_preferences(p)
 

@@ -8,7 +8,11 @@ from gi.repository import GLib
 
 from .i18n import N_
 
+EV_KEY = 1
 EV_ABS = 3
+KEY_MAX = 0x2ff
+BTN_JOYSTICK = 0x120
+EVIOCGKEY = 0x18        # ioctl nr: the keys currently held down
 ABS_X = 0
 ABS_MAX = 0x3f
 ABS_HAT0X = 0x10        # 0x10+ are hats (d-pad) and others, not pedals
@@ -65,6 +69,90 @@ def kernel_name(code):
     if code in ABS_NAMES:
         return "ABS_" + ABS_NAMES[code].upper()
     return f"ABS_{code:#04x}"
+
+
+def _key_names():
+    """Kernel names of the key and button codes a wheel, a button box or
+    pedals may report (input-event-codes.h)."""
+    names = {0x3b + i: f"KEY_F{i + 1}" for i in range(10)}
+    names.update({0x57: "KEY_F11", 0x58: "KEY_F12"})
+    names.update({0x1d2 + i: f"KEY_FN_F{i + 1}" for i in range(12)})
+    names.update({0x100 + i: f"BTN_{i}" for i in range(10)})
+    for first, group in (
+            (0x110, "LEFT RIGHT MIDDLE SIDE EXTRA FORWARD BACK TASK"),
+            (0x120, "TRIGGER THUMB THUMB2 TOP TOP2 PINKIE BASE BASE2 BASE3 "
+                    "BASE4 BASE5 BASE6"),
+            (0x130, "SOUTH EAST C NORTH WEST Z TL TR TL2 TR2 SELECT START "
+                    "MODE THUMBL THUMBR"),
+            (0x150, "GEAR_DOWN GEAR_UP"),
+            (0x220, "DPAD_UP DPAD_DOWN DPAD_LEFT DPAD_RIGHT GRIPL GRIPR "
+                    "GRIPL2 GRIPR2")):
+        names.update({first + i: "BTN_" + n
+                      for i, n in enumerate(group.split())})
+    names[0x12f] = "BTN_DEAD"
+    names.update({0x290 + i: f"KEY_MACRO{i + 1}" for i in range(30)})
+    names.update({0x2c0 + i: f"BTN_TRIGGER_HAPPY{i + 1}" for i in range(40)})
+    return names
+
+
+KEY_NAMES = _key_names()
+
+
+def key_name(code):
+    """The kernel's name of a key or button code, e.g. BTN_SOUTH; generic,
+    it says nothing about where the button is on the device."""
+    if code in KEY_NAMES:
+        return KEY_NAMES[code]
+    return f"{'BTN' if code >= 0x100 else 'KEY'}_{code:#05x}"
+
+
+def sdl_order(code):
+    """Sort key for the buttons of a device in the order SDL numbers them
+    (and with it most games on Linux and Proton): BTN_JOYSTICK and up
+    first, the codes below after them, each by code."""
+    return (code < BTN_JOYSTICK, code)
+
+
+def bits_set(data):
+    """The numbers of the bits set in an evdev bit mask (little endian)."""
+    mask = int.from_bytes(bytes(data), "little")
+    return [i for i in range(mask.bit_length()) if mask >> i & 1]
+
+
+class Button:
+    """A key or button of an input device, for the button test: whether it
+    is held down now and how often it was pressed since the last reset."""
+
+    def __init__(self, device, code, pressed=False):
+        self.device, self.code = device, code
+        self.pressed = pressed
+        self.presses = 0
+
+    def update(self, value):
+        """An EV_KEY event: 1 pressed, 0 released, 2 held (auto repeat,
+        not a new press). True if it was a new press."""
+        new = value == 1 and not self.pressed
+        if new:
+            self.presses += 1
+        if value in (0, 1):
+            self.pressed = value == 1
+        return new
+
+    def reset(self):
+        """Untested again; a button held down stays shown as held."""
+        self.presses = 0
+
+    @property
+    def tested(self):
+        return self.presses > 0
+
+    @property
+    def key(self):
+        return f"{self.device}:key:{self.code}"
+
+    @property
+    def name(self):
+        return key_name(self.code)
 
 
 def parse_absinfo(data):
@@ -146,13 +234,17 @@ class InputMonitor:
 
     axes holds the steering and pedal axes of the live display; all_axes
     every absolute axis the devices report (also hats and axes without a
-    range), for the diagnostics. Both share the same Axis objects."""
+    range), for the diagnostics. Both share the same Axis objects.
+    buttons holds every key and button the devices report, for the button
+    test; they are only read, never remapped."""
 
     def __init__(self, on_change, on_gone=None):
         self.on_change = on_change
         self.on_gone = on_gone
         self.axes = {}          # key -> Axis
         self.all_axes = {}      # key -> Axis
+        self.buttons = {}       # key -> Button
+        self.last_button = None  # key of the button pressed last
         self.devices = []       # names of the opened devices, in order
         self.denied = []        # devnodes without read permission
         self._open = []         # (fd, watch id)
@@ -173,6 +265,10 @@ class InputMonitor:
             except OSError:
                 os.close(fd)
                 continue
+            try:
+                self._read_buttons(fd, name)
+            except OSError:
+                pass            # the axes still work without the buttons
             watch = GLib.unix_fd_add_full(
                 GLib.PRIORITY_DEFAULT, fd,
                 GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR,
@@ -185,12 +281,35 @@ class InputMonitor:
             GLib.source_remove(watch)
             os.close(fd)
         self._open, self.axes, self.denied, self._keys = [], {}, [], {}
-        self.all_axes, self.devices = {}, []
+        self.all_axes, self.devices, self.buttons = {}, [], {}
+        self.last_button = None
 
     def reset_measurements(self):
         """Forget the observed ranges of all axes (diagnostics)."""
         for axis in self.all_axes.values():
             axis.reset_observed()
+
+    def reset_buttons(self):
+        """Start the button test anew: no button counts as tested."""
+        for button in self.buttons.values():
+            button.reset()
+        self.last_button = None
+
+    def _read_buttons(self, fd, name):
+        """The keys and buttons the device reports and which are held now."""
+        size = KEY_MAX // 8 + 1
+        bits = bytearray(size)
+        fcntl.ioctl(fd, _ioc_read(0x20 + EV_KEY, size), bits, True)
+        held = bytearray(size)
+        try:
+            fcntl.ioctl(fd, _ioc_read(EVIOCGKEY, size), held, True)
+        except OSError:
+            pass            # all shown as released until the first event
+        down = set(bits_set(held))
+        for code in bits_set(bits):
+            button = Button(name, code, code in down)
+            self.buttons[button.key] = button
+            self._keys.setdefault(fd, []).append(button.key)
 
     def _read_axes(self, fd, name):
         bits = bytearray(8)
@@ -223,6 +342,9 @@ class InputMonitor:
             for key in self._keys.pop(fd, []):
                 self.axes.pop(key, None)
                 self.all_axes.pop(key, None)
+                self.buttons.pop(key, None)
+                if key == self.last_button:
+                    self.last_button = None
             if name in self.devices:
                 self.devices.remove(name)
             if self.on_gone:
@@ -231,6 +353,13 @@ class InputMonitor:
         changed = False
         for _s, _us, etype, code, value in EVENT.iter_unpack(
                 data[:len(data) - len(data) % EVENT.size]):
+            if etype == EV_KEY:
+                button = self.buttons.get(f"{name}:key:{code}")
+                if button:
+                    if button.update(value):
+                        self.last_button = button.key
+                    changed = True
+                continue
             key = f"{name}:{code}"
             axis = self.all_axes.get(key) if etype == EV_ABS else None
             if axis:
