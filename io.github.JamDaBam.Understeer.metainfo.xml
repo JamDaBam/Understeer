@@ -49,6 +49,20 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.2.0" date="2026-11-13">
+            <description>
+                <ul>
+                    <li>Preferences → Wheelbase can show the name of the applied preset on the LED display of the steering wheel, off unless switched on: the first three characters it can show, e.g. “Ral” for “Rally 1”. Also for the preset of a game that starts, and after switching slots the preset of the new slot</li>
+                    <li xml:lang="de">„Einstellungen → Wheelbase“ kann den Namen des angewendeten Presets auf der LED-Anzeige des Lenkrads zeigen, nur wenn eingeschaltet: die ersten drei Zeichen, die sie darstellen kann, z. B. „Ral“ für „Rally 1“. Auch für das Preset eines Spiels, das startet, und nach einem Slot-Wechsel das Preset des neuen Slots</li>
+                    <li>A preset belongs to the slot it was applied in: after switching slots, in Understeer or on the wheelbase, the preset of the new slot is active again, and the values of another slot are no longer offered for saving into the preset</li>
+                    <li xml:lang="de">Ein Preset gehört zu dem Slot, in dem es angewendet wurde: Nach einem Slot-Wechsel, in Understeer oder an der Wheelbase, ist wieder das Preset des neuen Slots aktiv, und die Werte eines anderen Slots werden nicht mehr zum Speichern ins Preset angeboten</li>
+                    <li>“Remove … from Slot” in the Presets menu takes the active preset out of the slot; its values stay on the wheelbase</li>
+                    <li xml:lang="de">„… vom Slot entfernen“ im Presets-Menü nimmt das aktive Preset aus dem Slot; seine Werte bleiben auf der Wheelbase</li>
+                    <li>Preferences → Wheelbase has a test for the steering wheel display: it shows a short text such as 888, so you can see whether your steering wheel has a display, which the driver can't tell</li>
+                    <li xml:lang="de">„Einstellungen → Wheelbase“ hat einen Test für die Lenkrad-Anzeige: Er zeigt einen kurzen Text wie 888, damit du siehst, ob dein Lenkrad eine Anzeige hat, was der Treiber nicht erkennen kann</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.1.0" date="2026-11-13">
             <description>
                 <ul>
