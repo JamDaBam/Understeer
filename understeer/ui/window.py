@@ -295,7 +295,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
 
         self.undo_btn = Gtk.Button(icon_name="edit-undo-symbolic")
         self.undo_btn.set_tooltip_text(
-            _("Undo all changes since the values were loaded"))
+            _("Undo all changes since the values were loaded or a preset "
+              "was applied"))
         self.undo_btn.set_action_name("win.undo-all")
         header.pack_end(self.undo_btn)
 

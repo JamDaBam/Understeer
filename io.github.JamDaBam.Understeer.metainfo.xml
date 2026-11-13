@@ -52,6 +52,8 @@
         <release version="2.1.0" date="2026-11-12">
             <description>
                 <ul>
+                    <li>After applying a preset no tile is marked as changed any more: the preset is what Undo goes back to</li>
+                    <li xml:lang="de">Nach dem Anwenden eines Presets ist keine Kachel mehr als geändert markiert: „Rückgängig“ führt zum Preset zurück</li>
                     <li>Report a Problem also tells which functions your wheelbase, steering wheel and pedals offer (e.g. LEDs, display, pedal rumble) and whether hid-fanatecff is from before October 2026</li>
                     <li xml:lang="de">„Problem melden“ gibt jetzt auch an, welche Funktionen deine Wheelbase, dein Lenkrad und deine Pedale bieten (z. B. LEDs, Display, Pedal-Rumble) und ob hid-fanatecff älter als Oktober 2026 ist</li>
                 </ul>

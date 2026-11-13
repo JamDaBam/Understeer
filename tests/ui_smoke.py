@@ -363,6 +363,18 @@ def steps(win):
         check((dev / "SHO").read_text().strip() == "90", "preset applied to device")
         win.activate_action("win.apply-preset", GLib.Variant.new_string(str(gt3)))
         check((dev / "SHO").read_text().strip() == "40", "and back")
+        # An applied preset is what the tiles compare to: none looks changed
+        marked = [a for a, r in win.rows.items() if r.row.has_css_class("modified")]
+        check(marked == [], f"no tile marked as changed after a preset: {marked}")
+        sho = win.rows["SHO"]
+        sho.set(70, silent=False)
+        win.flush_live()
+        check(sho.row.has_css_class("modified") and sho.revert_btn.get_sensitive(),
+              "a change made by hand is marked")
+        win._undo_all()
+        check(sho.get() == 40 and (dev / "SHO").read_text().strip() == "40"
+              and not sho.row.has_css_class("modified"),
+              f"Undo goes back to the preset: {sho.get()}")
         rally.unlink()
         win._presets_changed()
     yield "apply preset", apply_preset
@@ -899,6 +911,8 @@ def steps(win):
             win.go_to_background(announce=False)
             win._apply_preset(waiting, game="Some Game")
             check(win.pending == {"FF": ff - 10}, f"preset waits: {win.pending}")
+            check(win.rows["FF"].baseline == ff,
+                  "a preset waiting for Apply is still a change to discard")
             win.show_again()
             check(win.pending == {"FF": ff - 10} and win.pending_bar.get_revealed()
                   and win.rows["FF"].get() == ff - 10,
