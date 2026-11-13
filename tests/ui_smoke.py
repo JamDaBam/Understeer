@@ -1750,13 +1750,16 @@ def steps(win):
         check(set(diag.widgets) == set(win.inputs.all_axes),
               f"a card per axis: {sorted(diag.widgets)}")
         throttle = win.inputs.all_axes["FANATEC Pedals:1"]
+        # What decides the layout: the tile's place in the grid, which asks
+        # for the shared column width whatever the text in the tile says
         card = diag.widgets[throttle.key]["bar"].get_parent().get_parent()
-        before = card.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        place = card.get_parent()
+        before = place.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
         throttle.update(0)
         throttle.update(65535)
         win._update_inputs()
         w = diag.widgets[throttle.key]
-        after = card.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        after = place.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
         check(before == after, f"tile keeps its width: {before} -> {after}")
         check(w["observed"].get_label() == "0 … 65535 (100 %)",
               f"observed range: {w['observed'].get_label()}")
@@ -1877,9 +1880,10 @@ def steps(win):
               "axis without a role is not checked")
         check(not wheel["status"].get_visible()
               and wheel["findings"].get_visible(), "findings instead of status")
-        before = gas["card"].measure(Gtk.Orientation.HORIZONTAL, -1)[1]
-        check(before == brake["card"].measure(Gtk.Orientation.HORIZONTAL, -1)[1],
-              "findings don't change the width of the tiles")
+        before = gas["card"].get_parent().measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        check(before == brake["card"].get_parent().measure(
+            Gtk.Orientation.HORIZONTAL, -1)[1],
+            "findings don't change the width of the tiles")
         # The wheel turned while it should be let go
         hc.start_measuring()
         wheel_axis.value = 30000
