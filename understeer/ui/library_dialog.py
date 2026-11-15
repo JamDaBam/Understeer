@@ -1,19 +1,21 @@
 """The community preset library: a dialog listing the presets of the
-online catalog, each with a read-only page of its details and values.
+online catalog, each with a page of its details and values.
 
-Browsing only: nothing here applies, imports or saves a preset, and
-nothing is written to the wheelbase. Everything in the catalog comes from
-others, so it is only ever shown as plain text, never as markup.
+A preset is only added to the user's presets when they import it from its
+page and confirm, through the import of shared presets (asking before a
+preset of the same name is replaced). Nothing here applies a preset or
+writes to the wheelbase. Everything in the catalog comes from others, so
+it is only ever shown as plain text, never as markup.
 """
 import logging
 
 from gi.repository import Adw, GLib, Gtk, Pango
 
-from .. import community, compatibility, library_search
+from .. import community, compatibility, config, library_search, sharing
 from ..i18n import N_, _
 from ..settings import SETTINGS_BY_ID, format_value
 from .dates import date_text
-from .names import cap_row, label_factory
+from .names import cap_row, label_factory, short
 from .tasks import in_thread
 
 log = logging.getLogger("understeer.window")
@@ -129,7 +131,12 @@ class LibraryMixin:
     def _show_library(self):
         dialog = self.fit_dialog(Adw.Dialog(title=_("Community Library")))
         nav = Adw.NavigationView()
-        dialog.set_child(nav)
+        toasts = Adw.ToastOverlay(child=nav)
+        dialog.set_child(toasts)
+
+        def notify(text):
+            toasts.add_toast(Adw.Toast(custom_title=self._toast_label(text),
+                                       timeout=4))
         state = {"loaded": community.read_cache(), "busy": False,
                  "filters": library_search.NONE, "shown": 0, "device": None,
                  "choices": {"game": [], "wheelbase": [], "tag": []},
@@ -323,7 +330,8 @@ class LibraryMixin:
                 state["loaded"].catalog.entries,
                 key=lambda e: (e.name.casefold(), e.id))
             for entry in entries:
-                rows.append(self._library_row(entry, nav, lambda: state["device"]))
+                rows.append(self._library_row(entry, nav, lambda: state["device"],
+                                              notify))
             # The choices of this catalog; a choice no longer there is let go
             available = library_search.options(entries)
             keep = library_search.keep(state["filters"], available)
@@ -381,10 +389,11 @@ class LibraryMixin:
         dialog.present(self)
         return dialog
 
-    def _library_row(self, entry, nav, wheelbase):
+    def _library_row(self, entry, nav, wheelbase, notify=None):
         """A row of the list: name, game and wheelbase, the beginning of the
         description, how its wheelbase compares; opens the details.
-        wheelbase(): the connected one (compatibility.Device or None)."""
+        wheelbase(): the connected one (compatibility.Device or None);
+        notify(text): tells the result of an import."""
         row = cap_row(Adw.ActionRow(use_markup=False, activatable=True),
                       title_lines=1, subtitle_lines=2)
         row.set_title(entry.name)       # after use_markup, others' text
@@ -407,14 +416,38 @@ class LibraryMixin:
             row.add_suffix(badge)
         row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
         row.connect("activated", lambda r: nav.push(
-            self._library_details(entry, wheelbase())))
+            self._library_details(entry, wheelbase(), notify)))
         return row
 
-    def _library_details(self, entry, wheelbase=None):
-        """A page with everything about one preset; read only. wheelbase:
-        the connected one, to compare the preset's with."""
+    def _library_import_values(self, entry):
+        """The values a local preset of entry gets: as the import of a
+        shared preset keeps them (the parser already cleaned them)."""
+        return {a: v for a, v in entry.values.items() if a in self.rows}
+
+    def _library_same_presets(self, values):
+        """Names of the user's presets that already have exactly values."""
+        names = []
+        for name, path in config.list_presets():
+            try:
+                if self._read_preset(path)[1] == values:
+                    names.append(name)
+            except (OSError, ValueError):
+                continue
+        return names
+
+    def _library_details(self, entry, wheelbase=None, notify=None):
+        """A page with everything about one preset, and a button to import
+        it. wheelbase: the connected one, to compare the preset's with;
+        notify(text): tells the result of an import."""
         meta = entry.meta
         page = Adw.PreferencesPage()
+        current = self._collect_values()        # the tiles, not the device
+        differ = {a for a, v in entry.values.items()
+                  if a in current and current[a] != v}
+        if differ:
+            page.set_description(_(
+                "Settings that differ from the current ones: {n}. Their "
+                "current value is shown below them.").format(n=len(differ)))
         if is_demo(entry):
             note = Adw.PreferencesGroup()
             label = Gtk.Label(wrap=True, xalign=0, label=_(
@@ -462,7 +495,7 @@ class LibraryMixin:
                                    shared=format_value(setting, shared),
                                    kept=format_value(setting, kept))))
             page.add(notes)
-        for group in self._value_groups(entry.values):
+        for group in self._value_groups(entry.values, differ, current):
             page.add(group)
         # The header shows the name in a label of its own: a page title is
         # shown as markup there, and the name is others' text.
@@ -470,7 +503,100 @@ class LibraryMixin:
                           css_classes=["title"])
         title.set_use_markup(False)
         header = Adw.HeaderBar(title_widget=title)
+        importable = bool(self._library_import_values(entry))
+        button = Gtk.Button(label=_("Import Preset"), sensitive=importable,
+                            tooltip_text=_(
+                                "Add it to your presets, after you confirm. "
+                                "It is not applied.") if importable else _(
+                                "This preset holds no setting Understeer "
+                                "can save."))
+        button.add_css_class("suggested-action")
+        button.connect("clicked", lambda b: self._ask_import_community(
+            entry, wheelbase, notify or self._notify, b))
+        header.pack_end(button)
         toolbar = Adw.ToolbarView(content=page)
         toolbar.add_top_bar(header)
         log.info("Showing community preset %s", entry.id)
         return Adw.NavigationPage(title=entry.name, child=toolbar)
+
+    def _ask_import_community(self, entry, wheelbase, notify, parent):
+        """Confirm adding a community preset to the user's presets: what is
+        adjusted or left out, a preset with the same settings, how its
+        wheelbase compares. Another or an unknown model has to be
+        acknowledged. Nothing is written before the user confirms, and
+        the wheelbase is never written."""
+        values = self._library_import_values(entry)
+        if not values:
+            return
+        result = compatibility.classify(entry.meta, wheelbase)
+        dialog = Adw.AlertDialog(
+            heading=_("Import “{name}”?").format(name=short(entry.name)),
+            body=_("It is added to your presets with {n} settings. Nothing is "
+                   "applied to the wheelbase: you can apply it later from "
+                   "your presets.").format(n=len(values)))
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        def note(text, *css):
+            label = Gtk.Label(label=text, wrap=True, xalign=0,
+                              css_classes=list(css))
+            label.set_use_markup(False)
+            box.append(label)
+
+        if is_demo(entry):
+            note(_("Example: this entry only shows what the library looks "
+                   "like. It is not a recommended setup."), "warning")
+        title, explanation = compatibility_details(entry, wheelbase)
+        note(f"{title}: {explanation}")
+        if entry.adjusted:
+            changes = []
+            for attr_id, shared, kept in entry.adjusted:
+                setting = SETTINGS_BY_ID[attr_id]
+                changes.append(_("{setting}: {shared} becomes {kept}").format(
+                    setting=_(setting["label"]),
+                    shared=format_value(setting, shared),
+                    kept=format_value(setting, kept)))
+            note(_("Adjusted to the steps of their setting:") + "\n" +
+                 "\n".join(changes))
+        if entry.unsupported:
+            note(_("Not imported, as this version doesn't know them: "
+                   "{ids}").format(ids=", ".join(entry.unsupported)))
+        same = self._library_same_presets(values)
+        if same:
+            note(_("Your presets already have these settings: {names}").format(
+                names=", ".join(f"“{short(n)}”" for n in same)))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("import", _("Import"))
+        dialog.set_response_appearance("import",
+                                       Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_close_response("cancel")
+        if result.level != compatibility.SAME:
+            check = Gtk.CheckButton(child=Gtk.Label(wrap=True, xalign=0, label=_(
+                "I have checked the values and know they may not suit my "
+                "wheelbase")))
+            check.connect("toggled", lambda c: dialog.set_response_enabled(
+                "import", c.get_active()))
+            dialog.set_response_enabled("import", False)
+            box.append(check)
+        else:
+            dialog.set_default_response("import")
+        dialog.set_extra_child(box)
+
+        def done(added):
+            if not added:
+                log.info("Community preset %s not imported", entry.id)
+                return
+            self._presets_changed()
+            path, name = added[0]
+            log.info("Community preset %s imported as %s", entry.id, path.name)
+            notify(_("Preset “{name}” imported. You find it in your "
+                     "presets.").format(name=short(name)))
+
+        def on_response(_d, response):
+            if response != "import":
+                log.info("Import of community preset %s cancelled", entry.id)
+                return
+            self._import_presets(
+                [sharing.Found(entry.name, values, 1, None)], done=done)
+
+        dialog.connect("response", on_response)
+        dialog.present(parent)

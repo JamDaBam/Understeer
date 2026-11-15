@@ -87,6 +87,7 @@ STEP_MS = 300
 
 
 EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
+                   "Could not save preset: Disk full",
                    "Could not load preset: Broken.json holds no preset",
                    "Could not delete preset: Disk full"}
 
@@ -3063,6 +3064,218 @@ def steps(win):
         community.download = library_offline
         check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
     yield "library filters in German", filters_german
+
+    # --- Community Library: importing a preset ------------------------------
+    import_catalog = [
+        {"id": "imp-same", "meta": {"author": "Ana", "game": "ACC",
+                                     "wheelbase": "CSL DD", "tags": ["demo"]},
+         "preset": {"understeer_preset": 1, "name": "Community GT3",
+                    "values": {"SEN": 905, "FF": 55, "XYZ": 3}}},
+        {"id": "imp-other", "meta": {"wheelbase": "Podium Wheel Base DD1"},
+         "preset": {"understeer_preset": 1, "name": "Community Rally",
+                    "values": {"FF": 60}}},
+    ]
+    imp = {}
+
+    def imp_files():
+        return sorted(f.name for f in config.CONFIG_DIR.iterdir())
+
+    def imp_page():
+        nav = next(w for w in walk(library["dialog"]) if isinstance(w, Adw.NavigationView))
+        return nav, nav.get_visible_page()
+
+    def imp_button():
+        _nav, page = imp_page()
+        return next((w for w in walk(page) if isinstance(w, Gtk.Button)
+                     and w.get_label() == "Import Preset"), None)
+
+    def imp_alert():
+        d = win.get_visible_dialog()
+        return d if isinstance(d, Adw.AlertDialog) else None
+
+    def imp_texts(d):
+        return [w.get_label() for w in walk(d.get_extra_child())
+                if isinstance(w, Gtk.Label)]
+
+    def imp_confirm():
+        imp_button().emit("clicked")
+        d = imp_alert()
+        d.emit("response", "import")
+        d.force_close()
+
+    def imp_open(entry_id):
+        u = ui()
+        u["rows"][entry_id].emit("activated")
+
+    def import_open():
+        raw = json.dumps({"understeer_library": 1, "presets": import_catalog}).encode()
+        community.CACHE_FILE.write_bytes(raw)           # the cached catalog
+        community.download = library_offline            # offline: no download
+        search_ui["downloads"] = 0
+        imp.update(sysfs=sysfs_state(), files=imp_files(),
+                   cache=community.CACHE_FILE.read_bytes(),
+                   active=win.active_preset, values=win._collect_values())
+        imp["write"], window_module.write_values = window_module.write_values, \
+            lambda writes: imp.setdefault("hw", []).append(writes) or []
+        library["dialog"] = win._show_library()
+    yield "library import open offline", import_open
+
+    def import_details():
+        u = ui()
+        check(sorted(u["rows"]) == ["imp-other", "imp-same"],
+              f"cached catalog listed offline: {sorted(u['rows'])}")
+        u["search"].set_text("community")               # kept after the import
+        imp_open("imp-same")
+        button = imp_button()
+        check(button is not None and button.get_sensitive(),
+              "import button on the details page")
+        check(imp_files() == imp["files"], "opening the details saves nothing")
+        button.emit("clicked")
+    yield "library import details", import_details
+
+    def import_preview():
+        d = imp_alert()
+        check(d is not None and d.get_heading() == "Import “Community GT3”?",
+              f"import asked: {d and d.get_heading()}")
+        if d is None:
+            return
+        texts = "\n".join(imp_texts(d))
+        for part in ("Example:", "Same wheelbase model:",
+                     "Steering Angle: 905° becomes 900°", "XYZ"):
+            check(part in texts, f"preview tells {part!r}: {texts!r}")
+        check(d.get_response_enabled("import"), "same model: import allowed")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(imp_files() == imp["files"], "cancelled: nothing saved")
+        imp_button().emit("clicked")
+        d = imp_alert()
+        d.emit("response", "import")
+        d.force_close()
+    yield "library import preview", import_preview
+
+    def import_saved():
+        path = config.preset_path("Community GT3")
+        check(path.exists(), f"preset saved: {imp_files()}")
+        if path.exists():
+            name, values = config.read_preset(path)
+            check((name, values) == ("Community GT3", {"SEN": 900, "FF": 55}),
+                  f"saved as normalised, without unknown settings: {name} {values}")
+        check(not any(f.endswith(".part") for f in imp_files()), "no part files")
+        check(win.get_visible_dialog() is library["dialog"],
+              "the library stays open")
+        labels = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label)]
+        check(any("Community GT3" in l and "imported" in l for l in labels),
+              f"success told in the library: {labels[-3:]}")
+        check(win.active_preset == imp["active"], "not made the active preset")
+        imp_button().emit("clicked")                    # the same again
+    yield "library import saved", import_saved
+
+    def import_same_again():
+        d = imp_alert()
+        texts = "\n".join(imp_texts(d)) if d else ""
+        check("already have these settings: “Community GT3”" in texts,
+              f"same preset told: {texts!r}")
+        d.emit("response", "import")
+        d.force_close()
+        d = imp_alert()
+        check(d is not None and d.has_response("replace") and d.has_response("keep"),
+              "name taken: replace or keep both")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(imp_files() == sorted(imp["files"] + ["Community GT3.json"]),
+              f"cancelled replacement: unchanged {imp_files()}")
+        config.write_preset(config.preset_path("Community GT3"), "Community GT3",
+                            {"FF": 10})                 # the user's own change
+        imp_confirm()
+    yield "library import same again", import_same_again
+
+    def import_keep_both():
+        d = imp_alert()
+        check(d is not None and d.has_response("keep"), "asked about the name")
+        d.emit("response", "keep")
+        d.force_close()
+        _n, own = config.read_preset(config.preset_path("Community GT3"))
+        check(own == {"FF": 10}, f"own preset kept: {own}")
+        both = config.preset_path("Community GT3 (2)")
+        check(both.exists() and config.read_preset(both)[1] == {"SEN": 900, "FF": 55},
+              f"kept both: {imp_files()}")
+        imp_confirm()
+    yield "library import keep both", import_keep_both
+
+    def import_replace():
+        d = imp_alert()
+        check(d is not None and d.has_response("replace"), "asked again")
+        d.emit("response", "replace")
+        d.force_close()
+        _n, own = config.read_preset(config.preset_path("Community GT3"))
+        check(own == {"SEN": 900, "FF": 55}, f"replaced after confirming: {own}")
+        check(not config.preset_path("Community GT3 (3)").exists(), "no third copy")
+        nav, _page = imp_page()
+        nav.pop()
+        check(ui()["shown"] == ["imp-other", "imp-same"]
+              and ui()["search"].get_text() == "community",
+              "back in the list, search kept")
+        imp_open("imp-other")
+        imp_button().emit("clicked")
+    yield "library import replace", import_replace
+
+    def import_other_model():
+        d = imp_alert()
+        texts = "\n".join(imp_texts(d)) if d else ""
+        check("Different wheelbase model:" in texts, f"other model told: {texts!r}")
+        check(not d.get_response_enabled("import"), "import needs the acknowledgement")
+        tick = next(w for w in walk(d.get_extra_child()) if isinstance(w, Gtk.CheckButton))
+        tick.set_active(True)
+        check(d.get_response_enabled("import"), "acknowledged: import allowed")
+        # The disk is full: nothing is saved, no part file stays
+        imp["replace"] = pathlib.Path.replace
+
+        def full(*_a, **_k):
+            raise OSError("Disk full")
+        pathlib.Path.replace = full
+        d.emit("response", "import")
+        d.force_close()
+        pathlib.Path.replace = imp.pop("replace")
+    yield "library import other model, disk full", import_other_model
+
+    def import_disk_full():
+        d = imp_alert()
+        check(d is not None and d.get_heading() == "Could not save preset",
+              f"error told: {d and d.get_heading()}")
+        if d is not None:
+            d.force_close()
+        check(not config.preset_path("Community Rally").exists()
+              and not any(f.endswith(".part") for f in imp_files()),
+              f"nothing half written: {imp_files()}")
+        check(win.get_visible_dialog() is library["dialog"], "library still open")
+        imp_button().emit("clicked")
+        d = imp_alert()
+        next(w for w in walk(d.get_extra_child())
+             if isinstance(w, Gtk.CheckButton)).set_active(True)
+        d.emit("response", "import")
+        d.force_close()
+    yield "library import disk full", import_disk_full
+
+    def import_done():
+        check(config.read_preset(config.preset_path("Community Rally"))[1] == {"FF": 60},
+              "other model imported after acknowledging")
+        check(search_ui["downloads"] == 0, "no download while importing")
+        check(community.CACHE_FILE.read_bytes() == imp["cache"], "cache unchanged")
+        check(sysfs_state() == imp["sysfs"], "the wheelbase was not written")
+        check(not imp.get("hw"), f"nothing applied: {imp.get('hw')}")
+        check(win._collect_values() == imp["values"], "tuning values unchanged")
+        window_module.write_values = imp.pop("write")
+        close_dialogs(win)
+        win._select_page("presets")
+        tiles = [w for w in walk(win) if hasattr(w, "get_title")
+                 and w.get_title() in ("Community GT3", "Community Rally")]
+        check(len(tiles) >= 2, "imported presets in the preset list")
+        for name in ("Community GT3", "Community GT3 (2)", "Community Rally"):
+            config.preset_path(name).unlink()
+        win._presets_changed()
+        check(imp_files() == imp["files"], f"other presets untouched: {imp_files()}")
+    yield "library import done", import_done
 
     def layout_and_language():
         win._set_layout("compact")

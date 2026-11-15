@@ -1312,12 +1312,13 @@ class PresetsMixin:
         else:                           # choose which ones
             self._ask_paste_preset(text, fallback_name)
 
-    def _import_presets(self, found, added=None):
+    def _import_presets(self, found, added=None, done=None):
         """Add presets found, one after another; for a name already taken,
-        ask whether to replace it or keep both."""
+        ask whether to replace it or keep both. done(added): called at the
+        end with [(path, name)] of those added, instead of telling so."""
         added = [] if added is None else added
         if not found:
-            self._imported(added)
+            (done or self._imported)(added)
             return
         first, rest = found[0], found[1:]
         name = first.name
@@ -1330,7 +1331,7 @@ class PresetsMixin:
 
         if not path.exists():
             add(path, name)
-            self._import_presets(rest, added)
+            self._import_presets(rest, added, done)
             return
         try:
             _n, stored = self._read_preset(path)
@@ -1365,7 +1366,7 @@ class PresetsMixin:
                 new = free_name(
                     name, lambda n: config.preset_path(n).exists())
                 add(config.preset_path(new), new)
-            self._import_presets(rest, added)
+            self._import_presets(rest, added, done)
 
         dialog.connect("response", on_response)
         dialog.present(self)

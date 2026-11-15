@@ -18,9 +18,12 @@ version 1, and the rules Understeer checks it against. The checks live in
 - Parsing (`library.parse_catalog`) is pure: bytes in, entries out. It
   doesn't touch files, the network or any device. Downloading, caching and
   the UI are separate steps on top of it.
-- Importing goes through the existing import: the preview of the presets
-  found, the question on a name already taken, and saving as a local
-  preset. Nothing is applied to the wheelbase on import.
+- Importing goes through the existing import: the question on a name
+  already taken, and saving as a local preset. Before it, the preset's page
+  shows its values and the confirmation lists adjusted and left-out
+  settings and how its wheelbase compares; a preset made on another or an
+  unknown model needs an explicit acknowledgement. Nothing is applied to
+  the wheelbase on import.
 
 ## Catalog
 

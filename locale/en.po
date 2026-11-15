@@ -1075,225 +1075,277 @@ msgstr "Test finished"
 msgid "Test stopped: the LEDs changed. Was the wheelbase unplugged or the wheel changed?"
 msgstr "Test stopped: the LEDs changed. Was the wheelbase unplugged or the wheel changed?"
 
-#: understeer/ui/library_dialog.py:32
+#: understeer/ui/library_dialog.py:34
 msgid "No connection to the catalog. Check the internet connection."
 msgstr "No connection to the catalog. Check the internet connection."
 
-#: understeer/ui/library_dialog.py:34
+#: understeer/ui/library_dialog.py:36
 msgid "The catalog took too long to answer."
 msgstr "The catalog took too long to answer."
 
-#: understeer/ui/library_dialog.py:36
+#: understeer/ui/library_dialog.py:38
 msgid "The catalog server answered with error {code}."
 msgstr "The catalog server answered with error {code}."
 
-#: understeer/ui/library_dialog.py:39
+#: understeer/ui/library_dialog.py:41
 msgid "The catalog needs a newer version of Understeer."
 msgstr "The catalog needs a newer version of Understeer."
 
-#: understeer/ui/library_dialog.py:41
+#: understeer/ui/library_dialog.py:43
 msgid "The catalog was moved to another address, which is not followed."
 msgstr "The catalog was moved to another address, which is not followed."
 
-#: understeer/ui/library_dialog.py:43
+#: understeer/ui/library_dialog.py:45
 msgid "The downloaded catalog is not valid."
 msgstr "The downloaded catalog is not valid."
 
-#: understeer/ui/library_dialog.py:62
+#: understeer/ui/library_dialog.py:64
 msgid "Same wheelbase model"
 msgstr "Same wheelbase model"
 
-#: understeer/ui/library_dialog.py:63
+#: understeer/ui/library_dialog.py:65
 msgid "Different wheelbase model"
 msgstr "Different wheelbase model"
 
-#: understeer/ui/library_dialog.py:64
+#: understeer/ui/library_dialog.py:66
 msgid "Compatibility unknown"
 msgstr "Compatibility unknown"
 
-#: understeer/ui/library_dialog.py:67
+#: understeer/ui/library_dialog.py:69
 msgid "No wheelbase is connected, so the model can't be compared."
 msgstr "No wheelbase is connected, so the model can't be compared."
 
-#: understeer/ui/library_dialog.py:69
+#: understeer/ui/library_dialog.py:71
 msgid "Understeer doesn't know the model of the connected wheelbase."
 msgstr "Understeer doesn't know the model of the connected wheelbase."
 
-#: understeer/ui/library_dialog.py:71
+#: understeer/ui/library_dialog.py:73
 msgid "The preset doesn't say which wheelbase it was made on."
 msgstr "The preset doesn't say which wheelbase it was made on."
 
-#: understeer/ui/library_dialog.py:73
+#: understeer/ui/library_dialog.py:75
 msgid "The preset names a wheelbase Understeer can't match to exactly one model: {name}."
 msgstr "The preset names a wheelbase Understeer can't match to exactly one model: {name}."
 
-#: understeer/ui/library_dialog.py:85
+#: understeer/ui/library_dialog.py:87
 msgid "Made on the same model as your wheelbase ({model}), recognised by its USB product ID. That doesn't mean every value suits it: variants of a model can differ, and the values aren't checked against your wheelbase."
 msgstr "Made on the same model as your wheelbase ({model}), recognised by its USB product ID. That doesn't mean every value suits it: variants of a model can differ, and the values aren't checked against your wheelbase."
 
-#: understeer/ui/library_dialog.py:91
+#: understeer/ui/library_dialog.py:93
 msgid "Made on a {preset}; your wheelbase is a {model}."
 msgstr "Made on a {preset}; your wheelbase is a {model}."
 
-#: understeer/ui/library_dialog.py:93
+#: understeer/ui/library_dialog.py:95
 msgid "Belt"
 msgstr "Belt"
 
-#: understeer/ui/library_dialog.py:93
+#: understeer/ui/library_dialog.py:95
 msgid "Direct drive"
 msgstr "Direct drive"
 
-#: understeer/ui/library_dialog.py:95
+#: understeer/ui/library_dialog.py:97
 msgid "Drive of the preset's wheelbase: {preset}. Yours: {yours}."
 msgstr "Drive of the preset's wheelbase: {preset}. Yours: {yours}."
 
-#: understeer/ui/library_dialog.py:98
+#: understeer/ui/library_dialog.py:100
 msgid "Another model can need other values."
 msgstr "Another model can need other values."
 
-#: understeer/ui/library_dialog.py:130
+#: understeer/ui/library_dialog.py:132
 msgid "Community Library"
 msgstr "Community Library"
 
-#: understeer/ui/library_dialog.py:139
+#: understeer/ui/library_dialog.py:146
 msgid "Load the catalog again. Newly shared presets can take a few minutes to show up."
 msgstr "Load the catalog again. Newly shared presets can take a few minutes to show up."
 
-#: understeer/ui/library_dialog.py:148
+#: understeer/ui/library_dialog.py:155
 msgid "Loading the Catalog…"
 msgstr "Loading the Catalog…"
 
-#: understeer/ui/library_dialog.py:153
+#: understeer/ui/library_dialog.py:160
 msgid "Community Library Unavailable"
 msgstr "Community Library Unavailable"
 
-#: understeer/ui/library_dialog.py:154
+#: understeer/ui/library_dialog.py:161
 msgid "Try Again"
 msgstr "Try Again"
 
-#: understeer/ui/library_dialog.py:158
+#: understeer/ui/library_dialog.py:165
 msgid "No Community Presets Yet"
 msgstr "No Community Presets Yet"
 
-#: understeer/ui/library_dialog.py:160
+#: understeer/ui/library_dialog.py:167
 msgid "Search presets"
 msgstr "Search presets"
 
-#: understeer/ui/library_dialog.py:165
+#: understeer/ui/library_dialog.py:172
 msgid "All games"
 msgstr "All games"
 
-#: understeer/ui/library_dialog.py:166
+#: understeer/ui/library_dialog.py:173
 msgid "All wheelbases"
 msgstr "All wheelbases"
 
-#: understeer/ui/library_dialog.py:167
+#: understeer/ui/library_dialog.py:174
 msgid "All tags"
 msgstr "All tags"
 
-#: understeer/ui/library_dialog.py:173
+#: understeer/ui/library_dialog.py:180
 msgid "Only my wheelbase"
 msgstr "Only my wheelbase"
 
-#: understeer/ui/library_dialog.py:174
+#: understeer/ui/library_dialog.py:181
 msgid "Reset Filters"
 msgstr "Reset Filters"
 
-#: understeer/ui/library_dialog.py:193
+#: understeer/ui/library_dialog.py:200
 msgid "No Matching Presets"
 msgstr "No Matching Presets"
 
-#: understeer/ui/library_dialog.py:201
+#: understeer/ui/library_dialog.py:208
 msgid "Read only: looking at a preset changes neither the wheelbase nor your presets."
 msgstr "Read only: looking at a preset changes neither the wheelbase nor your presets."
 
-#: understeer/ui/library_dialog.py:219
+#: understeer/ui/library_dialog.py:226
 msgid "Catalog of {date}."
 msgstr "Catalog of {date}."
 
-#: understeer/ui/library_dialog.py:222
+#: understeer/ui/library_dialog.py:229
 msgid "Offline: showing the catalog of {date}."
 msgstr "Offline: showing the catalog of {date}."
 
-#: understeer/ui/library_dialog.py:225
+#: understeer/ui/library_dialog.py:232
 msgid "Showing the catalog of {date}."
 msgstr "Showing the catalog of {date}."
 
-#: understeer/ui/library_dialog.py:230
+#: understeer/ui/library_dialog.py:237
 msgid "Presets left out because they can't be read: {n}"
 msgstr "Presets left out because they can't be read: {n}"
 
-#: understeer/ui/library_dialog.py:233
+#: understeer/ui/library_dialog.py:240
 msgid "Shown: {n} of {total}"
 msgstr "Shown: {n} of {total}"
 
-#: understeer/ui/library_dialog.py:305
+#: understeer/ui/library_dialog.py:313
 msgid "Only presets made on the same model as your {model}"
 msgstr "Only presets made on the same model as your {model}"
 
-#: understeer/ui/library_dialog.py:394
+#: understeer/ui/library_dialog.py:404
 msgid "by {author}"
 msgstr "by {author}"
 
-#: understeer/ui/library_dialog.py:404
+#: understeer/ui/library_dialog.py:414
 msgid "Example"
 msgstr "Example"
 
-#: understeer/ui/library_dialog.py:419
+#: understeer/ui/library_dialog.py:448
+msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
+msgstr "Settings that differ from the current ones: {n}. Their current value is shown below them."
+
+#: understeer/ui/library_dialog.py:453
 msgid "Example: this entry only shows what the library looks like. It is not a recommended setup."
 msgstr "Example: this entry only shows what the library looks like. It is not a recommended setup."
 
-#: understeer/ui/library_dialog.py:434
+#: understeer/ui/library_dialog.py:467
 msgid "Author"
 msgstr "Author"
 
-#: understeer/ui/library_dialog.py:434
+#: understeer/ui/library_dialog.py:467
 msgid "Game"
 msgstr "Game"
 
-#: understeer/ui/library_dialog.py:435
+#: understeer/ui/library_dialog.py:468
 msgid "Wheelbase"
 msgstr "Wheelbase"
 
-#: understeer/ui/library_dialog.py:436
+#: understeer/ui/library_dialog.py:469
 msgid "Drive"
 msgstr "Drive"
 
-#: understeer/ui/library_dialog.py:437
+#: understeer/ui/library_dialog.py:470
 msgid "Torque"
 msgstr "Torque"
 
-#: understeer/ui/library_dialog.py:437
+#: understeer/ui/library_dialog.py:470
 msgid "{n} Nm"
 msgstr "{n} Nm"
 
-#: understeer/ui/library_dialog.py:439
+#: understeer/ui/library_dialog.py:472
 msgid "Tags"
 msgstr "Tags"
 
-#: understeer/ui/library_dialog.py:441
+#: understeer/ui/library_dialog.py:474
 msgid "About This Preset"
 msgstr "About This Preset"
 
-#: understeer/ui/library_dialog.py:446
+#: understeer/ui/library_dialog.py:479
 msgid "Compatibility"
 msgstr "Compatibility"
 
-#: understeer/ui/library_dialog.py:450
+#: understeer/ui/library_dialog.py:483
 msgid "Notes"
 msgstr "Notes"
 
-#: understeer/ui/library_dialog.py:453
+#: understeer/ui/library_dialog.py:486
 msgid "Settings this version doesn't know"
 msgstr "Settings this version doesn't know"
 
-#: understeer/ui/library_dialog.py:455
+#: understeer/ui/library_dialog.py:488
 msgid "they are left out."
 msgstr "they are left out."
 
-#: understeer/ui/library_dialog.py:460
+#: understeer/ui/library_dialog.py:493
 msgid "Shared as {shared}, kept as {kept} in the steps of this setting."
 msgstr "Shared as {shared}, kept as {kept} in the steps of this setting."
+
+#: understeer/ui/library_dialog.py:507
+msgid "Import Preset"
+msgstr "Import Preset"
+
+#: understeer/ui/library_dialog.py:508
+msgid "Add it to your presets, after you confirm. It is not applied."
+msgstr "Add it to your presets, after you confirm. It is not applied."
+
+#: understeer/ui/library_dialog.py:510
+msgid "This preset holds no setting Understeer can save."
+msgstr "This preset holds no setting Understeer can save."
+
+#: understeer/ui/library_dialog.py:533
+msgid "Import “{name}”?"
+msgstr "Import “{name}”?"
+
+#: understeer/ui/library_dialog.py:534
+msgid "It is added to your presets with {n} settings. Nothing is applied to the wheelbase: you can apply it later from your presets."
+msgstr "It is added to your presets with {n} settings. Nothing is applied to the wheelbase: you can apply it later from your presets."
+
+#: understeer/ui/library_dialog.py:554
+msgid "{setting}: {shared} becomes {kept}"
+msgstr "{setting}: {shared} becomes {kept}"
+
+#: understeer/ui/library_dialog.py:558
+msgid "Adjusted to the steps of their setting:"
+msgstr "Adjusted to the steps of their setting:"
+
+#: understeer/ui/library_dialog.py:561
+msgid "Not imported, as this version doesn't know them: {ids}"
+msgstr "Not imported, as this version doesn't know them: {ids}"
+
+#: understeer/ui/library_dialog.py:565
+msgid "Your presets already have these settings: {names}"
+msgstr "Your presets already have these settings: {names}"
+
+#: understeer/ui/library_dialog.py:568
+msgid "Import"
+msgstr "Import"
+
+#: understeer/ui/library_dialog.py:573
+msgid "I have checked the values and know they may not suit my wheelbase"
+msgstr "I have checked the values and know they may not suit my wheelbase"
+
+#: understeer/ui/library_dialog.py:591
+msgid "Preset “{name}” imported. You find it in your presets."
+msgstr "Preset “{name}” imported. You find it in your presets."
 
 #: understeer/ui/live_input.py:26
 msgid "Current Angle"
@@ -1562,10 +1614,6 @@ msgstr "Export…"
 #: understeer/ui/preferences.py:196
 msgid "Adds the presets and games from an exported file. Ones with the same name are replaced."
 msgstr "Adds the presets and games from an exported file. Ones with the same name are replaced."
-
-#: understeer/ui/preferences.py:196
-msgid "Import"
-msgstr "Import"
 
 #: understeer/ui/preferences.py:198
 msgid "Import…"
@@ -1943,10 +1991,6 @@ msgstr "Preset “{name}” loaded — click Apply to write it"
 msgid "No wheelbase is connected, so preset “{name}” was not written."
 msgstr "No wheelbase is connected, so preset “{name}” was not written."
 
-#: understeer/ui/presets.py:553
-msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
-msgstr "Settings that differ from the current ones: {n}. Their current value is shown below them."
-
 #: understeer/ui/presets.py:556
 msgid "The current settings match this preset."
 msgstr "The current settings match this preset."
@@ -2199,83 +2243,83 @@ msgstr "No Preset Found"
 msgid "OK"
 msgstr "OK"
 
-#: understeer/ui/presets.py:1342
+#: understeer/ui/presets.py:1343
 msgid "Your preset already has the same settings. Replace it anyway, or keep both?"
 msgstr "Your preset already has the same settings. Replace it anyway, or keep both?"
 
-#: understeer/ui/presets.py:1345
+#: understeer/ui/presets.py:1346
 msgid "Replace your preset, or keep both? The shared preset has these settings:"
 msgstr "Replace your preset, or keep both? The shared preset has these settings:"
 
-#: understeer/ui/presets.py:1348
+#: understeer/ui/presets.py:1349
 msgid "Replace your preset, or keep both?"
 msgstr "Replace your preset, or keep both?"
 
-#: understeer/ui/presets.py:1350
+#: understeer/ui/presets.py:1351
 msgid "“{name}” Already Exists"
 msgstr "“{name}” Already Exists"
 
-#: understeer/ui/presets.py:1354
+#: understeer/ui/presets.py:1355
 msgid "Keep Both"
 msgstr "Keep Both"
 
-#: understeer/ui/presets.py:1355
+#: understeer/ui/presets.py:1356
 msgid "Replace"
 msgstr "Replace"
 
-#: understeer/ui/presets.py:1393
+#: understeer/ui/presets.py:1394
 msgid "Preset “{name}” imported"
 msgstr "Preset “{name}” imported"
 
-#: understeer/ui/presets.py:1396
+#: understeer/ui/presets.py:1397
 msgid "Presets imported: {n}"
 msgstr "Presets imported: {n}"
 
-#: understeer/ui/presets.py:1401
+#: understeer/ui/presets.py:1402
 msgid "Games that use this preset keep it."
 msgstr "Games that use this preset keep it."
 
-#: understeer/ui/presets.py:1401
+#: understeer/ui/presets.py:1402
 msgid "Rename Preset"
 msgstr "Rename Preset"
 
-#: understeer/ui/presets.py:1415
+#: understeer/ui/presets.py:1416
 msgid "Name Already Used"
 msgstr "Name Already Used"
 
-#: understeer/ui/presets.py:1416
+#: understeer/ui/presets.py:1417
 msgid "Another preset is already called “{name}”."
 msgstr "Another preset is already called “{name}”."
 
-#: understeer/ui/presets.py:1420
+#: understeer/ui/presets.py:1421
 msgid "Could not rename preset"
 msgstr "Could not rename preset"
 
-#: understeer/ui/presets.py:1429
+#: understeer/ui/presets.py:1430
 msgid "Preset renamed to “{name}”"
 msgstr "Preset renamed to “{name}”"
 
-#: understeer/ui/presets.py:1442
+#: understeer/ui/presets.py:1443
 msgid "Used by: {games}. Without their preset, these games get none applied."
 msgstr "Used by: {games}. Without their preset, these games get none applied."
 
-#: understeer/ui/presets.py:1456
+#: understeer/ui/presets.py:1457
 msgid "Could not delete preset"
 msgstr "Could not delete preset"
 
-#: understeer/ui/presets.py:1479
+#: understeer/ui/presets.py:1480
 msgid "Folder “{folder}” deleted. Presets deleted: {n}"
 msgstr "Folder “{folder}” deleted. Presets deleted: {n}"
 
-#: understeer/ui/presets.py:1484
+#: understeer/ui/presets.py:1485
 msgid "Presets deleted: {n}"
 msgstr "Presets deleted: {n}"
 
-#: understeer/ui/presets.py:1486
+#: understeer/ui/presets.py:1487
 msgid "Used by: {games}"
 msgstr "Used by: {games}"
 
-#: understeer/ui/presets.py:1493
+#: understeer/ui/presets.py:1494
 msgid "Could not restore presets"
 msgstr "Could not restore presets"
 
