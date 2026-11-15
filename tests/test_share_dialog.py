@@ -102,9 +102,7 @@ def test_texts_in_german():
         ("Lenkwinkel ist 905°, die Wheelbase übernimmt aber 900°. Speichere "
          "das Preset zuerst mit 900°.")
     assert i18n._("Share with Community") == "In Community teilen"
-    assert i18n._("Preset prepared. GitHub submission will be available in a "
-                  "future update.") == ("Preset vorbereitet. Die GitHub-"
-                                        "Einreichung folgt in einem späteren Update.")
+    assert i18n._("Continue on GitHub") == "Auf GitHub fortfahren"
 
 
 @pytest.mark.parametrize("text, tags", [
@@ -114,13 +112,42 @@ def test_split_tags(text, tags):
     assert share_dialog.split_tags(text) == tags
 
 
-def test_dialog_sends_copies_and_writes_nothing():
+def test_dialog_sends_and_writes_nothing():
     """The dialog only reads the saved preset and the cached catalog: no
-    clipboard, browser, network, file writing or wheelbase access."""
+    network, file writing, wheelbase access or shell. The browser is only
+    opened in open_uri(), the clipboard only written in copy(), both only
+    from a button the user clicks."""
     source = (ROOT / "understeer" / "ui" / "share_dialog.py").read_text(
         encoding="utf-8")
-    for name in ("clipboard", "UriLauncher", "launch", "urllib", "http",
-                 "download", "refresh(", "write_preset", "write_file",
-                 "write_values", "device", "_collect_values", "_apply",
-                 "getpass", "environ", "socket", "subprocess"):
+    for name in ("urllib", "http", "download", "refresh(", "write_preset",
+                 "write_file", "write_values", "device", "_collect_values",
+                 "_apply", "getpass", "environ", "socket", "subprocess",
+                 "webbrowser", "xdg-open", "spawn", "os.system"):
         assert name not in source, name
+    assert source.count("Gtk.UriLauncher") == 1
+    assert source.count("get_clipboard()") == 1
+    assert source.count("open_uri(self, plan.url, opened)") == 1
+
+
+@pytest.mark.parametrize("field, label", [
+    ("preset-json", "Preset JSON"), ("description", "Description"),
+    ("preset-name", "Preset name"), ("wheelbase", "Wheelbase model")])
+def test_github_labels(field, label):
+    """Fields to copy are named as the form on GitHub names them."""
+    assert share_dialog.GITHUB_LABELS[field] == label
+
+
+def test_github_messages_in_both_languages():
+    texts = {"Continue on GitHub…": "Auf GitHub fortfahren…",
+             "GitHub opened. Review the information and submit the issue "
+             "there.": "GitHub wurde geöffnet. Prüfe dort die Angaben und "
+                       "reiche den Beitrag selbst ein.",
+             "The browser could not be opened: {error}":
+                 "Der Browser konnte nicht geöffnet werden: {error}"}
+    for english, german in texts.items():
+        assert i18n._(english) == english
+        i18n.set_language("de")
+        assert i18n._(english) == german
+        i18n.set_language("en")
+    assert "future update" not in (ROOT / "understeer" / "ui" /
+                                   "share_dialog.py").read_text(encoding="utf-8")

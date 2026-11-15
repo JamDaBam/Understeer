@@ -3277,7 +3277,10 @@ def steps(win):
         check(imp_files() == imp["files"], f"other presets untouched: {imp_files()}")
     yield "library import done", import_done
 
-    # --- Share with Community: prepared in memory only ------------------------
+    # --- Share with Community: up to the form on GitHub ----------------------
+    from understeer import github_form
+    from understeer.ui import share_dialog as share_module
+    import urllib.parse
     share = {}
 
     def share_dialog():
@@ -3332,6 +3335,14 @@ def steps(win):
             lambda *a, **k: share["downloads"].append(a) or library_offline()
         share["launch"] = Gtk.UriLauncher.launch
         Gtk.UriLauncher.launch = lambda *a, **k: share["browser"].append(a)
+        share.update(opened=[], result=None, open_uri=share_module.open_uri)
+
+        def fake_open(parent, uri, done):               # answers later, like GTK
+            share["opened"].append(uri)
+            result = share["result"]
+            GLib.timeout_add(50, lambda: done(result) or False)
+        share_module.open_uri = fake_open
+        win.get_clipboard().set("private before")
         share["write"], window_module.write_values = window_module.write_values, \
             lambda writes: share.setdefault("hw", []).append(writes) or []
         win.prepared_submission = None
@@ -3411,22 +3422,112 @@ def steps(win):
         check(not share_button("Confirm").get_sensitive(), "confirm needs the tick")
     yield "share preview", share_preview
 
+    def share_labels():
+        return [w.get_label() for w in walk(share_page())
+                if isinstance(w, Gtk.Label) and w.get_visible()]
+
+    def share_read_clipboard():
+        share["clip"] = []
+        win.get_clipboard().read_text_async(
+            None, lambda c, r: share["clip"].append(c.read_text_finish(r)))
+
     def share_confirm():
         tick = next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton))
         tick.set_active(True)
         share_button("Confirm").emit("clicked")
         page = share_page()
-        check(page.get_tag() == "done", f"done page: {page.get_tag()}")
-        status = next(w for w in walk(page) if isinstance(w, Adw.StatusPage))
-        check(status.get_description() == "Preset prepared. GitHub submission "
-              "will be available in a future update.", "honest completion text")
-        check(status.get_title() == "Not Published Yet", "not called published")
+        check(page.get_tag() == "done", f"GitHub page: {page.get_tag()}")
+        text = "\n".join(share_labels())
+        for part in ("opens in your default browser", "need to sign in",
+                     "Nothing has been submitted yet", "tick the boxes yourself",
+                     "may accept it, ask for changes or decline it",
+                     "browser history"):
+            check(part in text, f"GitHub page tells {part!r}")
+        check("Too Long for the Link" not in text, "everything fits into the link")
+        check("future update" not in text and "submitted." not in text,
+              "nothing claimed as submitted")
         result = win.prepared_submission
         check(result is not None and result.entry["preset"]["values"]
               == {"SEN": 540, "FF": 75, "FOR": 100}, "kept in memory")
         check(share["path"].read_bytes() == share["bytes"], "saved preset unchanged")
+        share["result"] = "No browser here"             # the first launch fails
+        go = share_button("Continue on GitHub…")
+        go.emit("clicked")
+        go.emit("clicked")                              # a quick second click
+        check(len(share["opened"]) == 1, f"opened once: {len(share['opened'])}")
+        check(not go.get_sensitive(), "no second launch while opening")
+        share_read_clipboard()
+    yield "share confirmed, GitHub asked", share_confirm
+
+    def share_launch_failed():
+        url = share["opened"][0] if share["opened"] else ""
+        check(url == github_form.for_submission(win.prepared_submission).url,
+              f"the prepared submission's link: {url[:80]}")
+        q = dict(urllib.parse.parse_qsl(url.partition("?")[2]))
+        check(q.get("template") == "community-preset.yml"
+              and q.get("preset-name") == "Share Me" and q.get("author") == "Tester"
+              and q.get("catalog-id") == "test-game-share-me"
+              and json.loads(q.get("preset-json", "{}")) == {
+                  "understeer_preset": 1, "name": "Share Me",
+                  "values": {"SEN": 540, "FF": 75, "FOR": 100}}
+              and "acknowledgement" not in q,
+              f"fields filled in, preset only, no box ticked: {sorted(q)}")
+        text = "\n".join(share_labels())
+        check("The browser could not be opened: No browser here" in text,
+              f"failure told: {text[-200:]!r}")
+        check("GitHub opened" not in text, "no success claimed")
+        check(share_button("Copy Link").get_visible(), "link can be copied instead")
+        check(share_button("Continue on GitHub…").get_sensitive(), "can try again")
+        check(share["clip"] == ["private before"],
+              f"nothing copied without asking: {share['clip']}")
+        share["result"] = None                          # now it opens
+        share_button("Continue on GitHub…").emit("clicked")
+    yield "share browser failed", share_launch_failed
+
+    def share_launched():
+        check(len(share["opened"]) == 2, f"opened again: {len(share['opened'])}")
+        text = "\n".join(share_labels())
+        check("GitHub opened. Review the information and submit the issue there."
+              in text, "launch told only after it worked")
+        go = share_button("Continue on GitHub…")
+        check(not go.get_sensitive(), "opened once is enough")
+        go.emit("clicked")
+        check(len(share["opened"]) == 2, "no further launch")
+        share_button("Copy Link").emit("clicked")       # the user asks for it
+        share_read_clipboard()
+    yield "share browser opened", share_launched
+
+    def share_link_copied():
+        check(share["clip"] == [share["opened"][-1]], "link copied on request")
         share_button("Close").emit("clicked")
-    yield "share confirmed", share_confirm
+        share_open(share["path"])
+        share_fill(description=("Fahrgefühl für Übungsrunden " * 40)[:1000].strip())
+        share_button("Review").emit("clicked")
+        next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton)).set_active(True)
+        share_button("Confirm").emit("clicked")
+        text = "\n".join(share_labels())
+        check("Too Long for the Link" in text, "too long for the link told")
+        rows = [w for w in walk(share_page()) if isinstance(w, Adw.ActionRow)
+                and w.get_title() == "Preset JSON"]
+        check(len(rows) == 1, "the JSON to copy by hand")
+        if rows:
+            next(w for w in walk(rows[0]) if isinstance(w, Gtk.Button)).emit("clicked")
+        share_read_clipboard()
+    yield "share too long for the link", share_link_copied
+
+    def share_json_copied():
+        entry = win.prepared_submission.entry
+        check(share["clip"] == [github_form.preset_json(entry)],
+              f"preset JSON copied: {share['clip'][:1]}")
+        check("Copied: Preset JSON" in share_labels(), "copy told")
+        share_button("Continue on GitHub…").emit("clicked")
+        url = share["opened"][-1]
+        q = dict(urllib.parse.parse_qsl(url.partition("?")[2]))
+        check(len(url) <= github_form.MAX_URL_CHARS and "preset-json" not in q
+              and q.get("preset-name") == "Share Me",
+              f"short link without the JSON: {len(url)} {sorted(q)}")
+        share_dialog().close()
+    yield "share JSON copied", share_json_copied
 
     def share_cancel():
         check(win.get_visible_dialog() is None, "closed")
@@ -3472,6 +3573,7 @@ def steps(win):
         check(win.prepared_submission is None, "nothing prepared")
         community.download = share.pop("download")
         Gtk.UriLauncher.launch = share.pop("launch")
+        share_module.open_uri = share.pop("open_uri")
         window_module.write_values = share.pop("write")
         win.rows["FF"].set(share["live"]["FF"], silent=True)
         odd.unlink()

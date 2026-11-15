@@ -2,8 +2,10 @@
 shown publicly with it, check it with submission.prepare() and review the
 prepared entry before confirming it.
 
-It ends with the confirmed submission kept in memory: nothing is sent,
-published, copied or written, the saved preset stays as it is, and the
+After the confirmation, the form on GitHub can be opened in the browser
+with the submission filled in (github_form); the user submits it there,
+or not. Nothing is sent from Understeer, nothing is copied unless the user
+asks for it, nothing is written, the saved preset stays as it is, and the
 wheelbase is never read or written. The values are those of the saved
 preset file, never the current tuning. Everything the user types is shown
 as plain text, never as markup.
@@ -11,9 +13,9 @@ as plain text, never as markup.
 import logging
 import pathlib
 
-from gi.repository import Adw, Gtk, Pango
+from gi.repository import Adw, GLib, Gtk, Pango
 
-from .. import community, config, submission
+from .. import community, config, github_form, submission
 from ..i18n import N_, _
 from ..settings import SETTINGS_BY_ID, format_value
 from .names import label_factory
@@ -23,6 +25,29 @@ log = logging.getLogger("understeer.window")
 FIELDS = {"name": N_("Preset Name"), "game": N_("Game"),
           "wheelbase": N_("Wheelbase"), "author": N_("Author"),
           "description": N_("Description"), "tags": N_("Tags")}
+
+
+# The fields' labels as the form on GitHub shows them, in English like the
+# form itself, so they can be found there
+GITHUB_LABELS = {"title": "Title", "preset-name": "Preset name",
+                 "game": "Game", "wheelbase": "Wheelbase model",
+                 "author": "Author", "description": "Description",
+                 "tags": "Tags (optional)",
+                 "catalog-id": "Proposed catalog ID (optional)",
+                 "preset-json": "Preset JSON"}
+
+
+def open_uri(parent, uri, done):
+    """Open uri with the default browser, through the desktop portal or
+    GIO, never a shell; then done(None), or done(error text)."""
+    def finished(launcher, result):
+        try:
+            ok = launcher.launch_finish(result)
+        except GLib.Error as e:
+            done(e.message)
+            return
+        done(None if ok else _("The browser didn't start."))
+    Gtk.UriLauncher.new(uri).launch(parent, None, finished)
 
 
 def _field(field):
@@ -336,7 +361,7 @@ class ShareMixin:
             self.prepared_submission = result
             log.info("Preset %s prepared for sharing as %s", path.name,
                      entry["id"])
-            nav.push(self._share_done(dialog))
+            nav.push(self._share_done(dialog, result))
 
         confirm.connect("clicked", on_confirm)
         toolbar = Adw.ToolbarView(content=page)
@@ -344,19 +369,115 @@ class ShareMixin:
         return Adw.NavigationPage(title=_("Review"), child=toolbar,
                                   tag="preview")
 
-    @staticmethod
-    def _share_done(dialog):
-        # No user text here: the title and description of a status page
-        # can be read as markup
-        status = Adw.StatusPage(
-            icon_name="emblem-ok-symbolic", title=_("Not Published Yet"),
-            description=_("Preset prepared. GitHub submission will be "
-                          "available in a future update."))
+    def _share_done(self, dialog, result):
+        """The last page: what happens on GitHub, the button that opens the
+        form there with the submission filled in, and copy buttons for
+        fields too long for the link. Nothing is sent from here: the user
+        submits on GitHub, or doesn't."""
+        try:
+            plan = github_form.for_submission(result)
+        except ValueError as e:
+            log.error("Prepared submission not usable: %s", e)
+            status = Adw.StatusPage(icon_name="dialog-error-symbolic",
+                                    title=_("The preset can't be prepared "
+                                            "for sharing."))
+            return Adw.NavigationPage(title=_("Share with Community"),
+                                      child=status, tag="done", can_pop=False)
+        page = Adw.PreferencesPage()
+        about = Adw.PreferencesGroup(title=_("Continue on GitHub"))
+        for text in (
+                _("GitHub opens in your default browser with the form filled "
+                  "in. You may need to sign in there."),
+                _("Nothing has been submitted yet. Check every field there, "
+                  "tick the boxes yourself and submit the issue: only then "
+                  "is it public."),
+                _("A maintainer reviews it and may accept it, ask for "
+                  "changes or decline it."),
+                _("The link holds the public details, so it can show up in "
+                  "your browser history.")):
+            about.add(_plain_label(text))
+        page.add(about)
+        state = {"launching": False, "opened": False}
+        status = _plain_label("", visible=False)
+
+        def tell(text, css):
+            status.set_label(text)
+            for c in ("success", "error", "dim-label"):
+                status.remove_css_class(c)
+            status.add_css_class(css)
+            status.set_visible(True)
+
+        def copy(text, field_label):
+            try:
+                self.get_clipboard().set(text)
+            except (GLib.Error, TypeError) as e:
+                log.warning("Could not copy %s: %s", field_label, e)
+                tell(_("Could not copy: {error}").format(error=str(e)), "error")
+                return
+            log.info("Copied %s of a prepared submission", field_label)
+            tell(_("Copied: {field}").format(field=field_label), "dim-label")
+
+        if plan.left_out:
+            group = Adw.PreferencesGroup(
+                title=_("Too Long for the Link"),
+                description=_("These don't fit into the link and stay empty "
+                              "on GitHub. Copy each one and paste it into "
+                              "its field there:"))
+            for field in plan.left_out:
+                label = GITHUB_LABELS[field]
+                row = Adw.ActionRow(use_markup=False)
+                row.set_title(label)
+                button = Gtk.Button(label=_("Copy"), valign=Gtk.Align.CENTER)
+                button.update_property([Gtk.AccessibleProperty.LABEL],
+                                       [_("Copy {field}").format(field=label)])
+                button.connect("clicked", lambda b, f=field, l=label:
+                               copy(plan.values[f], l))
+                row.add_suffix(button)
+                group.add(row)
+            page.add(group)
+            log.info("Submission link without %s (too long)",
+                     ", ".join(plan.left_out))
+
+        actions = Adw.PreferencesGroup()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        go = Gtk.Button(label=_("Continue on GitHub…"), halign=Gtk.Align.CENTER)
+        go.add_css_class("pill")
+        go.add_css_class("suggested-action")
+        copy_link = Gtk.Button(label=_("Copy Link"), halign=Gtk.Align.CENTER,
+                               visible=False)
+        copy_link.add_css_class("flat")
+        copy_link.connect("clicked", lambda b: copy(plan.url, _("Link")))
         close = Gtk.Button(label=_("Close"), halign=Gtk.Align.CENTER)
-        close.add_css_class("pill")
+        close.add_css_class("flat")
         close.connect("clicked", lambda b: dialog.close())
-        status.set_child(close)
-        toolbar = Adw.ToolbarView(content=status)
+        for w in (go, status, copy_link, close):
+            box.append(w)
+        actions.add(box)
+        page.add(actions)
+
+        def opened(error):
+            state["launching"] = False
+            if error is not None:
+                log.warning("Could not open the submission form: %s", error)
+                tell(_("The browser could not be opened: {error}").format(
+                    error=error), "error")
+                copy_link.set_visible(True)     # to open it by hand
+                go.set_sensitive(True)
+                return
+            state["opened"] = True
+            log.info("Submission form opened in the browser")
+            tell(_("GitHub opened. Review the information and submit the "
+                   "issue there."), "success")
+
+        def on_go(_button):
+            if state["launching"] or state["opened"]:
+                return                          # opened once is enough
+            state["launching"] = True
+            go.set_sensitive(False)
+            open_uri(self, plan.url, opened)
+
+        go.connect("clicked", on_go)
+        toolbar = Adw.ToolbarView(content=page)
         toolbar.add_top_bar(Adw.HeaderBar(show_back_button=False))
         return Adw.NavigationPage(title=_("Share with Community"), child=toolbar,
                                   tag="done", can_pop=False)

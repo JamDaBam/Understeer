@@ -2439,201 +2439,261 @@ msgstr "About this setting"
 msgid "Not supported by your hardware"
 msgstr "Not supported by your hardware"
 
-#: understeer/ui/share_dialog.py:22
+#: understeer/ui/share_dialog.py:25
 msgid "Preset Name"
 msgstr "Preset Name"
 
-#: understeer/ui/share_dialog.py:24
+#: understeer/ui/share_dialog.py:27
 msgid "Description"
 msgstr "Description"
 
-#: understeer/ui/share_dialog.py:28
+#: understeer/ui/share_dialog.py:49
+msgid "The browser didn't start."
+msgstr "The browser didn't start."
+
+#: understeer/ui/share_dialog.py:54
 msgid "Preset"
 msgstr "Preset"
 
-#: understeer/ui/share_dialog.py:42
+#: understeer/ui/share_dialog.py:68
 msgid "Choose the wheelbase the preset was made on."
 msgstr "Choose the wheelbase the preset was made on."
 
-#: understeer/ui/share_dialog.py:43
+#: understeer/ui/share_dialog.py:69
 msgid "{field} is required."
 msgstr "{field} is required."
 
-#: understeer/ui/share_dialog.py:46
+#: understeer/ui/share_dialog.py:72
 msgid "{field} is too long."
 msgstr "{field} is too long."
 
-#: understeer/ui/share_dialog.py:47
+#: understeer/ui/share_dialog.py:73
 msgid "{field} is too long: at most {n} characters."
 msgstr "{field} is too long: at most {n} characters."
 
-#: understeer/ui/share_dialog.py:50
+#: understeer/ui/share_dialog.py:76
 msgid "{field} has too many lines: at most {n}."
 msgstr "{field} has too many lines: at most {n}."
 
-#: understeer/ui/share_dialog.py:53
+#: understeer/ui/share_dialog.py:79
 msgid "{field} must be one line."
 msgstr "{field} must be one line."
 
-#: understeer/ui/share_dialog.py:55
+#: understeer/ui/share_dialog.py:81
 msgid "{field} contains invisible or control characters."
 msgstr "{field} contains invisible or control characters."
 
-#: understeer/ui/share_dialog.py:58
+#: understeer/ui/share_dialog.py:84
 msgid "{field} must be text."
 msgstr "{field} must be text."
 
-#: understeer/ui/share_dialog.py:60
+#: understeer/ui/share_dialog.py:86
 msgid "{field} must not contain a web address."
 msgstr "{field} must not contain a web address."
 
-#: understeer/ui/share_dialog.py:62
+#: understeer/ui/share_dialog.py:88
 msgid "{field} must not contain an e-mail address."
 msgstr "{field} must not contain an e-mail address."
 
-#: understeer/ui/share_dialog.py:64
+#: understeer/ui/share_dialog.py:90
 msgid "{field} must not contain a file path."
 msgstr "{field} must not contain a file path."
 
-#: understeer/ui/share_dialog.py:66
+#: understeer/ui/share_dialog.py:92
 msgid "Choose one of the listed wheelbases."
 msgstr "Choose one of the listed wheelbases."
 
-#: understeer/ui/share_dialog.py:68
+#: understeer/ui/share_dialog.py:94
 msgid "At most {n} tags."
 msgstr "At most {n} tags."
 
-#: understeer/ui/share_dialog.py:70
+#: understeer/ui/share_dialog.py:96
 msgid "Tags are short words of a–z, 0–9 and -, separated by commas."
 msgstr "Tags are short words of a–z, 0–9 and -, separated by commas."
 
-#: understeer/ui/share_dialog.py:72
+#: understeer/ui/share_dialog.py:98
 msgid "The preset has a setting this version can't share: {setting}."
 msgstr "The preset has a setting this version can't share: {setting}."
 
-#: understeer/ui/share_dialog.py:75
+#: understeer/ui/share_dialog.py:101
 msgid "{setting} has a value that isn't valid."
 msgstr "{setting} has a value that isn't valid."
 
-#: understeer/ui/share_dialog.py:80
+#: understeer/ui/share_dialog.py:106
 msgid "{setting} is {shared}, which the wheelbase keeps as {kept}. Save the preset with {kept} first."
 msgstr "{setting} is {shared}, which the wheelbase keeps as {kept}. Save the preset with {kept} first."
 
-#: understeer/ui/share_dialog.py:86
+#: understeer/ui/share_dialog.py:112
 msgid "The preset has no settings."
 msgstr "The preset has no settings."
 
-#: understeer/ui/share_dialog.py:88
+#: understeer/ui/share_dialog.py:114
 msgid "The preset has too many settings."
 msgstr "The preset has too many settings."
 
-#: understeer/ui/share_dialog.py:89
+#: understeer/ui/share_dialog.py:115
 msgid "The preset can't be prepared for sharing."
 msgstr "The preset can't be prepared for sharing."
 
-#: understeer/ui/share_dialog.py:96
+#: understeer/ui/share_dialog.py:122
 msgid "{field} contains something that looks like a serial number. Make sure it isn't one of yours."
 msgstr "{field} contains something that looks like a serial number. Make sure it isn't one of yours."
 
-#: understeer/ui/share_dialog.py:99
+#: understeer/ui/share_dialog.py:125
 msgid "Check {field} once more."
 msgstr "Check {field} once more."
 
-#: understeer/ui/share_dialog.py:138
+#: understeer/ui/share_dialog.py:176
 msgid "Share with Community"
 msgstr "Share with Community"
 
-#: understeer/ui/share_dialog.py:142
+#: understeer/ui/share_dialog.py:180
 msgid "Everything you enter here is meant to be public. Nothing is sent: you review it first, and the preset stays as it is."
 msgstr "Everything you enter here is meant to be public. Nothing is sent: you review it first, and the preset stays as it is."
 
-#: understeer/ui/share_dialog.py:145
+#: understeer/ui/share_dialog.py:183
 msgid "Please Correct"
 msgstr "Please Correct"
 
-#: understeer/ui/share_dialog.py:147
+#: understeer/ui/share_dialog.py:185
 msgid "Required"
 msgstr "Required"
 
-#: understeer/ui/share_dialog.py:154
-msgid "The one you made the preset on"
-msgstr "The one you made the preset on"
-
-#: understeer/ui/share_dialog.py:155
+#: understeer/ui/share_dialog.py:190
 msgid "Not chosen"
 msgstr "Not chosen"
 
-#: understeer/ui/share_dialog.py:156
+#: understeer/ui/share_dialog.py:193
+msgid "The one you made the preset on"
+msgstr "The one you made the preset on"
+
+#: understeer/ui/share_dialog.py:200
 msgid "The name shown with the preset. Nothing is taken from your system."
 msgstr "The name shown with the preset. Nothing is taken from your system."
 
-#: understeer/ui/share_dialog.py:166
+#: understeer/ui/share_dialog.py:210
 msgid "Required. What the preset is for, plain text."
 msgstr "Required. What the preset is for, plain text."
 
-#: understeer/ui/share_dialog.py:177
+#: understeer/ui/share_dialog.py:221
 msgid "Optional"
 msgstr "Optional"
 
-#: understeer/ui/share_dialog.py:178
+#: understeer/ui/share_dialog.py:222
 msgid "Tags: short words separated by commas, e.g. gt3, endurance."
 msgstr "Tags: short words separated by commas, e.g. gt3, endurance."
 
-#: understeer/ui/share_dialog.py:185
+#: understeer/ui/share_dialog.py:229
 msgid "Review"
 msgstr "Review"
 
-#: understeer/ui/share_dialog.py:263
+#: understeer/ui/share_dialog.py:307
 msgid "This is meant to be shared publicly, as shown here. Nothing has been published or sent yet."
 msgstr "This is meant to be shared publicly, as shown here. Nothing has been published or sent yet."
 
-#: understeer/ui/share_dialog.py:268
+#: understeer/ui/share_dialog.py:312
 msgid "Please Check"
 msgstr "Please Check"
 
-#: understeer/ui/share_dialog.py:276
+#: understeer/ui/share_dialog.py:320
 msgid "Public Information"
 msgstr "Public Information"
 
-#: understeer/ui/share_dialog.py:284
+#: understeer/ui/share_dialog.py:328
 msgid "None"
 msgstr "None"
 
-#: understeer/ui/share_dialog.py:287
+#: understeer/ui/share_dialog.py:331
 msgid "Proposed Catalog ID"
 msgstr "Proposed Catalog ID"
 
-#: understeer/ui/share_dialog.py:288
+#: understeer/ui/share_dialog.py:332
 msgid "Only a proposal: it is not reserved and may already be taken by another submission. The catalog is checked again when the submission is accepted, and the ID can still change."
 msgstr "Only a proposal: it is not reserved and may already be taken by another submission. The catalog is checked again when the submission is accepted, and the ID can still change."
 
-#: understeer/ui/share_dialog.py:294
+#: understeer/ui/share_dialog.py:338
 msgid "Settings"
 msgstr "Settings"
 
-#: understeer/ui/share_dialog.py:295
+#: understeer/ui/share_dialog.py:339
 msgid "{n} settings, with exactly these values."
 msgstr "{n} settings, with exactly these values."
 
-#: understeer/ui/share_dialog.py:301
+#: understeer/ui/share_dialog.py:345
 msgid "I have checked everything above and want to share it publicly"
 msgstr "I have checked everything above and want to share it publicly"
 
-#: understeer/ui/share_dialog.py:306
+#: understeer/ui/share_dialog.py:350
 msgid "Confirm"
 msgstr "Confirm"
 
-#: understeer/ui/share_dialog.py:333
-msgid "Not Published Yet"
-msgstr "Not Published Yet"
+#: understeer/ui/share_dialog.py:387
+msgid "Continue on GitHub"
+msgstr "Continue on GitHub"
 
-#: understeer/ui/share_dialog.py:334
-msgid "Preset prepared. GitHub submission will be available in a future update."
-msgstr "Preset prepared. GitHub submission will be available in a future update."
+#: understeer/ui/share_dialog.py:389
+msgid "GitHub opens in your default browser with the form filled in. You may need to sign in there."
+msgstr "GitHub opens in your default browser with the form filled in. You may need to sign in there."
 
-#: understeer/ui/share_dialog.py:336
+#: understeer/ui/share_dialog.py:391
+msgid "Nothing has been submitted yet. Check every field there, tick the boxes yourself and submit the issue: only then is it public."
+msgstr "Nothing has been submitted yet. Check every field there, tick the boxes yourself and submit the issue: only then is it public."
+
+#: understeer/ui/share_dialog.py:394
+msgid "A maintainer reviews it and may accept it, ask for changes or decline it."
+msgstr "A maintainer reviews it and may accept it, ask for changes or decline it."
+
+#: understeer/ui/share_dialog.py:396
+msgid "The link holds the public details, so it can show up in your browser history."
+msgstr "The link holds the public details, so it can show up in your browser history."
+
+#: understeer/ui/share_dialog.py:415
+msgid "Could not copy: {error}"
+msgstr "Could not copy: {error}"
+
+#: understeer/ui/share_dialog.py:418
+msgid "Copied: {field}"
+msgstr "Copied: {field}"
+
+#: understeer/ui/share_dialog.py:422
+msgid "Too Long for the Link"
+msgstr "Too Long for the Link"
+
+#: understeer/ui/share_dialog.py:423
+msgid "These don't fit into the link and stay empty on GitHub. Copy each one and paste it into its field there:"
+msgstr "These don't fit into the link and stay empty on GitHub. Copy each one and paste it into its field there:"
+
+#: understeer/ui/share_dialog.py:430
+msgid "Copy"
+msgstr "Copy"
+
+#: understeer/ui/share_dialog.py:432
+msgid "Copy {field}"
+msgstr "Copy {field}"
+
+#: understeer/ui/share_dialog.py:443
+msgid "Continue on GitHub…"
+msgstr "Continue on GitHub…"
+
+#: understeer/ui/share_dialog.py:446
+msgid "Copy Link"
+msgstr "Copy Link"
+
+#: understeer/ui/share_dialog.py:449
+msgid "Link"
+msgstr "Link"
+
+#: understeer/ui/share_dialog.py:450
 msgid "Close"
 msgstr "Close"
+
+#: understeer/ui/share_dialog.py:462
+msgid "The browser could not be opened: {error}"
+msgstr "The browser could not be opened: {error}"
+
+#: understeer/ui/share_dialog.py:469
+msgid "GitHub opened. Review the information and submit the issue there."
+msgstr "GitHub opened. Review the information and submit the issue there."
 
 #: understeer/ui/trash_dialog.py:25
 msgid "Trash"

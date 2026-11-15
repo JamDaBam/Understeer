@@ -196,8 +196,28 @@ details; only the preset name is filled in, the wheelbase has to be
 chosen. A review page, built from the prepared entry, shows every public
 detail, the proposed id with the note that it is not reserved, and every
 setting with its exact value; the user confirms with a tick and
-**Confirm**. The prepared entry is then kept in memory only. Nothing is
-sent, copied, written or applied yet.
+**Confirm**. The prepared entry is then kept in memory only.
+
+The last page explains what happens on GitHub and has **Continue on
+GitHub…**: it opens the submission form of the preset repository
+(`.github/ISSUE_TEMPLATE/community-preset.yml`) in the default browser,
+through `Gtk.UriLauncher`, with the fields filled in from URL parameters
+named after the form's field ids (`understeer/github_form.py`). The
+field *Preset JSON* gets only the preset
+(`{"understeer_preset": 1, "name": …, "values": {…}}`); the metadata and
+the proposed id go into their own fields, and no acknowledgement box is
+ticked. The user checks everything there and submits the issue
+themselves; Understeer never submits anything, and says GitHub opened
+only when the browser reports it.
+
+GitHub doesn't state a length limit for such addresses. Filling in the
+form was tested with an address of about 830 characters; Understeer keeps
+addresses to 2000 characters (`MAX_URL_CHARS`). When a submission doesn't
+fit, whole fields are left out of the address, the preset JSON first,
+then the description, and the page lists them with a **Copy** button
+each, to paste into their fields on GitHub. Nothing is cut short, and
+nothing is copied unless the user clicks. The address holds only the
+public details, but can show up in the browser history.
 
 ## Validation
 
