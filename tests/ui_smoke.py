@@ -3727,8 +3727,10 @@ def main():
         return False
 
     application.connect("activate", lambda a: GLib.timeout_add(1500, run_steps))
-    GLib.timeout_add_seconds(90, lambda: (failures.append("timeout"),
-                                          application.quit()))
+    # The steps alone take STEP_MS each (about 71 s), more on a busy machine;
+    # a hang still ends here, well before test_ui.py's 150 s for the process
+    GLib.timeout_add_seconds(120, lambda: (failures.append("timeout"),
+                                           application.quit()))
     session_log.setup()
     config.migrate_config()
     application.run([])
