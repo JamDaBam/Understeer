@@ -134,13 +134,19 @@ never reads them.
 ## Submission rules
 
 The parser keeps all metadata optional, so a catalog stays readable when a
-field is missing. New public submissions are held to more: the validation
-in the preset repository (a later task) will additionally require
+field is missing. New public submissions are held to more: the check in
+the preset repository (`scripts/validate_catalog.py` in
+[Understeer-Presets](https://github.com/JamDaBam/Understeer-Presets))
+additionally requires
 
 - `meta.author`, `meta.game` and `meta.wheelbase`, not empty,
 - no entry in `skipped`, no `unsupported` settings and no `adjusted`
   values: a submission must hold exactly what Understeer keeps,
-- a new `id` that no other entry uses.
+- a new `id` that no other entry uses,
+- no web address in the preset name or in `meta.author`, `meta.game`,
+  `meta.wheelbase` and `meta.description`: nothing like `scheme://` or
+  `www.`. Understeer would show it as plain text only, but a public
+  catalog shouldn't send its readers anywhere.
 
 ## Validation
 
