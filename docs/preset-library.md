@@ -189,6 +189,16 @@ submission.entry_json(result.entry)   # the entry as text, deterministic
 Every problem is reported at once, with the field and a code, for the UI
 to show in its own words.
 
+In Understeer, a saved preset's menu has **Share → Share with
+Community…** (`understeer/ui/share_dialog.py`). It takes the values of
+the saved preset file, never the current tuning, and asks for the public
+details; only the preset name is filled in, the wheelbase has to be
+chosen. A review page, built from the prepared entry, shows every public
+detail, the proposed id with the note that it is not reserved, and every
+setting with its exact value; the user confirms with a tick and
+**Confirm**. The prepared entry is then kept in memory only. Nothing is
+sent, copied, written or applied yet.
+
 ## Validation
 
 The whole catalog is rejected when it is

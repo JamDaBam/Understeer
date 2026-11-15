@@ -274,6 +274,12 @@ class PresetsMixin:
             item.set_action_and_target_value(action,
                                              GLib.Variant.new_string(str(path)))
             menu.append_item(item)
+        community = Gio.Menu()
+        item = Gio.MenuItem.new(_("Share with Community…"), None)
+        item.set_action_and_target_value("win.share-community",
+                                         GLib.Variant.new_string(str(path)))
+        community.append_item(item)
+        menu.append_section(None, community)
         return menu
 
     def _sim_defaults_tile(self):

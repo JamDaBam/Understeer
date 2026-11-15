@@ -34,6 +34,7 @@ from .dates import date_text
 from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
 from .library_dialog import LibraryMixin
+from .share_dialog import ShareMixin
 
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheelbase
@@ -52,7 +53,8 @@ log = logging.getLogger("understeer.window")
 
 
 class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
-                  LibraryMixin, UpdateCheckMixin, Adw.ApplicationWindow):
+                  LibraryMixin, ShareMixin, UpdateCheckMixin,
+                  Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")
@@ -664,7 +666,8 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 ("delete-preset", lambda p: self._delete_presets([p])),
                 ("export-preset", self._export_preset),
                 ("copy-preset-text", lambda p: self._copy_preset(p, False)),
-                ("copy-preset-json", lambda p: self._copy_preset(p, True))):
+                ("copy-preset-json", lambda p: self._copy_preset(p, True)),
+                ("share-community", self._show_share_community)):
             add(name, lambda a, p, cb=cb: cb(p.get_string()),
                 GLib.VariantType.new("s"))
         add("import-preset", lambda *a: self._ask_import_preset())

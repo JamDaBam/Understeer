@@ -3277,6 +3277,207 @@ def steps(win):
         check(imp_files() == imp["files"], f"other presets untouched: {imp_files()}")
     yield "library import done", import_done
 
+    # --- Share with Community: prepared in memory only ------------------------
+    share = {}
+
+    def share_dialog():
+        return win.get_visible_dialog()
+
+    def share_nav():
+        return next(w for w in walk(share_dialog()) if isinstance(w, Adw.NavigationView))
+
+    def share_page():
+        return share_nav().get_visible_page()
+
+    def share_rows():
+        page = share_page()
+        rows = {w.get_title(): w for w in walk(page)
+                if isinstance(w, (Adw.EntryRow, Adw.ComboRow))}
+        text = next(w for w in walk(page) if isinstance(w, Gtk.TextView))
+        return rows, text
+
+    def share_button(label):
+        return next(w for w in walk(share_page()) if isinstance(w, Gtk.Button)
+                    and w.get_label() == label)
+
+    def share_errors():
+        return [w.get_title() for w in walk(share_page())
+                if isinstance(w, Adw.ActionRow) and w.has_css_class("error")
+                and w.get_visible()]
+
+    def share_fill(game="Test Game", base="CSL DD", author="Tester",
+                   description="Calm for long stints.", tags=""):
+        rows, text = share_rows()
+        rows["Game"].set_text(game)
+        rows["Author"].set_text(author)
+        rows["Tags"].set_text(tags)
+        names = [rows["Wheelbase"].get_model().get_string(i)
+                 for i in range(rows["Wheelbase"].get_model().get_n_items())]
+        rows["Wheelbase"].set_selected(names.index(base) if base else 0)
+        text.get_buffer().set_text(description)
+
+    def share_open(path):
+        win.activate_action("win.share-community", GLib.Variant.new_string(str(path)))
+
+    def share_opens():
+        path = config.preset_path("Share Me")
+        config.write_preset(path, "Share Me", {"FOR": 100, "FF": 75, "SEN": 540},
+                            folder="Shared")
+        win._presets_changed()
+        win.rows["FF"].set(66, silent=True)             # unsaved live value
+        share.update(path=path, bytes=path.read_bytes(), sysfs=sysfs_state(),
+                     cache=community.CACHE_FILE.read_bytes(), downloads=[],
+                     browser=[], live=win._collect_values())
+        share["download"], community.download = community.download, \
+            lambda *a, **k: share["downloads"].append(a) or library_offline()
+        share["launch"] = Gtk.UriLauncher.launch
+        Gtk.UriLauncher.launch = lambda *a, **k: share["browser"].append(a)
+        share["write"], window_module.write_values = window_module.write_values, \
+            lambda writes: share.setdefault("hw", []).append(writes) or []
+        win.prepared_submission = None
+        menu = win._share_menu(path)
+        labels = [menu.get_item_attribute_value(0, "label").get_string()] + [
+            menu.get_item_link(i, "section").get_item_attribute_value(
+                0, "label").get_string()
+            for i in range(menu.get_n_items())
+            if menu.get_item_link(i, "section") is not None]
+        check("Share with Community…" in labels, f"in the Share menu: {labels}")
+        share_open(path)
+    yield "share opens", share_opens
+
+    def share_required():
+        d = share_dialog()
+        check(isinstance(d, Adw.Dialog) and d.get_title() == "Share with Community",
+              f"share dialog shown: {d and d.get_title()}")
+        rows, text = share_rows()
+        check(rows["Preset Name"].get_text() == "Share Me", "name from the saved preset")
+        check(rows["Author"].get_text() == "" and rows["Game"].get_text() == "",
+              "author and game not filled in from the system")
+        check(rows["Wheelbase"].get_selected() == 0,
+              "the wheelbase isn't assumed from the connected one")
+        check(text.get_buffer().get_char_count() == 0, "no description yet")
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Game is required.", "Author is required.",
+                     "Description is required.",
+                     "Choose the wheelbase the preset was made on."):
+            check(part in errors, f"required told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "stays on the form")
+        combo = share_rows()[0]["Wheelbase"]
+        names = [combo.get_model().get_string(i)
+                 for i in range(combo.get_model().get_n_items())]
+        combo.set_selected(names.index("CSL Elite Wheel Base (PS4)"))
+    yield "share required fields", share_required
+
+    def share_invalid():
+        shown = [w for w in walk(share_rows()[0]["Wheelbase"])
+                 if isinstance(w, Gtk.Label)
+                 and w.get_label() == "CSL Elite Wheel Base (PS4)"]
+        check(shown and not shown[0].get_layout().is_ellipsized(),
+              "the longest wheelbase name is shown whole")
+        share_fill(game="G" * 81, author="me@example.org",
+                   description="From /home/someone/presets", tags="two words")
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Game is too long: at most 80 characters.",
+                     "Author must not contain an e-mail address.",
+                     "Description must not contain a file path.",
+                     "Tags are short words of a–z, 0–9 and -, separated by commas."):
+            check(part in errors, f"problem told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "still on the form")
+    yield "share invalid input", share_invalid
+
+    def share_preview():
+        share_fill(description="<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                   tags="GT3, endurance")
+        share_button("Review").emit("clicked")
+        page = share_page()
+        check(page.get_tag() == "preview", f"preview shown: {page.get_tag()}")
+        labels = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)]
+        rows = {w.get_title(): w.get_subtitle() for w in walk(page)
+                if isinstance(w, Adw.ActionRow)}
+        text = "\n".join(labels + [f"{k}|{v}" for k, v in rows.items()])
+        for part in ("meant to be shared publicly", "Nothing has been published",
+                     "looks like a serial number",
+                     "Description|<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                     "Wheelbase|CSL DD", "Author|Tester", "Tags|gt3, endurance",
+                     "Preset Name|Share Me", "test-game-share-me|Only a proposal",
+                     "The catalog is checked again", "3 settings",
+                     "Steering Angle|", "Force Feedback Strength|", "Force Effects|"):
+            check(part in text, f"preview shows {part!r}")
+        values = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)
+                  and w.has_css_class("numeric")]
+        check(values == ["540°", "75 %", "100 %"], f"saved values, not live ones: {values}")
+        check(not share_button("Confirm").get_sensitive(), "confirm needs the tick")
+    yield "share preview", share_preview
+
+    def share_confirm():
+        tick = next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton))
+        tick.set_active(True)
+        share_button("Confirm").emit("clicked")
+        page = share_page()
+        check(page.get_tag() == "done", f"done page: {page.get_tag()}")
+        status = next(w for w in walk(page) if isinstance(w, Adw.StatusPage))
+        check(status.get_description() == "Preset prepared. GitHub submission "
+              "will be available in a future update.", "honest completion text")
+        check(status.get_title() == "Not Published Yet", "not called published")
+        result = win.prepared_submission
+        check(result is not None and result.entry["preset"]["values"]
+              == {"SEN": 540, "FF": 75, "FOR": 100}, "kept in memory")
+        check(share["path"].read_bytes() == share["bytes"], "saved preset unchanged")
+        share_button("Close").emit("clicked")
+    yield "share confirmed", share_confirm
+
+    def share_cancel():
+        check(win.get_visible_dialog() is None, "closed")
+        win.prepared_submission = None
+        share_open(share["path"])
+        rows, text = share_rows()
+        check(rows["Author"].get_text() == "" and not share_errors(),
+              "opened again: a fresh form")
+        share_fill()
+        share_button("Review").emit("clicked")
+        check(share_page().get_tag() == "preview", "preview again")
+        share_dialog().close()                          # cancelled
+    yield "share cancelled", share_cancel
+
+    def share_adjusted():
+        check(win.get_visible_dialog() is None, "cancelled: closed")
+        check(win.prepared_submission is None, "cancelled: nothing prepared")
+        odd = config.preset_path("Share Odd")
+        config.write_preset(odd, "Share Odd", {"SEN": 905, "FF": 75, "ZZZ": 1})
+        share["odd"] = (odd, odd.read_bytes())
+        share_open(odd)
+        share_fill()
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Steering Angle is 905°, which the wheelbase keeps as 900°. "
+                     "Save the preset with 900° first.",
+                     "The preset has a setting this version can't share: ZZZ."):
+            check(part in errors, f"values told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "not shareable as it is")
+        share_dialog().close()
+    yield "share adjusted values", share_adjusted
+
+    def share_nothing_else():
+        odd, odd_bytes = share["odd"]
+        check(odd.read_bytes() == odd_bytes, "odd preset unchanged")
+        check(share["path"].read_bytes() == share["bytes"], "preset unchanged")
+        check(sysfs_state() == share["sysfs"], "the wheelbase was not written")
+        check(not share.get("hw"), f"nothing applied: {share.get('hw')}")
+        check(win._collect_values() == share["live"], "tuning values unchanged")
+        check(community.CACHE_FILE.read_bytes() == share["cache"], "cache unchanged")
+        check(share["downloads"] == [] and share["browser"] == [],
+              f"no network, no browser: {share['downloads']} {share['browser']}")
+        check(win.prepared_submission is None, "nothing prepared")
+        community.download = share.pop("download")
+        Gtk.UriLauncher.launch = share.pop("launch")
+        window_module.write_values = share.pop("write")
+        win.rows["FF"].set(share["live"]["FF"], silent=True)
+        odd.unlink()
+        win._presets_changed()
+    yield "share leaves everything as it was", share_nothing_else
+
     def layout_and_language():
         win._set_layout("compact")
         win._set_language("de")
@@ -3285,6 +3486,22 @@ def steps(win):
         check(win.active_preset == config.preset_path("Renamed"),
               "active preset kept over relocalize"),
         win._select_page("tuning"))
+
+    def share_german():
+        menu = win._share_menu(share["path"])
+        section = menu.get_item_link(menu.get_n_items() - 1, "section")
+        label = section.get_item_attribute_value(0, "label").get_string()
+        check(label == "In Community teilen…", f"menu in German: {label!r}")
+        share_open(share["path"])
+        d = share_dialog()
+        check(d.get_title() == "In Community teilen", f"German title: {d.get_title()}")
+        share_button("Überprüfen").emit("clicked")
+        errors = share_errors()
+        check("Spiel wird benötigt." in errors, f"German problems: {errors}")
+        d.close()
+        share["path"].unlink()
+        win._presets_changed()
+    yield "share in German", share_german
 
     def delete():
         path = config.preset_path("Renamed")
