@@ -72,6 +72,7 @@ def library_offline(*_args, **_kwargs):
 community.download = library_offline         # the community catalog neither
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
+from understeer import i18n  # noqa: E402
 from understeer.ui import cover_search, files, theme  # noqa: E402
 from understeer.ui.setting_tile import SettingTile  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
@@ -2884,6 +2885,184 @@ def steps(win):
         community.download = library_offline
         check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
     yield "library joined result", library_joined_result
+
+    # --- Community Library: search, filters, compatibility ---------------
+    def lib_entry(entry_id, name, **meta):
+        return {"id": entry_id, "meta": meta,
+                "preset": {"understeer_preset": 1, "name": name, "values": {"FF": 50}}}
+    filter_catalog = [
+        lib_entry("gt3", "GT3 Endurance", game="Assetto Corsa Competizione",
+                  wheelbase="CSL DD", tags=["gt3"]),
+        lib_entry("rally", "Gravel Rally", game="BeamNG.drive",
+                  wheelbase="Podium Wheel Base DD1", tags=["rally"]),
+        lib_entry("drift", "Drift Fun", game="BeamNG.drive",
+                  wheelbase="GT DD Pro", tags=["Rally"]),
+        lib_entry("bare", "Bare"),
+    ]
+    search_ui = {"downloads": 0}
+
+    def counting(raw):
+        def download(*_a, **_k):
+            search_ui["downloads"] += 1
+            return raw
+        return download
+
+    def ui():
+        d = library["dialog"]
+        find = lambda kind: [w for w in walk(d) if isinstance(w, kind)]
+        rows = {r.entry.id: r for r in find(Adw.ActionRow) if hasattr(r, "entry")}
+        return {"search": find(Gtk.SearchEntry)[0], "pickers": find(Gtk.DropDown),
+                "mine": next(w for w in find(Gtk.CheckButton)
+                             if w.get_label() == "Only my wheelbase"),
+                "reset": next(w for w in find(Gtk.Button)
+                              if w.get_label() == "Reset Filters"),
+                "rows": rows,
+                "shown": sorted(i for i, r in rows.items() if r.get_child_visible()),
+                "nav": find(Adw.NavigationView)[0]}
+
+    def filters_open():
+        raw = json.dumps({"understeer_library": 1, "presets": filter_catalog}).encode()
+        community.CACHE_FILE.write_bytes(raw)           # fresh: no download
+        community.download = counting(raw)
+        library["sysfs"] = sysfs_state()
+        library["dialog"] = win._show_library()
+    yield "library filters open", filters_open
+
+    def filters_compatibility():
+        u = ui()
+        levels = {i: r.level_label.get_label() for i, r in u["rows"].items()}
+        check(levels == {"gt3": "Same wheelbase model",
+                         "rally": "Different wheelbase model",
+                         "drift": "Compatibility unknown",
+                         "bare": "Compatibility unknown"},
+              f"compatibility per row: {levels}")
+        check(u["mine"].get_sensitive() and not u["mine"].get_active(),
+              "only my wheelbase: offered, not on by default")
+        check(u["shown"] == ["bare", "drift", "gt3", "rally"], "all shown at first")
+        check(not u["reset"].get_sensitive(), "nothing to reset yet")
+        u["search"].set_text("RALLY")
+    yield "library compatibility", filters_compatibility
+
+    def filters_search():
+        u = ui()
+        check(u["shown"] == ["drift", "rally"], f"search finds name and tag: {u['shown']}")
+        check(u["reset"].get_sensitive(), "reset offered")
+        game = u["pickers"][0]
+        model = game.get_model()
+        names = [model.get_string(i) for i in range(model.get_n_items())]
+        check(names == ["All games", "Assetto Corsa Competizione", "BeamNG.drive"],
+              f"games from the catalog: {names}")
+        game.set_selected(2)
+        u["mine"].set_active(True)
+    yield "library search", filters_search
+
+    def filters_no_match():
+        u = ui()
+        check(u["shown"] == [], f"rally + BeamNG + only mine: none: {u['shown']}")
+        placeholder = next(w for w in walk(library["dialog"])
+                           if isinstance(w, Adw.StatusPage)
+                           and w.get_title() == "No Matching Presets")
+        check(placeholder.get_mapped(), "no-results message shown")
+        check(not u["pickers"][1].get_sensitive(),
+              "wheelbase choice off while only mine is on")
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Shown: 0 of 4" in w.get_label()]
+        check(status, "count of shown presets")
+        u["reset"].emit("clicked")
+    yield "library no match", filters_no_match
+
+    def filters_reset():
+        u = ui()
+        check(u["shown"] == ["bare", "drift", "gt3", "rally"]
+              and u["search"].get_text() == "" and not u["mine"].get_active()
+              and all(p.get_selected() == 0 for p in u["pickers"]), "all reset")
+        u["pickers"][2].set_selected(
+            [u["pickers"][2].get_model().get_string(i)
+             for i in range(u["pickers"][2].get_model().get_n_items())].index("gt3"))
+        u["rows"]["gt3"].emit("activated")
+    yield "library filter, details", filters_reset
+
+    def filters_details():
+        u = ui()
+        page = u["nav"].get_visible_page()
+        texts = [w.get_title() for w in walk(page) if isinstance(w, Adw.ActionRow)]
+        texts += [w.get_subtitle() or "" for w in walk(page)
+                  if isinstance(w, Adw.ActionRow)]
+        check("Same wheelbase model" in texts
+              and any("USB product ID" in t and "variants" in t for t in texts),
+              f"details: model match, not a guarantee: {texts}")
+        u["nav"].pop()
+    yield "library details compatibility", filters_details
+
+    def filters_kept():
+        u = ui()
+        check(u["shown"] == ["gt3"] and u["pickers"][2].get_selected() > 0,
+              "tag filter kept after the details")
+        u["pickers"][2].set_selected(0)
+        u["mine"].set_active(True)
+        check(ui()["shown"] == ["gt3"], f"only mine on: {ui()['shown']}")
+        # The wheelbase goes away
+        library["glob"] = device.SYSFS_GLOB
+        device.SYSFS_GLOB = str(scratch / "sysfs" / "none" / "*")
+        win._detect_device()
+    yield "library wheelbase gone", filters_kept
+
+    def filters_disconnected():
+        u = ui()
+        levels = {r.level_label.get_label() for r in u["rows"].values()}
+        check(levels == {"Compatibility unknown"}, f"no wheelbase: unknown: {levels}")
+        check(not u["mine"].get_sensitive()
+              and "No wheelbase" in (u["mine"].get_tooltip_text() or ""),
+              "only mine off, with the reason")
+        check(u["mine"].get_active() and u["shown"] == ["bare", "drift", "gt3", "rally"]
+              and u["reset"].get_sensitive(),
+              f"only mine stays ticked, greyed, not filtering: {u['shown']}")
+        device.SYSFS_GLOB = library["glob"]
+        win._detect_device()
+    yield "library wheelbase disconnected", filters_disconnected
+
+    def filters_reconnected():
+        u = ui()
+        check(u["rows"]["gt3"].level_label.get_label() == "Same wheelbase model"
+              and u["mine"].get_sensitive(), "wheelbase back: compared again")
+        check(u["mine"].get_active() and u["shown"] == ["gt3"],
+              f"only mine ticked and filtering again: {u['shown']}")
+        u["mine"].set_active(False)
+        # A refresh that drops the chosen game: falls back to all games
+        u["pickers"][2].set_selected(0)
+        u["pickers"][0].set_selected(2)                 # BeamNG.drive
+        check(ui()["shown"] == ["drift", "rally"], f"game filter: {ui()['shown']}")
+        raw = json.dumps({"understeer_library": 1,
+                          "presets": filter_catalog[:1]}).encode()
+        community.download = counting(raw)
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+    yield "library refresh with a filter", filters_reconnected
+
+    def filters_after_refresh():
+        u = ui()
+        check(u["pickers"][0].get_selected() == 0 and u["shown"] == ["gt3"],
+              f"chosen game gone: all games: {u['shown']}")
+        check(search_ui["downloads"] == 1, f"only Refresh downloaded: {search_ui}")
+        close_dialogs(win)
+        i18n.set_language("de")
+        library["dialog"] = win._show_library()
+    yield "library after refresh", filters_after_refresh
+
+    def filters_german():
+        d = library["dialog"]
+        flow = next(w for w in walk(d) if isinstance(w, Gtk.FlowBox))
+        labels = [w.get_label() for w in walk(flow) if isinstance(w, (Gtk.CheckButton, Gtk.Button))
+                  and w.get_label()]
+        check("Nur meine Wheelbase" in labels and "Filter zurücksetzen" in labels,
+              f"German labels: {labels}")
+        minimum = flow.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+        check(minimum <= 400, f"filters wrap to fit a narrow window: {minimum} px")
+        close_dialogs(win)
+        i18n.set_language("en")
+        community.download = library_offline
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+    yield "library filters in German", filters_german
 
     def layout_and_language():
         win._set_layout("compact")

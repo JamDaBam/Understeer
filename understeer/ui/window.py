@@ -940,6 +940,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self._refresh_device_state()
+        self._library_device_changed()
         self._start_inputs()
         if self.device_path:
             GLib.timeout_add(INPUT_SETTLE_MS, lambda: self._start_inputs() and False)

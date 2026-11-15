@@ -1099,115 +1099,199 @@ msgstr "Der Katalog wurde an eine andere Adresse umgeleitet. Dieser Umleitung fo
 msgid "The downloaded catalog is not valid."
 msgstr "Der heruntergeladene Katalog ist ungültig."
 
-#: understeer/ui/library_dialog.py:80
-msgid "Community Library"
-msgstr "Community-Bibliothek"
+#: understeer/ui/library_dialog.py:62
+msgid "Same wheelbase model"
+msgstr "Gleiches Wheelbase-Modell"
 
-#: understeer/ui/library_dialog.py:86
-msgid "Load the catalog again. Newly shared presets can take a few minutes to show up."
-msgstr "Katalog neu laden. Neu geteilte Presets können erst nach ein paar Minuten erscheinen."
+#: understeer/ui/library_dialog.py:63
+msgid "Different wheelbase model"
+msgstr "Anderes Wheelbase-Modell"
 
-#: understeer/ui/library_dialog.py:95
-msgid "Loading the Catalog…"
-msgstr "Katalog wird geladen …"
+#: understeer/ui/library_dialog.py:64
+msgid "Compatibility unknown"
+msgstr "Kompatibilität unbekannt"
 
-#: understeer/ui/library_dialog.py:100
-msgid "Community Library Unavailable"
-msgstr "Community-Bibliothek nicht verfügbar"
+#: understeer/ui/library_dialog.py:67
+msgid "No wheelbase is connected, so the model can't be compared."
+msgstr "Keine Wheelbase angeschlossen, daher kann das Modell nicht verglichen werden."
 
-#: understeer/ui/library_dialog.py:101
-msgid "Try Again"
-msgstr "Erneut versuchen"
+#: understeer/ui/library_dialog.py:69
+msgid "Understeer doesn't know the model of the connected wheelbase."
+msgstr "Understeer kennt das Modell der angeschlossenen Wheelbase nicht."
 
-#: understeer/ui/library_dialog.py:105
-msgid "No Community Presets Yet"
-msgstr "Noch keine Community-Presets"
+#: understeer/ui/library_dialog.py:71
+msgid "The preset doesn't say which wheelbase it was made on."
+msgstr "Das Preset gibt nicht an, auf welcher Wheelbase es erstellt wurde."
 
-#: understeer/ui/library_dialog.py:114
-msgid "Read only: looking at a preset changes neither the wheelbase nor your presets."
-msgstr "Nur ansehen: Ein Preset anzusehen ändert weder die Wheelbase noch deine Presets."
+#: understeer/ui/library_dialog.py:73
+msgid "The preset names a wheelbase Understeer can't match to exactly one model: {name}."
+msgstr "Das Preset nennt eine Wheelbase, die Understeer keinem Modell eindeutig zuordnen kann: {name}."
 
-#: understeer/ui/library_dialog.py:131
-msgid "Catalog of {date}."
-msgstr "Katalog vom {date}."
+#: understeer/ui/library_dialog.py:85
+msgid "Made on the same model as your wheelbase ({model}), recognised by its USB product ID. That doesn't mean every value suits it: variants of a model can differ, and the values aren't checked against your wheelbase."
+msgstr "Erstellt auf demselben Modell wie deine Wheelbase ({model}), erkannt an ihrer USB-Produkt-ID. Das heißt nicht, dass jeder Wert zu ihr passt: Varianten eines Modells können sich unterscheiden, und die Werte werden nicht mit deiner Wheelbase abgeglichen."
 
-#: understeer/ui/library_dialog.py:134
-msgid "Offline: showing the catalog of {date}."
-msgstr "Offline: Angezeigt wird der Katalog vom {date}."
+#: understeer/ui/library_dialog.py:91
+msgid "Made on a {preset}; your wheelbase is a {model}."
+msgstr "Erstellt auf einer {preset}; deine Wheelbase ist eine {model}."
 
-#: understeer/ui/library_dialog.py:137
-msgid "Showing the catalog of {date}."
-msgstr "Angezeigt wird der Katalog vom {date}."
-
-#: understeer/ui/library_dialog.py:142
-msgid "Presets left out because they can't be read: {n}"
-msgstr "Ausgelassene Presets, weil sie nicht lesbar sind: {n}"
-
-#: understeer/ui/library_dialog.py:210
-msgid "by {author}"
-msgstr "von {author}"
-
-#: understeer/ui/library_dialog.py:215
-msgid "Example"
-msgstr "Beispiel"
-
-#: understeer/ui/library_dialog.py:228
-msgid "Example: this entry only shows what the library looks like. It is not a recommended setup."
-msgstr "Beispiel: Dieser Eintrag zeigt nur, wie die Bibliothek aussieht. Er ist keine empfohlene Einstellung."
-
-#: understeer/ui/library_dialog.py:241
+#: understeer/ui/library_dialog.py:93
 msgid "Belt"
 msgstr "Riemenantrieb"
 
-#: understeer/ui/library_dialog.py:241
+#: understeer/ui/library_dialog.py:93
 msgid "Direct drive"
 msgstr "Direct Drive"
 
-#: understeer/ui/library_dialog.py:243
+#: understeer/ui/library_dialog.py:95
+msgid "Drive of the preset's wheelbase: {preset}. Yours: {yours}."
+msgstr "Antrieb der Wheelbase des Presets: {preset}. Deine: {yours}."
+
+#: understeer/ui/library_dialog.py:98
+msgid "Another model can need other values."
+msgstr "Ein anderes Modell kann andere Werte brauchen."
+
+#: understeer/ui/library_dialog.py:130
+msgid "Community Library"
+msgstr "Community-Bibliothek"
+
+#: understeer/ui/library_dialog.py:139
+msgid "Load the catalog again. Newly shared presets can take a few minutes to show up."
+msgstr "Katalog neu laden. Neu geteilte Presets können erst nach ein paar Minuten erscheinen."
+
+#: understeer/ui/library_dialog.py:148
+msgid "Loading the Catalog…"
+msgstr "Katalog wird geladen …"
+
+#: understeer/ui/library_dialog.py:153
+msgid "Community Library Unavailable"
+msgstr "Community-Bibliothek nicht verfügbar"
+
+#: understeer/ui/library_dialog.py:154
+msgid "Try Again"
+msgstr "Erneut versuchen"
+
+#: understeer/ui/library_dialog.py:158
+msgid "No Community Presets Yet"
+msgstr "Noch keine Community-Presets"
+
+#: understeer/ui/library_dialog.py:160
+msgid "Search presets"
+msgstr "Presets suchen"
+
+#: understeer/ui/library_dialog.py:165
+msgid "All games"
+msgstr "Alle Spiele"
+
+#: understeer/ui/library_dialog.py:166
+msgid "All wheelbases"
+msgstr "Alle Wheelbases"
+
+#: understeer/ui/library_dialog.py:167
+msgid "All tags"
+msgstr "Alle Schlagwörter"
+
+#: understeer/ui/library_dialog.py:173
+msgid "Only my wheelbase"
+msgstr "Nur meine Wheelbase"
+
+#: understeer/ui/library_dialog.py:174
+msgid "Reset Filters"
+msgstr "Filter zurücksetzen"
+
+#: understeer/ui/library_dialog.py:193
+msgid "No Matching Presets"
+msgstr "Keine passenden Presets"
+
+#: understeer/ui/library_dialog.py:201
+msgid "Read only: looking at a preset changes neither the wheelbase nor your presets."
+msgstr "Nur ansehen: Ein Preset anzusehen ändert weder die Wheelbase noch deine Presets."
+
+#: understeer/ui/library_dialog.py:219
+msgid "Catalog of {date}."
+msgstr "Katalog vom {date}."
+
+#: understeer/ui/library_dialog.py:222
+msgid "Offline: showing the catalog of {date}."
+msgstr "Offline: Angezeigt wird der Katalog vom {date}."
+
+#: understeer/ui/library_dialog.py:225
+msgid "Showing the catalog of {date}."
+msgstr "Angezeigt wird der Katalog vom {date}."
+
+#: understeer/ui/library_dialog.py:230
+msgid "Presets left out because they can't be read: {n}"
+msgstr "Ausgelassene Presets, weil sie nicht lesbar sind: {n}"
+
+#: understeer/ui/library_dialog.py:233
+msgid "Shown: {n} of {total}"
+msgstr "Angezeigt: {n} von {total}"
+
+#: understeer/ui/library_dialog.py:305
+msgid "Only presets made on the same model as your {model}"
+msgstr "Nur Presets, die auf demselben Modell wie deine {model} erstellt wurden"
+
+#: understeer/ui/library_dialog.py:394
+msgid "by {author}"
+msgstr "von {author}"
+
+#: understeer/ui/library_dialog.py:404
+msgid "Example"
+msgstr "Beispiel"
+
+#: understeer/ui/library_dialog.py:419
+msgid "Example: this entry only shows what the library looks like. It is not a recommended setup."
+msgstr "Beispiel: Dieser Eintrag zeigt nur, wie die Bibliothek aussieht. Er ist keine empfohlene Einstellung."
+
+#: understeer/ui/library_dialog.py:434
 msgid "Author"
 msgstr "Autor"
 
-#: understeer/ui/library_dialog.py:243
+#: understeer/ui/library_dialog.py:434
 msgid "Game"
 msgstr "Spiel"
 
-#: understeer/ui/library_dialog.py:244
+#: understeer/ui/library_dialog.py:435
 msgid "Wheelbase"
 msgstr "Wheelbase"
 
-#: understeer/ui/library_dialog.py:245
+#: understeer/ui/library_dialog.py:436
 msgid "Drive"
 msgstr "Antrieb"
 
-#: understeer/ui/library_dialog.py:246
+#: understeer/ui/library_dialog.py:437
 msgid "Torque"
 msgstr "Drehmoment"
 
-#: understeer/ui/library_dialog.py:246
+#: understeer/ui/library_dialog.py:437
 msgid "{n} Nm"
 msgstr "{n} Nm"
 
-#: understeer/ui/library_dialog.py:248
+#: understeer/ui/library_dialog.py:439
 msgid "Tags"
 msgstr "Schlagwörter"
 
-#: understeer/ui/library_dialog.py:250
+#: understeer/ui/library_dialog.py:441
 msgid "About This Preset"
 msgstr "Über dieses Preset"
 
-#: understeer/ui/library_dialog.py:255
+#: understeer/ui/library_dialog.py:446
+msgid "Compatibility"
+msgstr "Kompatibilität"
+
+#: understeer/ui/library_dialog.py:450
 msgid "Notes"
 msgstr "Hinweise"
 
-#: understeer/ui/library_dialog.py:258
+#: understeer/ui/library_dialog.py:453
 msgid "Settings this version doesn't know"
 msgstr "Einstellungen, die diese Version nicht kennt"
 
-#: understeer/ui/library_dialog.py:260
+#: understeer/ui/library_dialog.py:455
 msgid "they are left out."
 msgstr "sie werden ausgelassen."
 
-#: understeer/ui/library_dialog.py:265
+#: understeer/ui/library_dialog.py:460
 msgid "Shared as {shared}, kept as {kept} in the steps of this setting."
 msgstr "Geteilt als {shared}, übernommen als {kept} in den Schritten dieser Einstellung."
 
@@ -2539,214 +2623,214 @@ msgstr "Einrichten der Berechtigungen fehlgeschlagen"
 msgid "Added to “{group}”. Log out and back in to tune live."
 msgstr "Zu „{group}“ hinzugefügt. Melde dich ab und wieder an, um live zu tunen."
 
-#: understeer/ui/window.py:971
+#: understeer/ui/window.py:972
 msgid "Wheelbase connected"
 msgstr "Wheelbase verbunden"
 
-#: understeer/ui/window.py:973
+#: understeer/ui/window.py:974
 msgid "Wheelbase disconnected"
 msgstr "Wheelbase getrennt"
 
-#: understeer/ui/window.py:985
+#: understeer/ui/window.py:986
 msgid "No device"
 msgstr "Kein Gerät"
 
-#: understeer/ui/window.py:1008
+#: understeer/ui/window.py:1009
 msgid "In sync with device"
 msgstr "Mit Gerät synchron"
 
-#: understeer/ui/window.py:1021
+#: understeer/ui/window.py:1022
 msgid "Writing…"
 msgstr "Schreibe …"
 
-#: understeer/ui/window.py:1056
+#: understeer/ui/window.py:1057
 msgid "Write failed: {names}"
 msgstr "Schreiben fehlgeschlagen: {names}"
 
-#: understeer/ui/window.py:1058
+#: understeer/ui/window.py:1059
 msgid "Could not write: {names}"
 msgstr "Konnte nicht schreiben: {names}"
 
-#: understeer/ui/window.py:1076
+#: understeer/ui/window.py:1077
 msgid "Pending changes: {n}"
 msgstr "Ausstehende Änderungen: {n}"
 
-#: understeer/ui/window.py:1078
+#: understeer/ui/window.py:1079
 msgid "Changes not applied yet"
 msgstr "Änderungen noch nicht übernommen"
 
-#: understeer/ui/window.py:1125
+#: understeer/ui/window.py:1126
 msgid "Changes undone"
 msgstr "Änderungen rückgängig gemacht"
 
-#: understeer/ui/window.py:1229
+#: understeer/ui/window.py:1230
 msgid "Slot changed on the wheelbase: {name}. Unapplied changes were discarded."
 msgstr "Slot an der Wheelbase gewechselt: {name}. Nicht übernommene Änderungen wurden verworfen."
 
-#: understeer/ui/window.py:1231
+#: understeer/ui/window.py:1232
 msgid "Slot changed on the wheelbase: {name}"
 msgstr "Slot an der Wheelbase gewechselt: {name}"
 
-#: understeer/ui/window.py:1253
+#: understeer/ui/window.py:1254
 msgid "Unknown wheel (ID {id})"
 msgstr "Unbekanntes Lenkrad (ID {id})"
 
-#: understeer/ui/window.py:1287
+#: understeer/ui/window.py:1288
 msgid "Steering wheel changed: {name}"
 msgstr "Lenkrad gewechselt: {name}"
 
-#: understeer/ui/window.py:1299
+#: understeer/ui/window.py:1300
 msgid "Firmware {version}"
 msgstr "Firmware {version}"
 
-#: understeer/ui/window.py:1300
+#: understeer/ui/window.py:1301
 msgid "Firmware: {state}"
 msgstr "Firmware: {state}"
 
-#: understeer/ui/window.py:1303
+#: understeer/ui/window.py:1304
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: understeer/ui/window.py:1322
+#: understeer/ui/window.py:1323
 msgid "Not supported by the installed driver"
 msgstr "Vom installierten Treiber nicht unterstützt"
 
-#: understeer/ui/window.py:1323
+#: understeer/ui/window.py:1324
 msgid "Not available"
 msgstr "Nicht verfügbar"
 
-#: understeer/ui/window.py:1324
+#: understeer/ui/window.py:1325
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: understeer/ui/window.py:1325
+#: understeer/ui/window.py:1326
 msgid "not connected"
 msgstr "nicht verbunden"
 
-#: understeer/ui/window.py:1326
+#: understeer/ui/window.py:1327
 msgid "no steering wheel reported"
 msgstr "kein Lenkrad gemeldet"
 
-#: understeer/ui/window.py:1327
+#: understeer/ui/window.py:1328
 msgid "could not be read"
 msgstr "nicht lesbar"
 
-#: understeer/ui/window.py:1328
+#: understeer/ui/window.py:1329
 msgid "hid-fanatecff not loaded"
 msgstr "hid-fanatecff nicht geladen"
 
-#: understeer/ui/window.py:1329
+#: understeer/ui/window.py:1330
 msgid "not known to Understeer"
 msgstr "Understeer unbekannt"
 
-#: understeer/ui/window.py:1330
+#: understeer/ui/window.py:1331
 msgid "not reported by the driver"
 msgstr "vom Treiber nicht gemeldet"
 
-#: understeer/ui/window.py:1331
+#: understeer/ui/window.py:1332
 msgid "invalid value"
 msgstr "ungültiger Wert"
 
-#: understeer/ui/window.py:1343
+#: understeer/ui/window.py:1344
 msgid "Device information copied"
 msgstr "Geräteinformationen kopiert"
 
-#: understeer/ui/window.py:1398
+#: understeer/ui/window.py:1399
 msgid "Could not switch the tuning menu"
 msgstr "Das Tuning-Menü konnte nicht umgeschaltet werden"
 
-#: understeer/ui/window.py:1430
+#: understeer/ui/window.py:1431
 msgid "Tuning menu changed on the wheelbase: {mode}"
 msgstr "Tuning-Menü an der Wheelbase umgeschaltet: {mode}"
 
-#: understeer/ui/window.py:1431
+#: understeer/ui/window.py:1432
 msgid "Advanced"
 msgstr "Erweitert"
 
-#: understeer/ui/window.py:1451
+#: understeer/ui/window.py:1452
 msgid "Enter up to three characters."
 msgstr "Gib bis zu drei Zeichen ein."
 
-#: understeer/ui/window.py:1453
+#: understeer/ui/window.py:1454
 msgid "“{character}” can't be shown on the display."
 msgstr "„{character}“ kann auf der Anzeige nicht dargestellt werden."
 
-#: understeer/ui/window.py:1456
+#: understeer/ui/window.py:1457
 msgid "A point or comma has to follow a character."
 msgstr "Ein Punkt oder Komma muss auf ein Zeichen folgen."
 
-#: understeer/ui/window.py:1457
+#: understeer/ui/window.py:1458
 msgid "Only three characters fit on the display."
 msgstr "Auf die Anzeige passen nur drei Zeichen."
 
-#: understeer/ui/window.py:1469
+#: understeer/ui/window.py:1470
 msgid "No display output: no wheelbase connected, or the driver offers none."
 msgstr "Keine Anzeige verfügbar: keine Wheelbase angeschlossen, oder der Treiber bietet keine an."
 
-#: understeer/ui/window.py:1472
+#: understeer/ui/window.py:1473
 msgid "No permission to write to the display. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
 msgstr "Keine Berechtigung, auf die Anzeige zu schreiben. Die udev-Regel von hid-fanatecff erlaubt es den Mitgliedern ihrer Gruppe, meist „games“."
 
-#: understeer/ui/window.py:1478
+#: understeer/ui/window.py:1479
 msgid "Digits, letters except K, M, V, W and X, - _ [ ] and a space for a dark position. A point or comma after a character lights its point."
 msgstr "Ziffern, Buchstaben außer K, M, V, W und X, - _ [ ] und ein Leerzeichen für eine dunkle Stelle. Ein Punkt oder Komma nach einem Zeichen schaltet dessen Punkt ein."
 
-#: understeer/ui/window.py:1500
+#: understeer/ui/window.py:1501
 msgid "Sent to the display: {text}"
 msgstr "An die Anzeige gesendet: {text}"
 
-#: understeer/ui/window.py:1508
+#: understeer/ui/window.py:1509
 msgid "Display cleared"
 msgstr "Anzeige geleert"
 
-#: understeer/ui/window.py:1538
+#: understeer/ui/window.py:1539
 msgid "The display is not available any more. Is the wheelbase still connected?"
 msgstr "Die Anzeige ist nicht mehr verfügbar. Ist die Wheelbase noch angeschlossen?"
 
-#: understeer/ui/window.py:1540
+#: understeer/ui/window.py:1541
 msgid "No permission to write to the display"
 msgstr "Keine Berechtigung, auf die Anzeige zu schreiben"
 
-#: understeer/ui/window.py:1541
+#: understeer/ui/window.py:1542
 msgid "Could not write to the display"
 msgstr "Konnte nicht auf die Anzeige schreiben"
 
-#: understeer/ui/window.py:1583
+#: understeer/ui/window.py:1584
 msgid "The driver can only switch to slots 1–{n}. Choose this slot on the wheelbase."
 msgstr "Der Treiber kann nur auf die Slots 1–{n} umschalten. Wähle diesen Slot an der Wheelbase."
 
-#: understeer/ui/window.py:1585
+#: understeer/ui/window.py:1586
 msgid "Could not switch slot"
 msgstr "Slot konnte nicht gewechselt werden"
 
-#: understeer/ui/window.py:1599
+#: understeer/ui/window.py:1600
 msgid "Could not send rumble"
 msgstr "Vibration konnte nicht gesendet werden"
 
-#: understeer/ui/window.py:1612
+#: understeer/ui/window.py:1613
 msgid "Permissions set up — changes now apply live"
 msgstr "Berechtigungen eingerichtet – Änderungen werden jetzt live übernommen"
 
-#: understeer/ui/window.py:1660
+#: understeer/ui/window.py:1661
 msgid "Reset All Tuning Slots?"
 msgstr "Alle Tuning-Slots zurücksetzen?"
 
-#: understeer/ui/window.py:1661
+#: understeer/ui/window.py:1662
 msgid "All tuning slots stored on the wheelbase will be cleared. This cannot be undone."
 msgstr "Alle auf der Wheelbase gespeicherten Tuning-Slots werden gelöscht. Das kann nicht rückgängig gemacht werden."
 
-#: understeer/ui/window.py:1664
+#: understeer/ui/window.py:1665
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: understeer/ui/window.py:1674
+#: understeer/ui/window.py:1675
 msgid "Not Available"
 msgstr "Nicht verfügbar"
 
-#: understeer/ui/window.py:1675
+#: understeer/ui/window.py:1676
 msgid "This wheelbase does not support resetting."
 msgstr "Diese Wheelbase unterstützt kein Zurücksetzen."
 
-#: understeer/ui/window.py:1677
+#: understeer/ui/window.py:1678
 msgid "Could not reset the tuning slots"
 msgstr "Die Tuning-Slots konnten nicht zurückgesetzt werden"
