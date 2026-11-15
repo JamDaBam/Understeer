@@ -151,6 +151,44 @@ additionally requires
   `www.`. Understeer would show it as plain text only, but a public
   catalog shouldn't send its readers anywhere.
 
+## Preparing a submission
+
+`understeer/submission.py` turns one local preset into a catalog entry
+for a submission, as it would stand in `catalog.json`. It is pure: the
+preset and the metadata come in as arguments, nothing is read from files,
+the system, the network or a device, and the local preset isn't changed.
+
+```python
+result = submission.prepare(name, values, author=..., game=...,
+                            wheelbase=..., description=..., tags=[...],
+                            taken_ids=ids_in_catalog)
+submission.entry_json(result.entry)   # the entry as text, deterministic
+```
+
+- **Required:** preset name, `game`, `wheelbase`, `author` and
+  `description`. `author` is only what the user typed or confirmed;
+  nothing fills it in. `wheelbase` must be one of the names Understeer
+  shows; an optional `drive` must match it.
+- **Nothing is cut or changed quietly.** A text over its limit (as in
+  the tables above), with a line break where one line is expected, or
+  with control or invisible characters is refused. Only spacing is
+  tidied. Settings Understeer doesn't know and values it would keep
+  differently (e.g. 905° → 900°) are refused, never left out or fitted.
+- **Privacy:** web addresses (the submission rule above), e-mail
+  addresses and file paths are refused in every text. Words the caller
+  passes as private (e.g. the login name) and serial-like codes give a
+  warning, for the user to look at again. Only the given fields and the
+  settings end up in the entry: no folder, no path, no device data.
+- **Id:** proposed as `<game>-<preset name>` in `a-z`, `0-9` and `-`;
+  when taken, `-<author>`, then `-2`, `-3`, … is added. Without latin
+  letters it is `preset-` and the fingerprint. Maintainers may still
+  choose another id when they add the entry; once published, it stays.
+- **Read back:** finally the entry is read with `parse_catalog`; unless
+  the parser takes it exactly as prepared, it is refused.
+
+Every problem is reported at once, with the field and a code, for the UI
+to show in its own words.
+
 ## Validation
 
 The whole catalog is rejected when it is
