@@ -2919,11 +2919,19 @@ def steps(win):
         library["dialog"] = win._show_library()     # and opened again
     yield "library closed while loading", library_closed_while_loading
 
+    def library_worker_started():
+        """Wait until the download thread has reached the (gated) download:
+        the dialog shows it at once, the thread counts it when it runs.
+        A second download still shows as calls == 2 in the checks."""
+        settle(lambda: library["calls"] >= 1)
+
     def library_reopened_waits():
         stack, _rows = library_widgets()
         check(stack.get_visible_child_name() == "loading",
-              "opened again while loading: waits for it")
-        check(library["calls"] == 1, f"one download only: {library['calls']}")
+              f"opened again while loading: waits for it: {library_state()}")
+        library_worker_started()
+        check(library["calls"] == 1,
+              f"one download only: {library['calls']}; {library_state()}")
         library["gate"].set()
     yield "library reopened waits", library_reopened_waits
 
@@ -2950,8 +2958,10 @@ def steps(win):
                     and w.get_mapped() and w.get_spinning()]
         refresh = next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
                        and w.get_icon_name() == "view-refresh-symbolic")
+        library_worker_started()
         check(spinning and not refresh.get_sensitive() and library["calls"] == 1,
-              "opened again with a fresh cache: shows the download under way")
+              "opened again with a fresh cache: shows the download under way: "
+              f"spinning {bool(spinning)}, {library_state()}")
         library["gate"].set()
     yield "library reopened joins", library_reopened_joins
 
