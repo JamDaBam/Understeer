@@ -1,0 +1,41 @@
+{
+  "understeer_library": 1,
+  "presets": [
+    {
+      "id": "acc-gt3-endurance",
+      "meta": {
+        "author": "Example Driver",
+        "game": "Assetto Corsa Competizione",
+        "wheelbase": "CSL DD",
+        "drive": "direct_drive",
+        "torque_nm": 8,
+        "description": "Calm GT3 feel for long stints.\nLower the strength on weaker wheelbases.",
+        "tags": ["gt3", "endurance"]
+      },
+      "preset": {
+        "understeer_preset": 1,
+        "name": "GT3 Endurance",
+        "values": {"SEN": 540, "FF": 75, "FOR": 100, "SPR": 0, "DPR": 0,
+                   "FFS": 1, "FEI": 40, "INT": 2, "NDP": 10, "SHO": 60}
+      }
+    },
+    {
+      "id": "dirt-rally-2-gravel",
+      "meta": {
+        "author": "Example Driver",
+        "game": "DiRT Rally 2.0",
+        "wheelbase": "CSL Elite Wheel Base",
+        "drive": "belt",
+        "torque_nm": 6,
+        "description": "Quick steering for gravel stages.",
+        "tags": ["rally", "gravel"]
+      },
+      "preset": {
+        "understeer_preset": 1,
+        "name": "Rally Gravel",
+        "values": {"SEN": 540, "FF": 90, "FOR": 110, "SPR": 0, "DPR": 0,
+                   "FFS": 1, "FEI": 60, "INT": 0, "SHO": 100, "DRI": -2}
+      }
+    }
+  ]
+}
