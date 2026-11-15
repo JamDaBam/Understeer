@@ -13,6 +13,7 @@ import pathlib
 import struct
 import xml.etree.ElementTree as ET
 import sys
+import threading
 import traceback
 import zlib
 
@@ -60,6 +61,15 @@ def offline(*_args, **_kwargs):
 
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
+
+from understeer import community  # noqa: E402
+
+
+def library_offline(*_args, **_kwargs):
+    raise community.Error("offline", "offline (test)")
+
+
+community.download = library_offline         # the community catalog neither
 
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
 from understeer.ui import cover_search, files, theme  # noqa: E402
@@ -2670,6 +2680,210 @@ def steps(win):
               "a grid doesn't take the free height of a short page")
         win.presets_box.remove(shared_grids["box"])
     yield "shared columns measured", shared_columns_measured
+
+    # --- Community Library: browsing only ------------------------------
+    library = {"calls": 0, "gate": threading.Event()}
+    preset_entry = {"understeer_preset": 1, "name": "x", "values": {"FF": 50}}
+    library_raw = json.dumps({"understeer_library": 1, "presets": [
+        {"id": "demo", "meta": {"author": "A", "game": "G", "wheelbase": "CSL DD",
+                                "description": "First line\nSecond line",
+                                "tags": ["demo"]},
+         "preset": dict(preset_entry, name="Demo Preset")},
+        {"id": "markup", "meta": {"description": "<a href='x'>link</a> &amp;"},
+         "preset": dict(preset_entry, name="<b>Not bold</b> & co")},
+        {"id": "bare", "preset": dict(preset_entry, name="Bare",
+                                      values={"SEN": 905, "NEW": 1})},
+        {"id": "broken", "preset": dict(preset_entry, values={"FF": 500})},
+    ]}).encode()
+
+    def sysfs_state():
+        return {f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+
+    def library_widgets():
+        dialog = library["dialog"]
+        stack = next(w for w in walk(dialog) if isinstance(w, Gtk.Stack)
+                     and w.get_child_by_name("loading") is not None)
+        rows = [w for w in walk(dialog) if isinstance(w, Adw.ActionRow)
+                and w.get_activatable()]
+        return stack, rows
+
+    def library_opens():
+        library["sysfs"] = sysfs_state()
+        library["presets"] = sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
+
+        def slow_download():
+            library["calls"] += 1
+            library["gate"].wait(10)
+            return library_raw
+        community.download = slow_download
+        check(not community.CACHE_FILE.exists(), "no cached catalog yet")
+        library["dialog"] = win._show_library()
+    yield "library opens", library_opens
+
+    def library_loading():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "loading",
+              f"loading shown first: {stack.get_visible_child_name()}")
+        library["gate"].set()
+    yield "library loading", library_loading
+
+    def library_listed():
+        stack, rows = library_widgets()
+        check(stack.get_visible_child_name() == "list",
+              f"list shown: {stack.get_visible_child_name()}")
+        titles = sorted(r.get_title() for r in rows)
+        check(titles == ["<b>Not bold</b> & co", "Bare", "Demo Preset"],
+              f"the usable presets listed: {titles}")
+        check(not any(r.get_use_markup() for r in rows), "names are plain text")
+        by = {r.get_title(): r for r in rows}
+        demo_labels = [w.get_label() for w in walk(by["Demo Preset"])
+                       if isinstance(w, Gtk.Label)]
+        check("Example" in demo_labels, f"demo preset marked: {demo_labels}")
+        check(by["Demo Preset"].get_subtitle() == "G · CSL DD · by A\nFirst line",
+              f"game, wheelbase, author, description: {by['Demo Preset'].get_subtitle()!r}")
+        check(by["Bare"].get_subtitle() in ("", None), "no metadata, no subtitle")
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Catalog of" in w.get_label()]
+        check(status and "left out" in status[0] and ": 1" in status[0],
+              f"skipped preset counted: {status}")
+        check(community.CACHE_FILE.read_bytes() == library_raw, "catalog cached")
+        by["Bare"].emit("activated")
+    yield "library listed", library_listed
+
+    def library_details():
+        nav = next(w for w in walk(library["dialog"])
+                   if isinstance(w, Adw.NavigationView))
+        page = nav.get_visible_page()
+        check(page.get_title() == "Bare", f"details shown: {page.get_title()}")
+        texts = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)]
+        texts += [w.get_subtitle() or "" for w in walk(page)
+                  if isinstance(w, Adw.ActionRow)]
+        check(any("Shared as 905°, kept as 900°" in t for t in texts),
+              f"adjusted value shown: {texts}")
+        check(any(t.startswith("NEW") for t in texts), "unknown setting shown")
+        check(find_row(page, "Steering Angle") is not None, "values shown")
+        buttons = [w.get_label() for w in walk(library["dialog"])
+                   if isinstance(w, Gtk.Button) and w.get_label()]
+        check(not {"Apply", "Import", "Add Preset", "Save"} & set(buttons),
+              f"no action on a community preset: {buttons}")
+        nav.pop()
+        markup = next(r for r in library_widgets()[1]
+                      if r.get_title().startswith("<b>"))
+        markup.emit("activated")
+    yield "library details", library_details
+
+    def library_markup_details():
+        nav = next(w for w in walk(library["dialog"])
+                   if isinstance(w, Adw.NavigationView))
+        page = nav.get_visible_page()
+        labels = [w for w in walk(page) if isinstance(w, Gtk.Label)
+                  and "link" in w.get_label()]
+        check(labels and labels[0].get_label() == "<a href='x'>link</a> &amp;"
+              and not labels[0].get_use_markup(), "description is plain text")
+        check(page.get_title() == "<b>Not bold</b> & co", "title as it is")
+        close_dialogs(win)
+        library["dialog"] = win._show_library()
+    yield "library details as text", library_markup_details
+
+    def library_cached():
+        stack, rows = library_widgets()
+        check(library["calls"] == 1 and stack.get_visible_child_name() == "list"
+              and len(rows) == 3, "opened again: from the cache, no download")
+        community.download = library_offline
+        refresh = next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                       and w.get_icon_name() == "view-refresh-symbolic")
+        refresh.emit("clicked")
+    yield "library cached", library_cached
+
+    def library_offline_shown():
+        stack, rows = library_widgets()
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Offline" in w.get_label()]
+        check(status and stack.get_visible_child_name() == "list" and len(rows) == 3,
+              f"offline: the cached presets stay: {status}")
+        check(community.CACHE_FILE.read_bytes() == library_raw, "cache kept")
+        community.download = lambda *a, **k: json.dumps(
+            {"understeer_library": 1, "presets": []}).encode()
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+    yield "library offline", library_offline_shown
+
+    def library_empty():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "empty", "empty catalog shown")
+        close_dialogs(win)
+        community.CACHE_FILE.write_bytes(b"broken")
+        community.download = library_offline
+        library["dialog"] = win._show_library()
+    yield "library empty", library_empty
+
+    def library_unavailable():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "failed",
+              "no usable cache, offline: unavailable")
+        close_dialogs(win)
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+        check(sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
+              == library["presets"], "the user's presets are as they were")
+    yield "library unavailable", library_unavailable
+
+    def library_closed_while_loading():
+        library["calls"], library["gate"] = 0, threading.Event()
+
+        def slow_download():
+            library["calls"] += 1
+            library["gate"].wait(10)
+            return library_raw
+        community.download = slow_download
+        library["dialog"] = win._show_library()     # broken cache: loads
+        close_dialogs(win)                          # closed while loading
+        library["dialog"] = win._show_library()     # and opened again
+    yield "library closed while loading", library_closed_while_loading
+
+    def library_reopened_waits():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "loading",
+              "opened again while loading: waits for it")
+        check(library["calls"] == 1, f"one download only: {library['calls']}")
+        library["gate"].set()
+    yield "library reopened waits", library_reopened_waits
+
+    def library_result_after_close():
+        stack, rows = library_widgets()
+        check(stack.get_visible_child_name() == "list" and len(rows) == 3,
+              "the result reaches the dialog opened again")
+        check(library["calls"] == 1, "still one download")
+        check(community.CACHE_FILE.read_bytes() == library_raw,
+              "the broken cache was replaced by the checked catalog")
+        close_dialogs(win)
+        # Again with a fresh cache: opened again while Refresh still loads
+        library["calls"], library["gate"] = 0, threading.Event()
+        library["dialog"] = win._show_library()
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+        close_dialogs(win)
+        library["dialog"] = win._show_library()
+    yield "library refresh, closed, opened again", library_result_after_close
+
+    def library_reopened_joins():
+        spinning = [w for w in walk(library["dialog"]) if isinstance(w, Gtk.Spinner)
+                    and w.get_mapped() and w.get_spinning()]
+        refresh = next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                       and w.get_icon_name() == "view-refresh-symbolic")
+        check(spinning and not refresh.get_sensitive() and library["calls"] == 1,
+              "opened again with a fresh cache: shows the download under way")
+        library["gate"].set()
+    yield "library reopened joins", library_reopened_joins
+
+    def library_joined_result():
+        spinning = [w for w in walk(library["dialog"]) if isinstance(w, Gtk.Spinner)
+                    and w.get_mapped() and w.get_spinning()]
+        check(not spinning and library["calls"] == 1,
+              "the result reached the dialog opened again")
+        close_dialogs(win)
+        community.download = library_offline
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+    yield "library joined result", library_joined_result
 
     def layout_and_language():
         win._set_layout("compact")

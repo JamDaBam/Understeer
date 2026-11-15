@@ -49,6 +49,10 @@ class Error(ValueError):
     """The whole catalog can't be used."""
 
 
+class NewerFormat(Error):
+    """The catalog is of a format only a newer Understeer reads."""
+
+
 class _Skip(ValueError):
     """One entry can't be used; the message is its reason, for the log."""
 
@@ -226,7 +230,7 @@ def parse_catalog(raw):
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise Error("this is no Understeer preset catalog")
     if version > LIBRARY_FORMAT:
-        raise Error("the catalog needs a newer version of Understeer")
+        raise NewerFormat("the catalog needs a newer version of Understeer")
     presets = data.get("presets")
     if not isinstance(presets, list):
         raise Error("the catalog has no list of presets")

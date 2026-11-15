@@ -33,6 +33,7 @@ from .setting_tile import SettingTile
 from .dates import date_text
 from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
+from .library_dialog import LibraryMixin
 
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheelbase
@@ -51,7 +52,7 @@ log = logging.getLogger("understeer.window")
 
 
 class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
-                  UpdateCheckMixin, Adw.ApplicationWindow):
+                  LibraryMixin, UpdateCheckMixin, Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")
@@ -668,6 +669,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 GLib.VariantType.new("s"))
         add("import-preset", lambda *a: self._ask_import_preset())
         add("paste-preset", lambda *a: self._ask_paste_preset())
+        add("show-library", lambda *a: self._show_library())
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())
