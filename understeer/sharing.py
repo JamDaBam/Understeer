@@ -113,6 +113,12 @@ def _json_objects(text):
             budget -= SCAN_WINDOW
             start = _OBJECT_START.search(text, pos + 1)
             continue
+        except ValueError:
+            # A number with more digits than Python turns into an int (4300
+            # by default): no preset, like any other unreadable object
+            budget -= len(window)
+            start = _OBJECT_START.search(text, pos + 1)
+            continue
         budget -= end + 64
         yield data
         start = _OBJECT_START.search(text, pos + end)

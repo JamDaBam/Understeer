@@ -1005,6 +1005,40 @@ def steps(win):
         close_dialogs(win)
     yield "import shared text", import_shared_text
 
+    def import_too_long_number():
+        """A number too long for Python's int: told as no preset, in the
+        import and in the paste dialog; nothing written or applied."""
+        big = ('{"understeer_preset": 1, "name": "Big Number", '
+               '"values": {"FF": 1' + "0" * 5000 + '}}')
+        files = sorted(f.name for f in config.CONFIG_DIR.iterdir())
+        device_files = {f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+        tuning = win._collect_values()
+        source = scratch / "big-number.json"            # as Import File… reads it
+        source.write_text(big, encoding="utf-8")
+        win._import_text(source.read_text(encoding="utf-8"), source.stem)
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "No Preset Found",
+              f"file import: no preset ({d and d.get_heading()})")
+        close_dialogs(win)
+        win._ask_paste_preset(big)                      # the paste dialog
+        d = win.get_visible_dialog()
+        labels = [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)
+                  and w.has_css_class("error")]
+        check(any(l.startswith("No preset found.") for l in labels),
+              f"paste: no preset told: {labels}")
+        add = next(w for w in walk(d) if isinstance(w, Gtk.Button)
+                   and "suggested-action" in w.get_css_classes())
+        check(not [w for w in walk(d) if isinstance(w, Adw.ExpanderRow)]
+              and not add.get_sensitive(), "paste: nothing to add")
+        close_dialogs(win)
+        check(sorted(f.name for f in config.CONFIG_DIR.iterdir()) == files,
+              "no preset or part file written")
+        check({f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+              == device_files, "the wheelbase was not written")
+        check(win._collect_values() == tuning, "tuning values unchanged")
+        source.unlink()
+    yield "import a too long number", import_too_long_number
+
     def share_as_json():
         win.activate_action("win.copy-preset-json",
                             GLib.Variant.new_string(str(copy)))
