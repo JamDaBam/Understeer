@@ -14,6 +14,7 @@ import struct
 import xml.etree.ElementTree as ET
 import sys
 import threading
+import time
 import traceback
 import zlib
 
@@ -106,6 +107,25 @@ sys.excepthook = lambda kind, value, tb: failures.append(
 def check(cond, what):
     if not cond:
         failures.append(f"check failed: {what}")
+
+
+SETTLE_S = 10       # longest wait for the result of a thread, e.g. a download
+
+
+def settle(ready, timeout=SETTLE_S):
+    """Run the main loop until ready() is true, at most timeout seconds,
+    and return ready(). Work in a thread hands its result to the main loop
+    when it is done, which on a busy machine can be later than the next
+    step: a check of that result waits for it here instead of relying on
+    STEP_MS. The step running this isn't run again meanwhile."""
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + timeout
+    while not ready():
+        if time.monotonic() >= deadline:
+            return False
+        if not context.iteration(False):
+            time.sleep(0.005)               # nothing to do yet
+    return True
 
 
 class ChosenFile:
@@ -2743,6 +2763,24 @@ def steps(win):
                 and w.get_activatable()]
         return stack, rows
 
+    def library_refresh():
+        return next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                    and w.get_icon_name() == "view-refresh-symbolic")
+
+    def library_state():
+        """What the library dialog shows, for a failed check."""
+        stack, rows = library_widgets()
+        return (f"page {stack.get_visible_child_name()!r}, loading "
+                f"{not library_refresh().get_sensitive()}, rows {len(rows)}, "
+                f"downloads {library.get('calls')}")
+
+    def library_settled():
+        """Wait until the library's load (a thread) has ended: Refresh is
+        usable again once its result reached the dialog."""
+        if not settle(lambda: library_refresh().get_sensitive()):
+            check(False, f"the library still loads after {SETTLE_S} s: "
+                         f"{library_state()}")
+
     def library_opens():
         library["sysfs"] = sysfs_state()
         library["presets"] = sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
@@ -2764,6 +2802,7 @@ def steps(win):
     yield "library loading", library_loading
 
     def library_listed():
+        library_settled()
         stack, rows = library_widgets()
         check(stack.get_visible_child_name() == "list",
               f"list shown: {stack.get_visible_child_name()}")
@@ -2832,11 +2871,12 @@ def steps(win):
     yield "library cached", library_cached
 
     def library_offline_shown():
+        library_settled()
         stack, rows = library_widgets()
         status = [w.get_label() for w in walk(library["dialog"])
                   if isinstance(w, Gtk.Label) and "Offline" in w.get_label()]
         check(status and stack.get_visible_child_name() == "list" and len(rows) == 3,
-              f"offline: the cached presets stay: {status}")
+              f"offline: the cached presets stay: {status}; {library_state()}")
         check(community.CACHE_FILE.read_bytes() == library_raw, "cache kept")
         community.download = lambda *a, **k: json.dumps(
             {"understeer_library": 1, "presets": []}).encode()
@@ -2845,8 +2885,10 @@ def steps(win):
     yield "library offline", library_offline_shown
 
     def library_empty():
+        library_settled()
         stack, _rows = library_widgets()
-        check(stack.get_visible_child_name() == "empty", "empty catalog shown")
+        check(stack.get_visible_child_name() == "empty",
+              f"empty catalog shown: {library_state()}")
         close_dialogs(win)
         community.CACHE_FILE.write_bytes(b"broken")
         community.download = library_offline
@@ -2854,9 +2896,10 @@ def steps(win):
     yield "library empty", library_empty
 
     def library_unavailable():
+        library_settled()
         stack, _rows = library_widgets()
         check(stack.get_visible_child_name() == "failed",
-              "no usable cache, offline: unavailable")
+              f"no usable cache, offline: unavailable: {library_state()}")
         close_dialogs(win)
         check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
         check(sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
@@ -2885,9 +2928,10 @@ def steps(win):
     yield "library reopened waits", library_reopened_waits
 
     def library_result_after_close():
+        library_settled()
         stack, rows = library_widgets()
         check(stack.get_visible_child_name() == "list" and len(rows) == 3,
-              "the result reaches the dialog opened again")
+              f"the result reaches the dialog opened again: {library_state()}")
         check(library["calls"] == 1, "still one download")
         check(community.CACHE_FILE.read_bytes() == library_raw,
               "the broken cache was replaced by the checked catalog")
@@ -2912,6 +2956,7 @@ def steps(win):
     yield "library reopened joins", library_reopened_joins
 
     def library_joined_result():
+        library_settled()
         spinning = [w for w in walk(library["dialog"]) if isinstance(w, Gtk.Spinner)
                     and w.get_mapped() and w.get_spinning()]
         check(not spinning and library["calls"] == 1,
@@ -3075,6 +3120,7 @@ def steps(win):
     yield "library refresh with a filter", filters_reconnected
 
     def filters_after_refresh():
+        library_settled()
         u = ui()
         check(u["pickers"][0].get_selected() == 0 and u["shown"] == ["gt3"],
               f"chosen game gone: all games: {u['shown']}")
