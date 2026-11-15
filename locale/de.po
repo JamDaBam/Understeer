@@ -1037,7 +1037,7 @@ msgstr "Keine LEDs gefunden: keine Wheelbase angeschlossen, oder der Treiber bie
 
 #: understeer/ui/led_diagnostics.py:104
 msgid "No permission to switch the LEDs. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
-msgstr "Keine Berechtigung, die LEDs zu schalten. Die udev-Regel von hid-fanatecff erlaubt es den Mitgliedern ihrer Gruppe, meist „games“."
+msgstr "Keine Berechtigung, die LEDs zu schalten. Die udev-Regel von hid-fanatecff erlaubt das den Mitgliedern einer bestimmten Gruppe, meist „games“."
 
 #: understeer/ui/led_diagnostics.py:140
 msgid "Light All in This Colour"
@@ -1129,7 +1129,7 @@ msgstr "Das Preset nennt eine Wheelbase, die Understeer keinem Modell eindeutig 
 
 #: understeer/ui/library_dialog.py:85
 msgid "Made on the same model as your wheelbase ({model}), recognised by its USB product ID. That doesn't mean every value suits it: variants of a model can differ, and the values aren't checked against your wheelbase."
-msgstr "Erstellt auf demselben Modell wie deine Wheelbase ({model}), erkannt an ihrer USB-Produkt-ID. Das heißt nicht, dass jeder Wert zu ihr passt: Varianten eines Modells können sich unterscheiden, und die Werte werden nicht mit deiner Wheelbase abgeglichen."
+msgstr "Erstellt auf demselben Modell wie deine Wheelbase ({model}), erkannt an der USB-Produkt-ID. Das heißt nicht, dass jeder Wert passt: Varianten eines Modells können sich unterscheiden, und die Werte werden nicht mit deiner Wheelbase abgeglichen."
 
 #: understeer/ui/library_dialog.py:91
 msgid "Made on a {preset}; your wheelbase is a {model}."
@@ -1945,7 +1945,7 @@ msgstr "Es ist keine Wheelbase verbunden, deshalb wurde das Preset „{name}“ 
 
 #: understeer/ui/presets.py:553
 msgid "Settings that differ from the current ones: {n}. Their current value is shown below them."
-msgstr "Einstellungen, die vom aktuellen Stand abweichen: {n}. Ihr aktueller Wert steht jeweils darunter."
+msgstr "Einstellungen, die vom aktuellen Stand abweichen: {n}. Der aktuelle Wert steht jeweils darunter."
 
 #: understeer/ui/presets.py:556
 msgid "The current settings match this preset."
@@ -2769,7 +2769,7 @@ msgstr "Keine Anzeige verfügbar: keine Wheelbase angeschlossen, oder der Treibe
 
 #: understeer/ui/window.py:1473
 msgid "No permission to write to the display. The udev rule of hid-fanatecff allows it for the members of its group, usually “games”."
-msgstr "Keine Berechtigung, auf die Anzeige zu schreiben. Die udev-Regel von hid-fanatecff erlaubt es den Mitgliedern ihrer Gruppe, meist „games“."
+msgstr "Keine Berechtigung, auf die Anzeige zu schreiben. Die udev-Regel von hid-fanatecff erlaubt das den Mitgliedern einer bestimmten Gruppe, meist „games“."
 
 #: understeer/ui/window.py:1479
 msgid "Digits, letters except K, M, V, W and X, - _ [ ] and a space for a dark position. A point or comma after a character lights its point."
