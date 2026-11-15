@@ -257,6 +257,44 @@ def test_broken_catalogs_are_rejected(raw):
         library.parse_catalog(raw)
 
 
+LONG = b"1" + b"0" * 5000          # more digits than Python makes an int of
+
+
+@pytest.mark.parametrize("raw", [
+    b'{"understeer_library": 1, "presets": [{"id": "a", "preset": '
+    b'{"understeer_preset": 1, "name": "x", "values": {"FF": ' + LONG + b'}}}]}',
+    b'{"understeer_library": ' + LONG + b', "presets": []}',
+    b'{"understeer_library": 1, "presets": [], "x": -' + LONG + b'}',
+    b'{"understeer_library": 1, "presets": [' + LONG + b']}',
+], ids=["in-values", "format-version", "unknown-key", "in-presets"])
+def test_too_long_numbers_reject_the_catalog(raw):
+    """A number Python won't turn into an int is a broken catalog, not an
+    error escaping the parser."""
+    with pytest.raises(library.Error, match="number that is too long"):
+        library.parse_catalog(raw)
+
+
+@pytest.mark.parametrize("raw, reason", [
+    (b'{"understeer_library": 1, "presets": [{"id": NaN}]}', "NaN is not a number"),
+    (b'{"understeer_library": 1, "presets": [], "presets": []}', "duplicate key"),
+])
+def test_reasons_of_the_checks_are_kept(raw, reason):
+    """The checks while reading raise library.Error, a ValueError too: they
+    keep their own reason, not the one for too long numbers."""
+    with pytest.raises(library.Error, match=reason):
+        library.parse_catalog(raw)
+
+
+def test_long_but_convertible_numbers_are_just_invalid_values():
+    """Up to the limit a long number is read, and then out of range."""
+    raw = (b'{"understeer_library": 1, "presets": [{"id": "a", "preset": '
+           b'{"understeer_preset": 1, "name": "x", "values": {"FF": 1'
+           + b"0" * 4000 + b'}}}]}')
+    catalog = library.parse_catalog(raw)
+    assert catalog.entries == [] and catalog.skipped == [
+        (0, "a", "preset.values.FF is out of range or no number")]
+
+
 def test_newer_catalog_format_is_rejected():
     with pytest.raises(library.Error, match="newer"):
         parse({"understeer_library": 2, "presets": []})
@@ -332,6 +370,34 @@ def test_duplicate_key_inside_an_entry_rejects_the_catalog():
            b'"values": {"FF": 10, "FF": 100}}}]}')
     with pytest.raises(library.Error, match="duplicate"):
         library.parse_catalog(raw)
+
+
+def test_too_long_number_touches_nothing():
+    """In a fresh interpreter: a catalog with a number too long for an int
+    is refused without any audit event (no open, socket, subprocess, ioctl,
+    ...) and without loading a module that talks to devices."""
+    import subprocess
+    import sys
+    code = """
+import sys
+from understeer import library
+events = []
+sys.addaudithook(lambda event, args: events.append(event))
+raw = b'{"understeer_library": 1, "presets": [' + b"7" * 5000 + b']}'
+try:
+    library.parse_catalog(raw)
+    raise SystemExit("not refused")
+except library.Error:
+    pass
+assert events == [], sorted(set(events))
+hardware = {"understeer.device", "understeer.capabilities", "understeer.leds",
+            "understeer.display", "understeer.inputs", "understeer.device_info"}
+assert not hardware & set(sys.modules), hardware & set(sys.modules)
+"""
+    root = pathlib.Path(__file__).parent.parent
+    run = subprocess.run([sys.executable, "-c", code], cwd=root,
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr + run.stdout
 
 
 def test_name_fits_a_file_name_in_bytes():

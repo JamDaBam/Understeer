@@ -101,6 +101,12 @@ def _load(raw):
         raise Error(f"the catalog is no valid JSON: {e.msg}") from None
     except RecursionError:
         raise Error("the catalog is nested too deeply") from None
+    except Error:
+        raise           # from the hooks (duplicate key, NaN), a ValueError too
+    except ValueError:
+        # A number with more digits than Python turns into an int (4300 by
+        # default): no setting has such a value, so the catalog is broken
+        raise Error("the catalog has a number that is too long") from None
 
 
 def _text(meta, key, limit):

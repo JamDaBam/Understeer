@@ -227,7 +227,9 @@ def test_unreadable_cache(cache):
     lambda h: h.send_body(b"error", 500),
     lambda h: h.send_body(json.dumps({"understeer_library": 2,
                                       "presets": []}).encode()),
-])
+    lambda h: h.send_body(b'{"understeer_library": 1' + b"0" * 5000
+                          + b', "presets": []}'),
+], ids=["broken", "http-500", "newer-format", "too-long-number"])
 def test_failed_refresh_keeps_the_cache(server, cache, answer):
     community.refresh()
     before = cache.stat().st_mtime_ns
@@ -277,3 +279,17 @@ def test_nothing_runs_on_its_own():
     source = pathlib.Path(community.__file__).read_text()
     for word in ("threading", "timeout_add", "while True", "sched", "GLib"):
         assert word not in source
+
+
+def test_too_long_number_is_an_invalid_catalog(server, cache):
+    """Downloaded or cached, a number too long for an int is told as an
+    invalid catalog, not as an unexpected error; the cache stays."""
+    community.refresh()
+    bad = b'{"understeer_library": 1, "presets": [' + b"9" * 5000 + b"]}"
+    server.answer = lambda h: h.send_body(bad)
+    with pytest.raises(community.Error) as e:
+        community.refresh()
+    assert e.value.kind == "invalid"
+    assert cache.read_bytes() == GOOD
+    cache.write_bytes(bad)                      # changed by someone else
+    assert community.read_cache() is None
