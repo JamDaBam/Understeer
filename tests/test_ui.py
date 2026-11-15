@@ -91,3 +91,6 @@ def test_app_runs_through(display, tmp_path):
     output = stdout + err_path.read_text(errors="replace")
     assert result.returncode == 0, output
     assert "failures: 0" in stdout, output
+    # Text from others (preset names, the community catalog) is never read
+    # as markup; GTK warns when it tries and fails.
+    assert "from markup due to error" not in output, output

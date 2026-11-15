@@ -44,7 +44,9 @@ class PresetsMixin:
                 (_("Import File…"), _("Add a preset shared as a file"),
                  "win.import-preset"),
                 (_("Paste Text…"), _("Add a preset shared as text or JSON"),
-                 "win.paste-preset")):
+                 "win.paste-preset"),
+                (_("Community Library…"), _("Browse presets shared online"),
+                 "win.show-library")):
             button = Gtk.Button(label=label, action_name=action,
                                 tooltip_text=tip)
             button.add_css_class("flat")
@@ -272,6 +274,12 @@ class PresetsMixin:
             item.set_action_and_target_value(action,
                                              GLib.Variant.new_string(str(path)))
             menu.append_item(item)
+        community = Gio.Menu()
+        item = Gio.MenuItem.new(_("Share with Community…"), None)
+        item.set_action_and_target_value("win.share-community",
+                                         GLib.Variant.new_string(str(path)))
+        community.append_item(item)
+        menu.append_section(None, community)
         return menu
 
     def _sim_defaults_tile(self):
@@ -331,6 +339,7 @@ class PresetsMixin:
         manage.append(_("Save as Preset…"), "win.save-preset")
         manage.append(_("Import Preset File…"), "win.import-preset")
         manage.append(_("Paste Preset Text…"), "win.paste-preset")
+        manage.append(_("Community Library…"), "win.show-library")
         manage.append(_("Manage Presets"), "win.show-presets")
         menu.append_section(None, manage)
         self.preset_button.set_menu_model(menu)
@@ -552,6 +561,19 @@ class PresetsMixin:
         else:
             note = _("The current settings match this preset.")
         page.set_description(note)
+        for group in self._value_groups(values, differ, current):
+            page.add(group)
+        toolbar = Adw.ToolbarView(content=page)
+        toolbar.add_top_bar(header)
+        dialog.set_child(toolbar)
+        log.info("Showing the values of preset %s", path.name)
+        dialog.present(self)
+
+    @staticmethod
+    def _value_groups(values, differ=frozenset(), current=None):
+        """The values of a preset as Adw.PreferencesGroups, one per tab with
+        values; those in differ also show their current value."""
+        groups = []
         for tab, title in TABS:
             # Group titles are markup: "Pedals & Paddles"
             group = Adw.PreferencesGroup(title=GLib.markup_escape_text(_(title)))
@@ -571,12 +593,8 @@ class PresetsMixin:
                 row.add_suffix(value)
                 group.add(row)
             if any(s["page"] == tab and s["id"] in values for s in SETTINGS):
-                page.add(group)
-        toolbar = Adw.ToolbarView(content=page)
-        toolbar.add_top_bar(header)
-        dialog.set_child(toolbar)
-        log.info("Showing the values of preset %s", path.name)
-        dialog.present(self)
+                groups.append(group)
+        return groups
 
     def _apply_running_game_preset(self):
         """After a wheelbase got connected: apply the preset of a running
@@ -1300,12 +1318,13 @@ class PresetsMixin:
         else:                           # choose which ones
             self._ask_paste_preset(text, fallback_name)
 
-    def _import_presets(self, found, added=None):
+    def _import_presets(self, found, added=None, done=None):
         """Add presets found, one after another; for a name already taken,
-        ask whether to replace it or keep both."""
+        ask whether to replace it or keep both. done(added): called at the
+        end with [(path, name)] of those added, instead of telling so."""
         added = [] if added is None else added
         if not found:
-            self._imported(added)
+            (done or self._imported)(added)
             return
         first, rest = found[0], found[1:]
         name = first.name
@@ -1318,7 +1337,7 @@ class PresetsMixin:
 
         if not path.exists():
             add(path, name)
-            self._import_presets(rest, added)
+            self._import_presets(rest, added, done)
             return
         try:
             _n, stored = self._read_preset(path)
@@ -1353,7 +1372,7 @@ class PresetsMixin:
                 new = free_name(
                     name, lambda n: config.preset_path(n).exists())
                 add(config.preset_path(new), new)
-            self._import_presets(rest, added)
+            self._import_presets(rest, added, done)
 
         dialog.connect("response", on_response)
         dialog.present(self)

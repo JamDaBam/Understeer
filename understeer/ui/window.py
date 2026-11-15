@@ -33,6 +33,8 @@ from .setting_tile import SettingTile
 from .dates import date_text
 from .names import label_factory, name_label, short
 from .trash_dialog import TrashMixin
+from .library_dialog import LibraryMixin
+from .share_dialog import ShareMixin
 
 LIVE_DELAY_MS = 120
 WATCH_MS = 250       # how often to look for changes made on the wheelbase
@@ -51,7 +53,8 @@ log = logging.getLogger("understeer.window")
 
 
 class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
-                  UpdateCheckMixin, Adw.ApplicationWindow):
+                  LibraryMixin, ShareMixin, UpdateCheckMixin,
+                  Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title("Understeer")
@@ -663,11 +666,13 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
                 ("delete-preset", lambda p: self._delete_presets([p])),
                 ("export-preset", self._export_preset),
                 ("copy-preset-text", lambda p: self._copy_preset(p, False)),
-                ("copy-preset-json", lambda p: self._copy_preset(p, True))):
+                ("copy-preset-json", lambda p: self._copy_preset(p, True)),
+                ("share-community", self._show_share_community)):
             add(name, lambda a, p, cb=cb: cb(p.get_string()),
                 GLib.VariantType.new("s"))
         add("import-preset", lambda *a: self._ask_import_preset())
         add("paste-preset", lambda *a: self._ask_paste_preset())
+        add("show-library", lambda *a: self._show_library())
         self.undo_action = add("undo-all", lambda *a: self._undo_all())
         self.update_action = add("update-preset",
                                  lambda *a: self._update_active_preset())
@@ -938,6 +943,7 @@ class TunerWindow(LiveInputMixin, PresetsMixin, PreferencesMixin, TrashMixin,
         self.rumble_path = find_rumble_path()
         self.writable = bool(self.device_path) and can_write(self.device_path)
         self._refresh_device_state()
+        self._library_device_changed()
         self._start_inputs()
         if self.device_path:
             GLib.timeout_add(INPUT_SETTLE_MS, lambda: self._start_inputs() and False)

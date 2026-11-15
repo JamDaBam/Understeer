@@ -172,3 +172,60 @@ def test_broken_brackets_end_quickly():
         with pytest.raises(sharing.Error):
             sharing.find_presets(text[:sharing.MAX_SIZE])
     assert time.monotonic() - start < 3
+
+
+# A number with more digits than Python turns into an int (4300 by default)
+LONG = "1" + "0" * 5000
+
+
+@pytest.mark.parametrize("text", [
+    '{"name": "Big", "values": {"FF": ' + LONG + '}}',
+    '{"understeer_preset": ' + LONG + ', "name": "Big", "values": {"FF": 70}}',
+    '{"name": "Big", "values": {"FF": 70}, "note": -' + LONG + '}',
+    '[{"name": "Big", "values": {"FF": ' + LONG + '}}]',
+    "Look at this:\n```json\n" + '{"values": {"FF": ' + LONG + '}}' + "\n```",
+], ids=["in-values", "format-version", "other-key", "in-a-list", "in-a-post"])
+def test_too_long_number_is_no_preset(text):
+    """Told like any text without a preset, not a ValueError escaping."""
+    with pytest.raises(sharing.Error, match="No preset found"):
+        sharing.find_presets(text)
+
+
+def test_too_long_number_doesnt_hide_other_presets():
+    """In a forum thread, the presets around an unreadable one are found."""
+    thread = (sharing.preset_text("Before", {"FF": 40}) + "\nand\n"
+              + '{"name": "Big", "values": {"FF": ' + LONG + '}}\n'
+              + sharing.preset_json("After", {"FF": 60}))
+    result = sharing.find_presets(thread)
+    assert [(f.name, f.values) for f in result.presets] == [
+        ("Before", {"FF": 40}), ("After", {"FF": 60})]
+
+
+def test_json_objects_skip_too_long_numbers():
+    found = list(sharing._json_objects(
+        '{"a": ' + LONG + '} {"b": 1} {"c": [' + LONG + ']} {"d": 2}'))
+    assert found == [{"b": 1}, {"d": 2}]
+
+
+def test_long_but_readable_number_is_an_invalid_value():
+    """Up to the limit the number is read, and left out as out of range,
+    as before."""
+    text = '{"name": "Big", "values": {"FF": 1' + "0" * 4000 + '}}'
+    with pytest.raises(sharing.Error, match="no settings Understeer knows"):
+        sharing.find_presets(text)
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "70.5", '"70"'])
+def test_other_odd_numbers_keep_their_reason(value):
+    """Unchanged: such values are left out, with their own message."""
+    with pytest.raises(sharing.Error, match="no settings Understeer knows"):
+        sharing.find_presets('{"name": "X", "values": {"FF": ' + value + '}}')
+
+
+def test_many_too_long_numbers_end_quickly():
+    import time
+    text = ('{"values": {"FF": ' + LONG + '}} ') * (sharing.MAX_SIZE // 5030)
+    start = time.monotonic()
+    with pytest.raises(sharing.Error):
+        sharing.find_presets(text)
+    assert time.monotonic() - start < 3

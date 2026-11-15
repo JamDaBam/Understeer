@@ -13,6 +13,8 @@ import pathlib
 import struct
 import xml.etree.ElementTree as ET
 import sys
+import threading
+import time
 import traceback
 import zlib
 
@@ -61,7 +63,17 @@ def offline(*_args, **_kwargs):
 steamgriddb.search = fake_search
 steamgriddb.covers = steamgriddb.fetch = steamgriddb.download = offline
 
+from understeer import community  # noqa: E402
+
+
+def library_offline(*_args, **_kwargs):
+    raise community.Error("offline", "offline (test)")
+
+
+community.download = library_offline         # the community catalog neither
+
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
+from understeer import i18n  # noqa: E402
 from understeer.ui import cover_search, files, theme  # noqa: E402
 from understeer.ui.setting_tile import SettingTile  # noqa: E402
 from understeer.ui import window as window_module  # noqa: E402
@@ -76,6 +88,7 @@ STEP_MS = 300
 
 
 EXPECTED_ERRORS = {"Could not save: Disk full",    # shown on purpose below
+                   "Could not save preset: Disk full",
                    "Could not load preset: Broken.json holds no preset",
                    "Could not delete preset: Disk full"}
 
@@ -94,6 +107,25 @@ sys.excepthook = lambda kind, value, tb: failures.append(
 def check(cond, what):
     if not cond:
         failures.append(f"check failed: {what}")
+
+
+SETTLE_S = 10       # longest wait for the result of a thread, e.g. a download
+
+
+def settle(ready, timeout=SETTLE_S):
+    """Run the main loop until ready() is true, at most timeout seconds,
+    and return ready(). Work in a thread hands its result to the main loop
+    when it is done, which on a busy machine can be later than the next
+    step: a check of that result waits for it here instead of relying on
+    STEP_MS. The step running this isn't run again meanwhile."""
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + timeout
+    while not ready():
+        if time.monotonic() >= deadline:
+            return False
+        if not context.iteration(False):
+            time.sleep(0.005)               # nothing to do yet
+    return True
 
 
 class ChosenFile:
@@ -992,6 +1024,40 @@ def steps(win):
               and d.get_heading() == "No Preset Found", "not a preset")
         close_dialogs(win)
     yield "import shared text", import_shared_text
+
+    def import_too_long_number():
+        """A number too long for Python's int: told as no preset, in the
+        import and in the paste dialog; nothing written or applied."""
+        big = ('{"understeer_preset": 1, "name": "Big Number", '
+               '"values": {"FF": 1' + "0" * 5000 + '}}')
+        files = sorted(f.name for f in config.CONFIG_DIR.iterdir())
+        device_files = {f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+        tuning = win._collect_values()
+        source = scratch / "big-number.json"            # as Import File… reads it
+        source.write_text(big, encoding="utf-8")
+        win._import_text(source.read_text(encoding="utf-8"), source.stem)
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "No Preset Found",
+              f"file import: no preset ({d and d.get_heading()})")
+        close_dialogs(win)
+        win._ask_paste_preset(big)                      # the paste dialog
+        d = win.get_visible_dialog()
+        labels = [w.get_label() for w in walk(d) if isinstance(w, Gtk.Label)
+                  and w.has_css_class("error")]
+        check(any(l.startswith("No preset found.") for l in labels),
+              f"paste: no preset told: {labels}")
+        add = next(w for w in walk(d) if isinstance(w, Gtk.Button)
+                   and "suggested-action" in w.get_css_classes())
+        check(not [w for w in walk(d) if isinstance(w, Adw.ExpanderRow)]
+              and not add.get_sensitive(), "paste: nothing to add")
+        close_dialogs(win)
+        check(sorted(f.name for f in config.CONFIG_DIR.iterdir()) == files,
+              "no preset or part file written")
+        check({f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+              == device_files, "the wheelbase was not written")
+        check(win._collect_values() == tuning, "tuning values unchanged")
+        source.unlink()
+    yield "import a too long number", import_too_long_number
 
     def share_as_json():
         win.activate_action("win.copy-preset-json",
@@ -2671,6 +2737,939 @@ def steps(win):
         win.presets_box.remove(shared_grids["box"])
     yield "shared columns measured", shared_columns_measured
 
+    # --- Community Library: browsing only ------------------------------
+    library = {"calls": 0, "gate": threading.Event()}
+    preset_entry = {"understeer_preset": 1, "name": "x", "values": {"FF": 50}}
+    library_raw = json.dumps({"understeer_library": 1, "presets": [
+        {"id": "demo", "meta": {"author": "A", "game": "G", "wheelbase": "CSL DD",
+                                "description": "First line\nSecond line",
+                                "tags": ["demo"]},
+         "preset": dict(preset_entry, name="Demo Preset")},
+        {"id": "markup", "meta": {"description": "<a href='x'>link</a> &amp;"},
+         "preset": dict(preset_entry, name="<b>Not bold</b> & co")},
+        {"id": "bare", "preset": dict(preset_entry, name="Bare",
+                                      values={"SEN": 905, "NEW": 1})},
+        {"id": "broken", "preset": dict(preset_entry, values={"FF": 500})},
+    ]}).encode()
+
+    def sysfs_state():
+        return {f.name: f.read_text() for f in dev.iterdir() if f.is_file()}
+
+    def library_widgets():
+        dialog = library["dialog"]
+        stack = next(w for w in walk(dialog) if isinstance(w, Gtk.Stack)
+                     and w.get_child_by_name("loading") is not None)
+        rows = [w for w in walk(dialog) if isinstance(w, Adw.ActionRow)
+                and w.get_activatable()]
+        return stack, rows
+
+    def library_refresh():
+        return next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                    and w.get_icon_name() == "view-refresh-symbolic")
+
+    def library_state():
+        """What the library dialog shows, for a failed check."""
+        stack, rows = library_widgets()
+        return (f"page {stack.get_visible_child_name()!r}, loading "
+                f"{not library_refresh().get_sensitive()}, rows {len(rows)}, "
+                f"downloads {library.get('calls')}")
+
+    def library_settled():
+        """Wait until the library's load (a thread) has ended: Refresh is
+        usable again once its result reached the dialog."""
+        if not settle(lambda: library_refresh().get_sensitive()):
+            check(False, f"the library still loads after {SETTLE_S} s: "
+                         f"{library_state()}")
+
+    def library_opens():
+        library["sysfs"] = sysfs_state()
+        library["presets"] = sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
+
+        def slow_download():
+            library["calls"] += 1
+            library["gate"].wait(10)
+            return library_raw
+        community.download = slow_download
+        check(not community.CACHE_FILE.exists(), "no cached catalog yet")
+        library["dialog"] = win._show_library()
+    yield "library opens", library_opens
+
+    def library_loading():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "loading",
+              f"loading shown first: {stack.get_visible_child_name()}")
+        library["gate"].set()
+    yield "library loading", library_loading
+
+    def library_listed():
+        library_settled()
+        stack, rows = library_widgets()
+        check(stack.get_visible_child_name() == "list",
+              f"list shown: {stack.get_visible_child_name()}")
+        titles = sorted(r.get_title() for r in rows)
+        check(titles == ["<b>Not bold</b> & co", "Bare", "Demo Preset"],
+              f"the usable presets listed: {titles}")
+        check(not any(r.get_use_markup() for r in rows), "names are plain text")
+        by = {r.get_title(): r for r in rows}
+        demo_labels = [w.get_label() for w in walk(by["Demo Preset"])
+                       if isinstance(w, Gtk.Label)]
+        check("Example" in demo_labels, f"demo preset marked: {demo_labels}")
+        check(by["Demo Preset"].get_subtitle() == "G · CSL DD · by A\nFirst line",
+              f"game, wheelbase, author, description: {by['Demo Preset'].get_subtitle()!r}")
+        check(by["Bare"].get_subtitle() in ("", None), "no metadata, no subtitle")
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Catalog of" in w.get_label()]
+        check(status and "left out" in status[0] and ": 1" in status[0],
+              f"skipped preset counted: {status}")
+        check(community.CACHE_FILE.read_bytes() == library_raw, "catalog cached")
+        by["Bare"].emit("activated")
+    yield "library listed", library_listed
+
+    def library_details():
+        nav = next(w for w in walk(library["dialog"])
+                   if isinstance(w, Adw.NavigationView))
+        page = nav.get_visible_page()
+        check(page.get_title() == "Bare", f"details shown: {page.get_title()}")
+        texts = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)]
+        texts += [w.get_subtitle() or "" for w in walk(page)
+                  if isinstance(w, Adw.ActionRow)]
+        check(any("Shared as 905°, kept as 900°" in t for t in texts),
+              f"adjusted value shown: {texts}")
+        check(any(t.startswith("NEW") for t in texts), "unknown setting shown")
+        check(find_row(page, "Steering Angle") is not None, "values shown")
+        buttons = [w.get_label() for w in walk(library["dialog"])
+                   if isinstance(w, Gtk.Button) and w.get_label()]
+        check(not {"Apply", "Import", "Add Preset", "Save"} & set(buttons),
+              f"no action on a community preset: {buttons}")
+        nav.pop()
+        markup = next(r for r in library_widgets()[1]
+                      if r.get_title().startswith("<b>"))
+        markup.emit("activated")
+    yield "library details", library_details
+
+    def library_markup_details():
+        nav = next(w for w in walk(library["dialog"])
+                   if isinstance(w, Adw.NavigationView))
+        page = nav.get_visible_page()
+        labels = [w for w in walk(page) if isinstance(w, Gtk.Label)
+                  and "link" in w.get_label()]
+        check(labels and labels[0].get_label() == "<a href='x'>link</a> &amp;"
+              and not labels[0].get_use_markup(), "description is plain text")
+        check(page.get_title() == "<b>Not bold</b> & co", "title as it is")
+        close_dialogs(win)
+        library["dialog"] = win._show_library()
+    yield "library details as text", library_markup_details
+
+    def library_cached():
+        stack, rows = library_widgets()
+        check(library["calls"] == 1 and stack.get_visible_child_name() == "list"
+              and len(rows) == 3, "opened again: from the cache, no download")
+        community.download = library_offline
+        refresh = next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                       and w.get_icon_name() == "view-refresh-symbolic")
+        refresh.emit("clicked")
+    yield "library cached", library_cached
+
+    def library_offline_shown():
+        library_settled()
+        stack, rows = library_widgets()
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Offline" in w.get_label()]
+        check(status and stack.get_visible_child_name() == "list" and len(rows) == 3,
+              f"offline: the cached presets stay: {status}; {library_state()}")
+        check(community.CACHE_FILE.read_bytes() == library_raw, "cache kept")
+        community.download = lambda *a, **k: json.dumps(
+            {"understeer_library": 1, "presets": []}).encode()
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+    yield "library offline", library_offline_shown
+
+    def library_empty():
+        library_settled()
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "empty",
+              f"empty catalog shown: {library_state()}")
+        close_dialogs(win)
+        community.CACHE_FILE.write_bytes(b"broken")
+        community.download = library_offline
+        library["dialog"] = win._show_library()
+    yield "library empty", library_empty
+
+    def library_unavailable():
+        library_settled()
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "failed",
+              f"no usable cache, offline: unavailable: {library_state()}")
+        close_dialogs(win)
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+        check(sorted(p.name for p in config.CONFIG_DIR.glob("*.json"))
+              == library["presets"], "the user's presets are as they were")
+    yield "library unavailable", library_unavailable
+
+    def library_closed_while_loading():
+        library["calls"], library["gate"] = 0, threading.Event()
+
+        def slow_download():
+            library["calls"] += 1
+            library["gate"].wait(10)
+            return library_raw
+        community.download = slow_download
+        library["dialog"] = win._show_library()     # broken cache: loads
+        close_dialogs(win)                          # closed while loading
+        library["dialog"] = win._show_library()     # and opened again
+    yield "library closed while loading", library_closed_while_loading
+
+    def library_worker_started():
+        """Wait until the download thread has reached the (gated) download:
+        the dialog shows it at once, the thread counts it when it runs.
+        A second download still shows as calls == 2 in the checks."""
+        settle(lambda: library["calls"] >= 1)
+
+    def library_reopened_waits():
+        stack, _rows = library_widgets()
+        check(stack.get_visible_child_name() == "loading",
+              f"opened again while loading: waits for it: {library_state()}")
+        library_worker_started()
+        check(library["calls"] == 1,
+              f"one download only: {library['calls']}; {library_state()}")
+        library["gate"].set()
+    yield "library reopened waits", library_reopened_waits
+
+    def library_result_after_close():
+        library_settled()
+        stack, rows = library_widgets()
+        check(stack.get_visible_child_name() == "list" and len(rows) == 3,
+              f"the result reaches the dialog opened again: {library_state()}")
+        check(library["calls"] == 1, "still one download")
+        check(community.CACHE_FILE.read_bytes() == library_raw,
+              "the broken cache was replaced by the checked catalog")
+        close_dialogs(win)
+        # Again with a fresh cache: opened again while Refresh still loads
+        library["calls"], library["gate"] = 0, threading.Event()
+        library["dialog"] = win._show_library()
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+        close_dialogs(win)
+        library["dialog"] = win._show_library()
+    yield "library refresh, closed, opened again", library_result_after_close
+
+    def library_reopened_joins():
+        spinning = [w for w in walk(library["dialog"]) if isinstance(w, Gtk.Spinner)
+                    and w.get_mapped() and w.get_spinning()]
+        refresh = next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+                       and w.get_icon_name() == "view-refresh-symbolic")
+        library_worker_started()
+        check(spinning and not refresh.get_sensitive() and library["calls"] == 1,
+              "opened again with a fresh cache: shows the download under way: "
+              f"spinning {bool(spinning)}, {library_state()}")
+        library["gate"].set()
+    yield "library reopened joins", library_reopened_joins
+
+    def library_joined_result():
+        library_settled()
+        spinning = [w for w in walk(library["dialog"]) if isinstance(w, Gtk.Spinner)
+                    and w.get_mapped() and w.get_spinning()]
+        check(not spinning and library["calls"] == 1,
+              "the result reached the dialog opened again")
+        close_dialogs(win)
+        community.download = library_offline
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+    yield "library joined result", library_joined_result
+
+    # --- Community Library: search, filters, compatibility ---------------
+    def lib_entry(entry_id, name, **meta):
+        return {"id": entry_id, "meta": meta,
+                "preset": {"understeer_preset": 1, "name": name, "values": {"FF": 50}}}
+    filter_catalog = [
+        lib_entry("gt3", "GT3 Endurance", game="Assetto Corsa Competizione",
+                  wheelbase="CSL DD", tags=["gt3"]),
+        lib_entry("rally", "Gravel Rally", game="BeamNG.drive",
+                  wheelbase="Podium Wheel Base DD1", tags=["rally"]),
+        lib_entry("drift", "Drift Fun", game="BeamNG.drive",
+                  wheelbase="GT DD Pro", tags=["Rally"]),
+        lib_entry("bare", "Bare"),
+    ]
+    search_ui = {"downloads": 0}
+
+    def counting(raw):
+        def download(*_a, **_k):
+            search_ui["downloads"] += 1
+            return raw
+        return download
+
+    def ui():
+        d = library["dialog"]
+        find = lambda kind: [w for w in walk(d) if isinstance(w, kind)]
+        rows = {r.entry.id: r for r in find(Adw.ActionRow) if hasattr(r, "entry")}
+        return {"search": find(Gtk.SearchEntry)[0], "pickers": find(Gtk.DropDown),
+                "mine": next(w for w in find(Gtk.CheckButton)
+                             if w.get_label() == "Only my wheelbase"),
+                "reset": next(w for w in find(Gtk.Button)
+                              if w.get_label() == "Reset Filters"),
+                "rows": rows,
+                "shown": sorted(i for i, r in rows.items() if r.get_child_visible()),
+                "nav": find(Adw.NavigationView)[0]}
+
+    def filters_open():
+        raw = json.dumps({"understeer_library": 1, "presets": filter_catalog}).encode()
+        community.CACHE_FILE.write_bytes(raw)           # fresh: no download
+        community.download = counting(raw)
+        library["sysfs"] = sysfs_state()
+        library["dialog"] = win._show_library()
+    yield "library filters open", filters_open
+
+    def filters_compatibility():
+        u = ui()
+        levels = {i: r.level_label.get_label() for i, r in u["rows"].items()}
+        check(levels == {"gt3": "Same wheelbase model",
+                         "rally": "Different wheelbase model",
+                         "drift": "Compatibility unknown",
+                         "bare": "Compatibility unknown"},
+              f"compatibility per row: {levels}")
+        check(u["mine"].get_sensitive() and not u["mine"].get_active(),
+              "only my wheelbase: offered, not on by default")
+        check(u["shown"] == ["bare", "drift", "gt3", "rally"], "all shown at first")
+        check(not u["reset"].get_sensitive(), "nothing to reset yet")
+        u["search"].set_text("RALLY")
+    yield "library compatibility", filters_compatibility
+
+    def filters_search():
+        u = ui()
+        check(u["shown"] == ["drift", "rally"], f"search finds name and tag: {u['shown']}")
+        check(u["reset"].get_sensitive(), "reset offered")
+        game = u["pickers"][0]
+        model = game.get_model()
+        names = [model.get_string(i) for i in range(model.get_n_items())]
+        check(names == ["All games", "Assetto Corsa Competizione", "BeamNG.drive"],
+              f"games from the catalog: {names}")
+        game.set_selected(2)
+        u["mine"].set_active(True)
+    yield "library search", filters_search
+
+    def filters_no_match():
+        u = ui()
+        check(u["shown"] == [], f"rally + BeamNG + only mine: none: {u['shown']}")
+        placeholder = next(w for w in walk(library["dialog"])
+                           if isinstance(w, Adw.StatusPage)
+                           and w.get_title() == "No Matching Presets")
+        check(placeholder.get_mapped(), "no-results message shown")
+        check(not u["pickers"][1].get_sensitive(),
+              "wheelbase choice off while only mine is on")
+        status = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label) and "Shown: 0 of 4" in w.get_label()]
+        check(status, "count of shown presets")
+        u["reset"].emit("clicked")
+    yield "library no match", filters_no_match
+
+    def filters_reset():
+        u = ui()
+        check(u["shown"] == ["bare", "drift", "gt3", "rally"]
+              and u["search"].get_text() == "" and not u["mine"].get_active()
+              and all(p.get_selected() == 0 for p in u["pickers"]), "all reset")
+        u["pickers"][2].set_selected(
+            [u["pickers"][2].get_model().get_string(i)
+             for i in range(u["pickers"][2].get_model().get_n_items())].index("gt3"))
+        u["rows"]["gt3"].emit("activated")
+    yield "library filter, details", filters_reset
+
+    def filters_details():
+        u = ui()
+        page = u["nav"].get_visible_page()
+        texts = [w.get_title() for w in walk(page) if isinstance(w, Adw.ActionRow)]
+        texts += [w.get_subtitle() or "" for w in walk(page)
+                  if isinstance(w, Adw.ActionRow)]
+        check("Same wheelbase model" in texts
+              and any("USB product ID" in t and "variants" in t for t in texts),
+              f"details: model match, not a guarantee: {texts}")
+        u["nav"].pop()
+    yield "library details compatibility", filters_details
+
+    def filters_kept():
+        u = ui()
+        check(u["shown"] == ["gt3"] and u["pickers"][2].get_selected() > 0,
+              "tag filter kept after the details")
+        u["pickers"][2].set_selected(0)
+        u["mine"].set_active(True)
+        check(ui()["shown"] == ["gt3"], f"only mine on: {ui()['shown']}")
+        # The wheelbase goes away
+        library["glob"] = device.SYSFS_GLOB
+        device.SYSFS_GLOB = str(scratch / "sysfs" / "none" / "*")
+        win._detect_device()
+    yield "library wheelbase gone", filters_kept
+
+    def filters_disconnected():
+        u = ui()
+        levels = {r.level_label.get_label() for r in u["rows"].values()}
+        check(levels == {"Compatibility unknown"}, f"no wheelbase: unknown: {levels}")
+        check(not u["mine"].get_sensitive()
+              and "No wheelbase" in (u["mine"].get_tooltip_text() or ""),
+              "only mine off, with the reason")
+        check(u["mine"].get_active() and u["shown"] == ["bare", "drift", "gt3", "rally"]
+              and u["reset"].get_sensitive(),
+              f"only mine stays ticked, greyed, not filtering: {u['shown']}")
+        device.SYSFS_GLOB = library["glob"]
+        win._detect_device()
+    yield "library wheelbase disconnected", filters_disconnected
+
+    def filters_reconnected():
+        u = ui()
+        check(u["rows"]["gt3"].level_label.get_label() == "Same wheelbase model"
+              and u["mine"].get_sensitive(), "wheelbase back: compared again")
+        check(u["mine"].get_active() and u["shown"] == ["gt3"],
+              f"only mine ticked and filtering again: {u['shown']}")
+        u["mine"].set_active(False)
+        # A refresh that drops the chosen game: falls back to all games
+        u["pickers"][2].set_selected(0)
+        u["pickers"][0].set_selected(2)                 # BeamNG.drive
+        check(ui()["shown"] == ["drift", "rally"], f"game filter: {ui()['shown']}")
+        raw = json.dumps({"understeer_library": 1,
+                          "presets": filter_catalog[:1]}).encode()
+        community.download = counting(raw)
+        next(w for w in walk(library["dialog"]) if isinstance(w, Gtk.Button)
+             and w.get_icon_name() == "view-refresh-symbolic").emit("clicked")
+    yield "library refresh with a filter", filters_reconnected
+
+    def filters_after_refresh():
+        library_settled()
+        u = ui()
+        check(u["pickers"][0].get_selected() == 0 and u["shown"] == ["gt3"],
+              f"chosen game gone: all games: {u['shown']}")
+        check(search_ui["downloads"] == 1, f"only Refresh downloaded: {search_ui}")
+        close_dialogs(win)
+        i18n.set_language("de")
+        library["dialog"] = win._show_library()
+    yield "library after refresh", filters_after_refresh
+
+    def filters_german():
+        d = library["dialog"]
+        flow = next(w for w in walk(d) if isinstance(w, Gtk.FlowBox))
+        labels = [w.get_label() for w in walk(flow) if isinstance(w, (Gtk.CheckButton, Gtk.Button))
+                  and w.get_label()]
+        check("Nur meine Wheelbase" in labels and "Filter zurücksetzen" in labels,
+              f"German labels: {labels}")
+        minimum = flow.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+        check(minimum <= 400, f"filters wrap to fit a narrow window: {minimum} px")
+        close_dialogs(win)
+        i18n.set_language("en")
+        community.download = library_offline
+        check(sysfs_state() == library["sysfs"], "the wheelbase was not written")
+    yield "library filters in German", filters_german
+
+    # --- Community Library: importing a preset ------------------------------
+    import_catalog = [
+        {"id": "imp-same", "meta": {"author": "Ana", "game": "ACC",
+                                     "wheelbase": "CSL DD", "tags": ["demo"]},
+         "preset": {"understeer_preset": 1, "name": "Community GT3",
+                    "values": {"SEN": 905, "FF": 55, "XYZ": 3}}},
+        {"id": "imp-other", "meta": {"wheelbase": "Podium Wheel Base DD1"},
+         "preset": {"understeer_preset": 1, "name": "Community Rally",
+                    "values": {"FF": 60}}},
+    ]
+    imp = {}
+
+    def imp_files():
+        return sorted(f.name for f in config.CONFIG_DIR.iterdir())
+
+    def imp_page():
+        nav = next(w for w in walk(library["dialog"]) if isinstance(w, Adw.NavigationView))
+        return nav, nav.get_visible_page()
+
+    def imp_button():
+        _nav, page = imp_page()
+        return next((w for w in walk(page) if isinstance(w, Gtk.Button)
+                     and w.get_label() == "Import Preset"), None)
+
+    def imp_alert():
+        d = win.get_visible_dialog()
+        return d if isinstance(d, Adw.AlertDialog) else None
+
+    def imp_texts(d):
+        return [w.get_label() for w in walk(d.get_extra_child())
+                if isinstance(w, Gtk.Label)]
+
+    def imp_confirm():
+        imp_button().emit("clicked")
+        d = imp_alert()
+        d.emit("response", "import")
+        d.force_close()
+
+    def imp_open(entry_id):
+        u = ui()
+        u["rows"][entry_id].emit("activated")
+
+    def import_open():
+        raw = json.dumps({"understeer_library": 1, "presets": import_catalog}).encode()
+        community.CACHE_FILE.write_bytes(raw)           # the cached catalog
+        community.download = library_offline            # offline: no download
+        search_ui["downloads"] = 0
+        imp.update(sysfs=sysfs_state(), files=imp_files(),
+                   cache=community.CACHE_FILE.read_bytes(),
+                   active=win.active_preset, values=win._collect_values())
+        imp["write"], window_module.write_values = window_module.write_values, \
+            lambda writes: imp.setdefault("hw", []).append(writes) or []
+        library["dialog"] = win._show_library()
+    yield "library import open offline", import_open
+
+    def import_details():
+        u = ui()
+        check(sorted(u["rows"]) == ["imp-other", "imp-same"],
+              f"cached catalog listed offline: {sorted(u['rows'])}")
+        u["search"].set_text("community")               # kept after the import
+        imp_open("imp-same")
+        button = imp_button()
+        check(button is not None and button.get_sensitive(),
+              "import button on the details page")
+        check(imp_files() == imp["files"], "opening the details saves nothing")
+        button.emit("clicked")
+    yield "library import details", import_details
+
+    def import_preview():
+        d = imp_alert()
+        check(d is not None and d.get_heading() == "Import “Community GT3”?",
+              f"import asked: {d and d.get_heading()}")
+        if d is None:
+            return
+        texts = "\n".join(imp_texts(d))
+        for part in ("Example:", "Same wheelbase model:",
+                     "Steering Angle: 905° becomes 900°", "XYZ"):
+            check(part in texts, f"preview tells {part!r}: {texts!r}")
+        check(d.get_response_enabled("import"), "same model: import allowed")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(imp_files() == imp["files"], "cancelled: nothing saved")
+        imp_button().emit("clicked")
+        d = imp_alert()
+        d.emit("response", "import")
+        d.force_close()
+    yield "library import preview", import_preview
+
+    def import_saved():
+        path = config.preset_path("Community GT3")
+        check(path.exists(), f"preset saved: {imp_files()}")
+        if path.exists():
+            name, values = config.read_preset(path)
+            check((name, values) == ("Community GT3", {"SEN": 900, "FF": 55}),
+                  f"saved as normalised, without unknown settings: {name} {values}")
+        check(not any(f.endswith(".part") for f in imp_files()), "no part files")
+        check(win.get_visible_dialog() is library["dialog"],
+              "the library stays open")
+        labels = [w.get_label() for w in walk(library["dialog"])
+                  if isinstance(w, Gtk.Label)]
+        check(any("Community GT3" in l and "imported" in l for l in labels),
+              f"success told in the library: {labels[-3:]}")
+        check(win.active_preset == imp["active"], "not made the active preset")
+        imp_button().emit("clicked")                    # the same again
+    yield "library import saved", import_saved
+
+    def import_same_again():
+        d = imp_alert()
+        texts = "\n".join(imp_texts(d)) if d else ""
+        check("already have these settings: “Community GT3”" in texts,
+              f"same preset told: {texts!r}")
+        d.emit("response", "import")
+        d.force_close()
+        d = imp_alert()
+        check(d is not None and d.has_response("replace") and d.has_response("keep"),
+              "name taken: replace or keep both")
+        d.emit("response", "cancel")
+        d.force_close()
+        check(imp_files() == sorted(imp["files"] + ["Community GT3.json"]),
+              f"cancelled replacement: unchanged {imp_files()}")
+        config.write_preset(config.preset_path("Community GT3"), "Community GT3",
+                            {"FF": 10})                 # the user's own change
+        imp_confirm()
+    yield "library import same again", import_same_again
+
+    def import_keep_both():
+        d = imp_alert()
+        check(d is not None and d.has_response("keep"), "asked about the name")
+        d.emit("response", "keep")
+        d.force_close()
+        _n, own = config.read_preset(config.preset_path("Community GT3"))
+        check(own == {"FF": 10}, f"own preset kept: {own}")
+        both = config.preset_path("Community GT3 (2)")
+        check(both.exists() and config.read_preset(both)[1] == {"SEN": 900, "FF": 55},
+              f"kept both: {imp_files()}")
+        imp_confirm()
+    yield "library import keep both", import_keep_both
+
+    def import_replace():
+        d = imp_alert()
+        check(d is not None and d.has_response("replace"), "asked again")
+        d.emit("response", "replace")
+        d.force_close()
+        _n, own = config.read_preset(config.preset_path("Community GT3"))
+        check(own == {"SEN": 900, "FF": 55}, f"replaced after confirming: {own}")
+        check(not config.preset_path("Community GT3 (3)").exists(), "no third copy")
+        nav, _page = imp_page()
+        nav.pop()
+        check(ui()["shown"] == ["imp-other", "imp-same"]
+              and ui()["search"].get_text() == "community",
+              "back in the list, search kept")
+        imp_open("imp-other")
+        imp_button().emit("clicked")
+    yield "library import replace", import_replace
+
+    def import_other_model():
+        d = imp_alert()
+        texts = "\n".join(imp_texts(d)) if d else ""
+        check("Different wheelbase model:" in texts, f"other model told: {texts!r}")
+        check(not d.get_response_enabled("import"), "import needs the acknowledgement")
+        tick = next(w for w in walk(d.get_extra_child()) if isinstance(w, Gtk.CheckButton))
+        tick.set_active(True)
+        check(d.get_response_enabled("import"), "acknowledged: import allowed")
+        # The disk is full: nothing is saved, no part file stays
+        imp["replace"] = pathlib.Path.replace
+
+        def full(*_a, **_k):
+            raise OSError("Disk full")
+        pathlib.Path.replace = full
+        d.emit("response", "import")
+        d.force_close()
+        pathlib.Path.replace = imp.pop("replace")
+    yield "library import other model, disk full", import_other_model
+
+    def import_disk_full():
+        d = imp_alert()
+        check(d is not None and d.get_heading() == "Could not save preset",
+              f"error told: {d and d.get_heading()}")
+        if d is not None:
+            d.force_close()
+        check(not config.preset_path("Community Rally").exists()
+              and not any(f.endswith(".part") for f in imp_files()),
+              f"nothing half written: {imp_files()}")
+        check(win.get_visible_dialog() is library["dialog"], "library still open")
+        imp_button().emit("clicked")
+        d = imp_alert()
+        next(w for w in walk(d.get_extra_child())
+             if isinstance(w, Gtk.CheckButton)).set_active(True)
+        d.emit("response", "import")
+        d.force_close()
+    yield "library import disk full", import_disk_full
+
+    def import_done():
+        check(config.read_preset(config.preset_path("Community Rally"))[1] == {"FF": 60},
+              "other model imported after acknowledging")
+        check(search_ui["downloads"] == 0, "no download while importing")
+        check(community.CACHE_FILE.read_bytes() == imp["cache"], "cache unchanged")
+        check(sysfs_state() == imp["sysfs"], "the wheelbase was not written")
+        check(not imp.get("hw"), f"nothing applied: {imp.get('hw')}")
+        check(win._collect_values() == imp["values"], "tuning values unchanged")
+        window_module.write_values = imp.pop("write")
+        close_dialogs(win)
+        win._select_page("presets")
+        tiles = [w for w in walk(win) if hasattr(w, "get_title")
+                 and w.get_title() in ("Community GT3", "Community Rally")]
+        check(len(tiles) >= 2, "imported presets in the preset list")
+        for name in ("Community GT3", "Community GT3 (2)", "Community Rally"):
+            config.preset_path(name).unlink()
+        win._presets_changed()
+        check(imp_files() == imp["files"], f"other presets untouched: {imp_files()}")
+    yield "library import done", import_done
+
+    # --- Share with Community: up to the form on GitHub ----------------------
+    from understeer import github_form
+    from understeer.ui import share_dialog as share_module
+    import urllib.parse
+    share = {}
+
+    def share_dialog():
+        return win.get_visible_dialog()
+
+    def share_nav():
+        return next(w for w in walk(share_dialog()) if isinstance(w, Adw.NavigationView))
+
+    def share_page():
+        return share_nav().get_visible_page()
+
+    def share_rows():
+        page = share_page()
+        rows = {w.get_title(): w for w in walk(page)
+                if isinstance(w, (Adw.EntryRow, Adw.ComboRow))}
+        text = next(w for w in walk(page) if isinstance(w, Gtk.TextView))
+        return rows, text
+
+    def share_button(label):
+        return next(w for w in walk(share_page()) if isinstance(w, Gtk.Button)
+                    and w.get_label() == label)
+
+    def share_errors():
+        return [w.get_title() for w in walk(share_page())
+                if isinstance(w, Adw.ActionRow) and w.has_css_class("error")
+                and w.get_visible()]
+
+    def share_fill(game="Test Game", base="CSL DD", author="Tester",
+                   description="Calm for long stints.", tags=""):
+        rows, text = share_rows()
+        rows["Game"].set_text(game)
+        rows["Author"].set_text(author)
+        rows["Tags"].set_text(tags)
+        names = [rows["Wheelbase"].get_model().get_string(i)
+                 for i in range(rows["Wheelbase"].get_model().get_n_items())]
+        rows["Wheelbase"].set_selected(names.index(base) if base else 0)
+        text.get_buffer().set_text(description)
+
+    def share_open(path):
+        win.activate_action("win.share-community", GLib.Variant.new_string(str(path)))
+
+    def share_opens():
+        path = config.preset_path("Share Me")
+        config.write_preset(path, "Share Me", {"FOR": 100, "FF": 75, "SEN": 540},
+                            folder="Shared")
+        win._presets_changed()
+        win.rows["FF"].set(66, silent=True)             # unsaved live value
+        share.update(path=path, bytes=path.read_bytes(), sysfs=sysfs_state(),
+                     cache=community.CACHE_FILE.read_bytes(), downloads=[],
+                     browser=[], live=win._collect_values())
+        share["download"], community.download = community.download, \
+            lambda *a, **k: share["downloads"].append(a) or library_offline()
+        share["launch"] = Gtk.UriLauncher.launch
+        Gtk.UriLauncher.launch = lambda *a, **k: share["browser"].append(a)
+        share.update(opened=[], result=None, open_uri=share_module.open_uri)
+
+        def fake_open(parent, uri, done):               # answers later, like GTK
+            share["opened"].append(uri)
+            result = share["result"]
+            GLib.timeout_add(50, lambda: done(result) or False)
+        share_module.open_uri = fake_open
+        win.get_clipboard().set("private before")
+        share["write"], window_module.write_values = window_module.write_values, \
+            lambda writes: share.setdefault("hw", []).append(writes) or []
+        win.prepared_submission = None
+        menu = win._share_menu(path)
+        labels = [menu.get_item_attribute_value(0, "label").get_string()] + [
+            menu.get_item_link(i, "section").get_item_attribute_value(
+                0, "label").get_string()
+            for i in range(menu.get_n_items())
+            if menu.get_item_link(i, "section") is not None]
+        check("Share with Community…" in labels, f"in the Share menu: {labels}")
+        share_open(path)
+    yield "share opens", share_opens
+
+    def share_required():
+        d = share_dialog()
+        check(isinstance(d, Adw.Dialog) and d.get_title() == "Share with Community",
+              f"share dialog shown: {d and d.get_title()}")
+        rows, text = share_rows()
+        check(rows["Preset Name"].get_text() == "Share Me", "name from the saved preset")
+        check(rows["Author"].get_text() == "" and rows["Game"].get_text() == "",
+              "author and game not filled in from the system")
+        check(rows["Wheelbase"].get_selected() == 0,
+              "the wheelbase isn't assumed from the connected one")
+        check(text.get_buffer().get_char_count() == 0, "no description yet")
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Game is required.", "Author is required.",
+                     "Description is required.",
+                     "Choose the wheelbase the preset was made on."):
+            check(part in errors, f"required told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "stays on the form")
+        combo = share_rows()[0]["Wheelbase"]
+        names = [combo.get_model().get_string(i)
+                 for i in range(combo.get_model().get_n_items())]
+        combo.set_selected(names.index("CSL Elite Wheel Base (PS4)"))
+    yield "share required fields", share_required
+
+    def share_invalid():
+        shown = [w for w in walk(share_rows()[0]["Wheelbase"])
+                 if isinstance(w, Gtk.Label)
+                 and w.get_label() == "CSL Elite Wheel Base (PS4)"]
+        check(shown and not shown[0].get_layout().is_ellipsized(),
+              "the longest wheelbase name is shown whole")
+        share_fill(game="G" * 81, author="me@example.org",
+                   description="From /home/someone/presets", tags="two words")
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Game is too long: at most 80 characters.",
+                     "Author must not contain an e-mail address.",
+                     "Description must not contain a file path.",
+                     "Tags are short words of a–z, 0–9 and -, separated by commas."):
+            check(part in errors, f"problem told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "still on the form")
+    yield "share invalid input", share_invalid
+
+    def share_preview():
+        share_fill(description="<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                   tags="GT3, endurance")
+        share_button("Review").emit("clicked")
+        page = share_page()
+        check(page.get_tag() == "preview", f"preview shown: {page.get_tag()}")
+        labels = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)]
+        rows = {w.get_title(): w.get_subtitle() for w in walk(page)
+                if isinstance(w, Adw.ActionRow)}
+        text = "\n".join(labels + [f"{k}|{v}" for k, v in rows.items()])
+        for part in ("meant to be shared publicly", "Nothing has been published",
+                     "looks like a serial number",
+                     "Description|<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                     "Wheelbase|CSL DD", "Author|Tester", "Tags|gt3, endurance",
+                     "Preset Name|Share Me", "test-game-share-me|Only a proposal",
+                     "The catalog is checked again", "3 settings",
+                     "Steering Angle|", "Force Feedback Strength|", "Force Effects|"):
+            check(part in text, f"preview shows {part!r}")
+        values = [w.get_label() for w in walk(page) if isinstance(w, Gtk.Label)
+                  and w.has_css_class("numeric")]
+        check(values == ["540°", "75 %", "100 %"], f"saved values, not live ones: {values}")
+        check(not share_button("Confirm").get_sensitive(), "confirm needs the tick")
+    yield "share preview", share_preview
+
+    def share_labels():
+        return [w.get_label() for w in walk(share_page())
+                if isinstance(w, Gtk.Label) and w.get_visible()]
+
+    def share_read_clipboard():
+        share["clip"] = []
+        win.get_clipboard().read_text_async(
+            None, lambda c, r: share["clip"].append(c.read_text_finish(r)))
+
+    def share_confirm():
+        tick = next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton))
+        tick.set_active(True)
+        share_button("Confirm").emit("clicked")
+        page = share_page()
+        check(page.get_tag() == "done", f"GitHub page: {page.get_tag()}")
+        text = "\n".join(share_labels())
+        for part in ("opens in your default browser", "need to sign in",
+                     "Nothing has been submitted yet", "tick the boxes yourself",
+                     "may accept it, ask for changes or decline it",
+                     "browser history"):
+            check(part in text, f"GitHub page tells {part!r}")
+        check("Too Long for the Link" not in text, "everything fits into the link")
+        check("future update" not in text and "submitted." not in text,
+              "nothing claimed as submitted")
+        result = win.prepared_submission
+        check(result is not None and result.entry["preset"]["values"]
+              == {"SEN": 540, "FF": 75, "FOR": 100}, "kept in memory")
+        check(share["path"].read_bytes() == share["bytes"], "saved preset unchanged")
+        share["result"] = "No browser here"             # the first launch fails
+        go = share_button("Continue on GitHub…")
+        go.emit("clicked")
+        go.emit("clicked")                              # a quick second click
+        check(len(share["opened"]) == 1, f"opened once: {len(share['opened'])}")
+        check(not go.get_sensitive(), "no second launch while opening")
+        share_read_clipboard()
+    yield "share confirmed, GitHub asked", share_confirm
+
+    def share_launch_failed():
+        url = share["opened"][0] if share["opened"] else ""
+        check(url == github_form.for_submission(win.prepared_submission).url,
+              f"the prepared submission's link: {url[:80]}")
+        q = dict(urllib.parse.parse_qsl(url.partition("?")[2]))
+        check(q.get("template") == "community-preset.yml"
+              and q.get("preset-name") == "Share Me" and q.get("author") == "Tester"
+              and q.get("catalog-id") == "test-game-share-me"
+              and json.loads(q.get("preset-json", "{}")) == {
+                  "understeer_preset": 1, "name": "Share Me",
+                  "values": {"SEN": 540, "FF": 75, "FOR": 100}}
+              and "acknowledgement" not in q,
+              f"fields filled in, preset only, no box ticked: {sorted(q)}")
+        text = "\n".join(share_labels())
+        check("The browser could not be opened: No browser here" in text,
+              f"failure told: {text[-200:]!r}")
+        check("GitHub opened" not in text, "no success claimed")
+        check(share_button("Copy Link").get_visible(), "link can be copied instead")
+        check(share_button("Continue on GitHub…").get_sensitive(), "can try again")
+        check(share["clip"] == ["private before"],
+              f"nothing copied without asking: {share['clip']}")
+        share["result"] = None                          # now it opens
+        share_button("Continue on GitHub…").emit("clicked")
+    yield "share browser failed", share_launch_failed
+
+    def share_launched():
+        check(len(share["opened"]) == 2, f"opened again: {len(share['opened'])}")
+        text = "\n".join(share_labels())
+        check("GitHub opened. Review the information and submit the issue there."
+              in text, "launch told only after it worked")
+        go = share_button("Continue on GitHub…")
+        check(not go.get_sensitive(), "opened once is enough")
+        go.emit("clicked")
+        check(len(share["opened"]) == 2, "no further launch")
+        share_button("Copy Link").emit("clicked")       # the user asks for it
+        share_read_clipboard()
+    yield "share browser opened", share_launched
+
+    def share_link_copied():
+        check(share["clip"] == [share["opened"][-1]], "link copied on request")
+        share_button("Close").emit("clicked")
+        share_open(share["path"])
+        share_fill(description=("Fahrgefühl für Übungsrunden " * 40)[:1000].strip())
+        share_button("Review").emit("clicked")
+        next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton)).set_active(True)
+        share_button("Confirm").emit("clicked")
+        text = "\n".join(share_labels())
+        check("Too Long for the Link" in text, "too long for the link told")
+        rows = [w for w in walk(share_page()) if isinstance(w, Adw.ActionRow)
+                and w.get_title() == "Preset JSON"]
+        check(len(rows) == 1, "the JSON to copy by hand")
+        if rows:
+            next(w for w in walk(rows[0]) if isinstance(w, Gtk.Button)).emit("clicked")
+        share_read_clipboard()
+    yield "share too long for the link", share_link_copied
+
+    def share_json_copied():
+        entry = win.prepared_submission.entry
+        check(share["clip"] == [github_form.preset_json(entry)],
+              f"preset JSON copied: {share['clip'][:1]}")
+        check("Copied: Preset JSON" in share_labels(), "copy told")
+        share_button("Continue on GitHub…").emit("clicked")
+        url = share["opened"][-1]
+        q = dict(urllib.parse.parse_qsl(url.partition("?")[2]))
+        check(len(url) <= github_form.MAX_URL_CHARS and "preset-json" not in q
+              and q.get("preset-name") == "Share Me",
+              f"short link without the JSON: {len(url)} {sorted(q)}")
+        share_dialog().close()
+    yield "share JSON copied", share_json_copied
+
+    def share_cancel():
+        check(win.get_visible_dialog() is None, "closed")
+        win.prepared_submission = None
+        share_open(share["path"])
+        rows, text = share_rows()
+        check(rows["Author"].get_text() == "" and not share_errors(),
+              "opened again: a fresh form")
+        share_fill()
+        share_button("Review").emit("clicked")
+        check(share_page().get_tag() == "preview", "preview again")
+        share_dialog().close()                          # cancelled
+    yield "share cancelled", share_cancel
+
+    def share_adjusted():
+        check(win.get_visible_dialog() is None, "cancelled: closed")
+        check(win.prepared_submission is None, "cancelled: nothing prepared")
+        odd = config.preset_path("Share Odd")
+        config.write_preset(odd, "Share Odd", {"SEN": 905, "FF": 75, "ZZZ": 1})
+        share["odd"] = (odd, odd.read_bytes())
+        share_open(odd)
+        share_fill()
+        share_button("Review").emit("clicked")
+        errors = share_errors()
+        for part in ("Steering Angle is 905°, which the wheelbase keeps as 900°. "
+                     "Save the preset with 900° first.",
+                     "The preset has a setting this version can't share: ZZZ."):
+            check(part in errors, f"values told: {part!r} in {errors}")
+        check(share_page().get_tag() == "form", "not shareable as it is")
+        share_dialog().close()
+    yield "share adjusted values", share_adjusted
+
+    def share_nothing_else():
+        odd, odd_bytes = share["odd"]
+        check(odd.read_bytes() == odd_bytes, "odd preset unchanged")
+        check(share["path"].read_bytes() == share["bytes"], "preset unchanged")
+        check(sysfs_state() == share["sysfs"], "the wheelbase was not written")
+        check(not share.get("hw"), f"nothing applied: {share.get('hw')}")
+        check(win._collect_values() == share["live"], "tuning values unchanged")
+        check(community.CACHE_FILE.read_bytes() == share["cache"], "cache unchanged")
+        check(share["downloads"] == [] and share["browser"] == [],
+              f"no network, no browser: {share['downloads']} {share['browser']}")
+        check(win.prepared_submission is None, "nothing prepared")
+        community.download = share.pop("download")
+        Gtk.UriLauncher.launch = share.pop("launch")
+        share_module.open_uri = share.pop("open_uri")
+        window_module.write_values = share.pop("write")
+        win.rows["FF"].set(share["live"]["FF"], silent=True)
+        odd.unlink()
+        win._presets_changed()
+    yield "share leaves everything as it was", share_nothing_else
+
     def layout_and_language():
         win._set_layout("compact")
         win._set_language("de")
@@ -2679,6 +3678,22 @@ def steps(win):
         check(win.active_preset == config.preset_path("Renamed"),
               "active preset kept over relocalize"),
         win._select_page("tuning"))
+
+    def share_german():
+        menu = win._share_menu(share["path"])
+        section = menu.get_item_link(menu.get_n_items() - 1, "section")
+        label = section.get_item_attribute_value(0, "label").get_string()
+        check(label == "In Community teilen…", f"menu in German: {label!r}")
+        share_open(share["path"])
+        d = share_dialog()
+        check(d.get_title() == "In Community teilen", f"German title: {d.get_title()}")
+        share_button("Überprüfen").emit("clicked")
+        errors = share_errors()
+        check("Spiel wird benötigt." in errors, f"German problems: {errors}")
+        d.close()
+        share["path"].unlink()
+        win._presets_changed()
+    yield "share in German", share_german
 
     def delete():
         path = config.preset_path("Renamed")
@@ -2722,8 +3737,10 @@ def main():
         return False
 
     application.connect("activate", lambda a: GLib.timeout_add(1500, run_steps))
-    GLib.timeout_add_seconds(90, lambda: (failures.append("timeout"),
-                                          application.quit()))
+    # The steps alone take STEP_MS each (about 71 s), more on a busy machine;
+    # a hang still ends here, well before test_ui.py's 150 s for the process
+    GLib.timeout_add_seconds(120, lambda: (failures.append("timeout"),
+                                           application.quit()))
     session_log.setup()
     config.migrate_config()
     application.run([])
