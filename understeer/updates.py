@@ -6,12 +6,17 @@ is updated with git. Nothing here runs unless the user agreed to it
 (setting "update_check"). The request asks GitHub for the newest release
 only and sends nothing about the user.
 
+Test versions (betas) are never offered by that look: fetch_beta() finds
+the newest one apart from it, only tells its version and page, and is
+not called by the app yet.
+
 Updating downloads the new AppImage next to the running one, checks it
 against the SHA-256 that GitHub gives for it, and only then puts it in
 place of the old file. The running Understeer goes on from its mounted
 image until it is restarted.
 """
 import hashlib
+import http.client
 import json
 import logging
 import os
@@ -33,6 +38,14 @@ CHECK_EVERY = 3600              # at most one look an hour, also over restarts
 # and anything else are never offered. ASCII digits only, as int() would
 # also read other digits.
 STABLE_TAG = re.compile(r"v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")
+
+# Test versions: GitHub's list of the newest releases, asked only when
+# fetch_beta() is called. One page: see newest_beta().
+BETAS_PER_PAGE = 10
+BETAS_URL = ("https://api.github.com/repos/JamDaBam/Understeer/releases"
+             f"?per_page={BETAS_PER_PAGE}")
+MAX_BETAS_ANSWER = 1024 * 1024       # ten releases are about 75 KB
+BETA_TAG = re.compile(r"v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}-beta\.[0-9]{1,4}")
 
 log = logging.getLogger("understeer.updates")
 
@@ -112,6 +125,102 @@ def is_newer(latest, current):
         return False
     new, old = releases.number(latest), releases.number(current)
     return new is not None and old is not None and new > old
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Follows no redirect: the answer must come from BETAS_URL itself, so
+    a redirect fails as an HTTP error."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def _opener():
+    """urllib with its usual HTTPS (certificates checked), no redirects."""
+    return urllib.request.build_opener(_NoRedirect)
+
+
+def _get_json(url, limit, timeout):
+    """The JSON of an HTTPS answer of at most limit bytes; raises Error."""
+    if not url.startswith("https://"):
+        raise Error("only HTTPS is asked")
+    req = urllib.request.Request(url, headers={
+        "User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
+    try:
+        with _opener().open(req, timeout=timeout) as resp:
+            body = resp.read(limit + 1)
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise Error(str(e)) from e          # offline, timeout, HTTP error
+    if len(body) > limit:
+        raise Error("the answer is too big")
+    try:
+        return json.loads(body)
+    except (ValueError, RecursionError) as e:
+        raise Error("the answer is no JSON") from e
+
+
+def _listed_release(data):
+    """("stable" or "beta", version, url) of one release in GitHub's list,
+    or None for anything else: a draft, a tag of another form, a beta not
+    marked as prerelease (or the other way round), or a page that is not
+    exactly the release's own on GitHub. Nothing else of it is read."""
+    if not isinstance(data, dict) or data.get("draft") is not False:
+        return None
+    tag, prerelease = data.get("tag_name"), data.get("prerelease")
+    if not isinstance(tag, str) or not isinstance(prerelease, bool):
+        return None
+    if prerelease and BETA_TAG.fullmatch(tag):
+        kind = "beta"
+    elif not prerelease and STABLE_TAG.fullmatch(tag):
+        kind = "stable"
+    else:
+        return None
+    url = f"{RELEASES_URL}/tag/{tag}"
+    version = releases.plain_version(tag)
+    if data.get("html_url") != url or releases.number(version) is None:
+        return None
+    return kind, version, url
+
+
+def newest_beta(data, current=None):
+    """{"version": "2.4.0-beta.2", "url": "https://…"} of the newest beta
+    in GitHub's list of releases, or None. Ordered by version, not by
+    date. A beta only counts if it is newer than every stable release in
+    the list and than current (the running version; None: any), so a
+    stable 2.4.0 ends the betas of 2.4.0. Raises Error if data is no list.
+
+    The list is one page of the newest releases (BETAS_PER_PAGE). A beta
+    that ten newer releases have followed is not seen; such a beta is in
+    practice ended by a stable release among them."""
+    if not isinstance(data, list):
+        raise Error("no list of releases in the answer")
+    floor = None
+    if current is not None:
+        floor = releases.number(current)
+        if floor is None:
+            return None             # e.g. run from git: newer can't be told
+    betas = []
+    for item in data[:BETAS_PER_PAGE]:
+        found = _listed_release(item)
+        if found is None:
+            continue
+        kind, version, url = found
+        key = releases.number(version)
+        if kind == "stable":
+            floor = key if floor is None else max(floor, key)
+        else:
+            betas.append((key, version, url))
+    betas = [b for b in betas if floor is None or b[0] > floor]
+    if not betas:
+        return None
+    _key, version, url = max(betas)
+    return {"version": version, "url": url}
+
+
+def fetch_beta(current=None, timeout=10):
+    """The newest beta on GitHub newer than current, see newest_beta(), or
+    None; raises Error. Only asks GitHub; never downloads anything."""
+    return newest_beta(_get_json(BETAS_URL, MAX_BETAS_ANSWER, timeout), current)
 
 
 def can_install(appimage):
