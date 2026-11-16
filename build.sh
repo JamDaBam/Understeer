@@ -69,11 +69,21 @@ export VERSION="${VERSION#v}"
 
 # Update information lets tools like Gear Lever find new releases on GitHub.
 # It also produces a .zsync file that must be uploaded next to the AppImage.
+# Only an official stable release gets it: those tools follow the latest
+# stable release and take any other file as an update, so a beta or a
+# build from git would be "updated" back to an older stable version.
 UPDATE_INFO="gh-releases-zsync|JamDaBam|Understeer|latest|Understeer-*x86_64.AppImage.zsync"
+OUTPUT="Understeer-$VERSION-$ARCH.AppImage"
+BUILD_KIND="$(python3 tools/release_tag.py --build-kind "$VERSION")"
 
 # Shown in the log file
 echo "$VERSION" > AppDir/usr/share/understeer/VERSION
 
-"./$TOOL" -u "$UPDATE_INFO" AppDir "Understeer-$VERSION-$ARCH.AppImage"
+if [ "$BUILD_KIND" = "stable" ]; then
+    "./$TOOL" -u "$UPDATE_INFO" AppDir "$OUTPUT"
+else
+    echo "No update information in a $BUILD_KIND build"
+    "./$TOOL" AppDir "$OUTPUT"
+fi
 
 echo "=== Success: AppImage compilation sequence completed ==="

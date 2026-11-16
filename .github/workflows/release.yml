@@ -52,15 +52,33 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: ./build.sh
 
-      # Both files must be there and not empty before anything is published.
+      # The files must be there and not empty before anything is published.
+      # A stable AppImage carries update information and has its .zsync
+      # file; a beta has neither, so AppImage managers can't take an older
+      # stable version for an update of it.
       - name: Check the files to publish
         env:
           VERSION: ${{ needs.tag.outputs.version }}
+          KIND: ${{ needs.tag.outputs.kind }}
         run: |
-          for file in "Understeer-$VERSION-x86_64.AppImage" \
-                      "Understeer-$VERSION-x86_64.AppImage.zsync"; do
-            test -s "$file" || { echo "Missing: $file"; exit 1; }
-          done
+          app="Understeer-$VERSION-x86_64.AppImage"
+          test -s "$app" || { echo "Missing: $app"; exit 1; }
+          # The strings in the AppImage's .upd_info section; none if it is
+          # empty or missing. readelf fails on anything but an ELF file.
+          dump="$(readelf -p .upd_info "$app")"
+          info="$(sed -nE 's/^[[:space:]]*\[[[:space:]]*[0-9a-f]+\][[:space:]]+//p' <<< "$dump")"
+          expected='gh-releases-zsync|JamDaBam|Understeer|latest|Understeer-*x86_64.AppImage.zsync'
+          case "$KIND" in
+            stable)
+              test -s "$app.zsync" || { echo "Missing: $app.zsync"; exit 1; }
+              test "$info" = "$expected" \
+                || { echo "Not the expected update information in $app: $info"; exit 1; } ;;
+            beta)
+              test ! -e "$app.zsync" || { echo "A beta has no $app.zsync"; exit 1; }
+              test -z "$info" \
+                || { echo "Update information in the beta $app: $info"; exit 1; } ;;
+            *) echo "Unknown kind of release: $KIND"; exit 1 ;;
+          esac
 
       # FLAGS is "" for a stable release and "--prerelease --latest=false"
       # for a beta: fixed words from tools/release_tag.py, not from the tag.
@@ -72,13 +90,13 @@ jobs:
           FLAGS: ${{ needs.tag.outputs.flags }}
         run: |
           read -r -a flags <<< "$FLAGS"
+          files=("Understeer-$VERSION-x86_64.AppImage")
           case "$KIND" in
-            stable) test "${#flags[@]}" -eq 0 ;;
+            stable) test "${#flags[@]}" -eq 0
+                    files+=("Understeer-$VERSION-x86_64.AppImage.zsync") ;;
             beta) test "${flags[*]}" = "--prerelease --latest=false" ;;
             *) echo "Unknown kind of release: $KIND"; exit 1 ;;
           esac
-          gh release create "$GITHUB_REF_NAME" \
-            "Understeer-$VERSION-x86_64.AppImage" \
-            "Understeer-$VERSION-x86_64.AppImage.zsync" \
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
             --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" \
             --generate-notes "${flags[@]}"

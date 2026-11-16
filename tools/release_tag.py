@@ -17,6 +17,11 @@ where flags are the extra options of "gh release create": a test version
 is a prerelease and never becomes the latest release, so the update check
 and AppImage tools keep offering the stable one. A stable release keeps
 the defaults. The flags are fixed words of this file, never from the tag.
+
+For build.sh, "release_tag.py --build-kind VERSION" prints what a version
+is: "stable" (1.2.3 or v1.2.3), "beta" (1.2.3-beta.4) or "development"
+(anything else, e.g. 1.2.3-5-gabc from git or "dev"). Only a stable build
+gets AppImage update information.
 """
 import datetime
 import pathlib
@@ -41,6 +46,18 @@ def release(tag):
         raise ValueError(f"{tag!r} is no release tag like v1.2.3 or "
                          "v1.2.3-beta.4")
     return tag[1:], "beta" if "-" in tag else "stable"
+
+
+def build_kind(version):
+    """"stable", "beta" or "development" (anything else) of a version as
+    build.sh gets it, with or without its "v"."""
+    if not isinstance(version, str):
+        return "development"
+    tag = version if version.startswith("v") else "v" + version
+    try:
+        return release(tag)[1]
+    except ValueError:
+        return "development"
 
 
 def check_metainfo(tag, path=None):
@@ -90,11 +107,15 @@ def outputs(tag):
 
 
 def main(args):
+    if len(args) == 2 and args[0] == "--build-kind":
+        print(build_kind(args[1]))
+        return 0
     path = None
     if len(args) == 3 and args[0] == "--metainfo":      # for the tests
         path, args = args[1], args[2:]
     if len(args) != 1:
-        print("usage: release_tag.py [--metainfo FILE] <tag>", file=sys.stderr)
+        print("usage: release_tag.py [--metainfo FILE] <tag>\n"
+              "       release_tag.py --build-kind <version>", file=sys.stderr)
         return 2
     try:
         check_metainfo(args[0], path)
