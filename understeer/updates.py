@@ -34,6 +34,7 @@ RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
 DOWNLOAD_URL = RELEASES_URL + "/download/"
 MAX_DOWNLOAD = 200 * 1024 * 1024        # far more than an AppImage needs
 CHECK_EVERY = 3600              # at most one look an hour, also over restarts
+BETA_CHECK_EVERY = 24 * 3600    # at most one look for a beta a day
 # The tag of a stable release, e.g. v2.3.3: test versions like v2.4.0-beta.1
 # and anything else are never offered. ASCII digits only, as int() would
 # also read other digits.
@@ -60,14 +61,14 @@ def can_check(version, environ=os.environ):
     return bool(environ.get("APPIMAGE")) and releases.has_notes(version)
 
 
-def due(last_checked, now=None):
+def due(last_checked, now=None, every=CHECK_EVERY):
     """Whether it is time to look again; last_checked: a time.time()."""
     now = time.time() if now is None else now
     try:
         last_checked = float(last_checked)
     except (TypeError, ValueError):
         return True
-    return not 0 <= now - last_checked < CHECK_EVERY
+    return not 0 <= now - last_checked < every
 
 
 def _asset(data, version, machine):
@@ -205,6 +206,47 @@ def newest_beta(data, current=None):
         return None
     _key, version, url = max(betas)
     return {"version": version, "url": url}
+
+
+def checked_beta(beta):
+    """{"version", "url"} of a beta as fetch_beta() gave it, checked again
+    (it may come from the settings file), or None."""
+    if not isinstance(beta, dict):
+        return None
+    version, url = beta.get("version"), beta.get("url")
+    if (not isinstance(version, str) or not BETA_TAG.fullmatch("v" + version)
+            or url != f"{RELEASES_URL}/tag/v{version}"):
+        return None
+    return {"version": version, "url": url}
+
+
+def beta_series(version):
+    """The release a beta is a test version of: "2.4.0" of "2.4.0-beta.2";
+    None if version is no beta."""
+    if not releases.is_prerelease(version):
+        return None
+    return releases.plain_version(version).split("-", 1)[0]
+
+
+def should_offer_beta(beta, current, stable, handled):
+    """Whether to ask about beta ({"version", "url"}) once: it is a test
+    version of a newer release than the running version current (so
+    2.4.0-beta.1 running hears nothing of 2.4.0-beta.2, but of
+    2.5.0-beta.1), no stable release is known that is newer than current
+    or than the beta (stable: the newest stable version known, or None),
+    and its release is newer than the release whose beta was asked about
+    already (handled, e.g. "2.4.0", or None). So beta.2 of a release asked
+    about is not asked about again."""
+    beta = checked_beta(beta)
+    key, now = releases.number(beta and beta["version"]), releases.number(current)
+    if beta is None or key is None or now is None or not key[0] > now[0]:
+        return False                # not of a newer release than running
+    stable_key = releases.number(stable) if isinstance(stable, str) else None
+    if stable_key is not None and not releases.is_prerelease(stable) and (
+            stable_key > now or stable_key > key):
+        return False
+    done = releases.number(handled) if isinstance(handled, str) else None
+    return done is None or key[0] > done[0]
 
 
 def fetch_beta(current=None, timeout=10):

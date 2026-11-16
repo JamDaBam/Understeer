@@ -283,19 +283,19 @@ msgstr "Auto"
 msgid "Understeer preset “{name}”"
 msgstr "Understeer preset “{name}”"
 
-#: understeer/sharing.py:128
+#: understeer/sharing.py:134
 msgid "Imported Preset"
 msgstr "Imported Preset"
 
-#: understeer/sharing.py:137
+#: understeer/sharing.py:143
 msgid "This is too long to hold presets."
 msgstr "This is too long to hold presets."
 
-#: understeer/sharing.py:159
+#: understeer/sharing.py:165
 msgid "The presets hold no settings Understeer knows."
 msgstr "The presets hold no settings Understeer knows."
 
-#: understeer/sharing.py:160
+#: understeer/sharing.py:166
 msgid "No preset found. Copy the whole text of a shared preset, or its JSON."
 msgstr "No preset found. Copy the whole text of a shared preset, or its JSON."
 
@@ -1711,75 +1711,87 @@ msgstr "Updates"
 msgid "Look for New Versions"
 msgstr "Look for New Versions"
 
-#: understeer/ui/preferences.py:323
+#: understeer/ui/preferences.py:315
+msgid "Notify About Test Versions"
+msgstr "Notify About Test Versions"
+
+#: understeer/ui/preferences.py:329
 msgid "At start and every hour, Understeer asks GitHub whether there is a newer version and shows a note at the top."
 msgstr "At start and every hour, Understeer asks GitHub whether there is a newer version and shows a note at the top."
 
-#: understeer/ui/preferences.py:325
+#: understeer/ui/preferences.py:331
 msgid "Only in the AppImage; a copy from git is updated with git."
 msgstr "Only in the AppImage; a copy from git is updated with git."
 
-#: understeer/ui/preferences.py:331
+#: understeer/ui/preferences.py:339
+msgid "Once a day, Understeer looks for a test version of the next release and asks once per release whether to show it on GitHub. Nothing is installed."
+msgstr "Once a day, Understeer looks for a test version of the next release and asks once per release whether to show it on GitHub. Nothing is installed."
+
+#: understeer/ui/preferences.py:344
+msgid "Needs “Look for New Versions”."
+msgstr "Needs “Look for New Versions”."
+
+#: understeer/ui/preferences.py:353
 msgid "Background"
 msgstr "Background"
 
-#: understeer/ui/preferences.py:333
+#: understeer/ui/preferences.py:355
 msgid "Run in the Background"
 msgstr "Run in the Background"
 
-#: understeer/ui/preferences.py:334
+#: understeer/ui/preferences.py:356
 msgid "Presets of games are also applied with the window closed. An icon in the system tray shows that Understeer runs; quit it there or in the main menu."
 msgstr "Presets of games are also applied with the window closed. An icon in the system tray shows that Understeer runs; quit it there or in the main menu."
 
-#: understeer/ui/preferences.py:339
+#: understeer/ui/preferences.py:361
 msgid "Start at Login"
 msgstr "Start at Login"
 
-#: understeer/ui/preferences.py:340
+#: understeer/ui/preferences.py:362
 msgid "Starts in the background when you log in."
 msgstr "Starts in the background when you log in."
 
-#: understeer/ui/preferences.py:344
+#: understeer/ui/preferences.py:366
 msgid "Notify When a Game Starts"
 msgstr "Notify When a Game Starts"
 
-#: understeer/ui/preferences.py:345
+#: understeer/ui/preferences.py:367
 msgid "With the window closed, a notification tells whether the preset of the game was applied."
 msgstr "With the window closed, a notification tells whether the preset of the game was applied."
 
-#: understeer/ui/preferences.py:374
+#: understeer/ui/preferences.py:396
 msgid "Could not change the start at login"
 msgstr "Could not change the start at login"
 
-#: understeer/ui/preferences.py:414
+#: understeer/ui/preferences.py:436
 msgid "Understeer Export (ZIP)"
 msgstr "Understeer Export (ZIP)"
 
-#: understeer/ui/preferences.py:431
+#: understeer/ui/preferences.py:453
 msgid "Could not export"
 msgstr "Could not export"
 
-#: understeer/ui/preferences.py:433
+#: understeer/ui/preferences.py:455
 msgid "Exported (presets: {presets}, games: {games})"
 msgstr "Exported (presets: {presets}, games: {games})"
 
-#: understeer/ui/preferences.py:447
+#: understeer/ui/preferences.py:469
 msgid "Could not import"
 msgstr "Could not import"
 
-#: understeer/ui/preferences.py:448
+#: understeer/ui/preferences.py:470
 msgid "This is not a file exported by Understeer, or it is damaged."
 msgstr "This is not a file exported by Understeer, or it is damaged."
 
-#: understeer/ui/preferences.py:453
+#: understeer/ui/preferences.py:475
 msgid "Import from This File?"
 msgstr "Import from This File?"
 
-#: understeer/ui/preferences.py:454
+#: understeer/ui/preferences.py:476
 msgid "Presets: {presets} · Games: {games} · Pictures: {covers}\n\nPresets and games with the same name are replaced, everything else stays. Settings like the language and slot names are taken from the file.\n\nThe current state is saved first, as before-import.zip next to the log file."
 msgstr "Presets: {presets} · Games: {games} · Pictures: {covers}\n\nPresets and games with the same name are replaced, everything else stays. Settings like the language and slot names are taken from the file.\n\nThe current state is saved first, as before-import.zip next to the log file."
 
-#: understeer/ui/preferences.py:492
+#: understeer/ui/preferences.py:514
 msgid "Imported (presets: {presets}, games: {games})"
 msgstr "Imported (presets: {presets}, games: {games})"
 
@@ -2755,51 +2767,67 @@ msgstr "The games in it are deleted for good."
 msgid "Empty Trash"
 msgstr "Empty Trash"
 
-#: understeer/ui/update_check.py:61
+#: understeer/ui/update_check.py:77
 msgid "Look for New Versions?"
 msgstr "Look for New Versions?"
 
-#: understeer/ui/update_check.py:62
+#: understeer/ui/update_check.py:78
 msgid "Understeer can ask GitHub at start and every hour whether there is a newer version and then show a note at the top. Only the version number is fetched; nothing about you is sent. You can change this in the preferences."
 msgstr "Understeer can ask GitHub at start and every hour whether there is a newer version and then show a note at the top. Only the version number is fetched; nothing about you is sent. You can change this in the preferences."
 
-#: understeer/ui/update_check.py:66
+#: understeer/ui/update_check.py:82
 msgid "Don't Look"
 msgstr "Don't Look"
 
-#: understeer/ui/update_check.py:67
+#: understeer/ui/update_check.py:83
 msgid "Look"
 msgstr "Look"
 
-#: understeer/ui/update_check.py:139
+#: understeer/ui/update_check.py:210
+msgid "Test Version Available"
+msgstr "Test Version Available"
+
+#: understeer/ui/update_check.py:211
+msgid "Understeer {version} is a test version of the next release. You can try it and tell what works and what doesn't. Understeer asks only once for each release; nothing is downloaded or installed."
+msgstr "Understeer {version} is a test version of the next release. You can try it and tell what works and what doesn't. Understeer asks only once for each release; nothing is downloaded or installed."
+
+#: understeer/ui/update_check.py:216
+msgid "Not Now"
+msgstr "Not Now"
+
+#: understeer/ui/update_check.py:217
+msgid "View on GitHub"
+msgstr "View on GitHub"
+
+#: understeer/ui/update_check.py:284
 msgid "Understeer {version} is installed. Restart to use it."
 msgstr "Understeer {version} is installed. Restart to use it."
 
-#: understeer/ui/update_check.py:141
+#: understeer/ui/update_check.py:286
 msgid "Restart"
 msgstr "Restart"
 
-#: understeer/ui/update_check.py:143
+#: understeer/ui/update_check.py:288
 msgid "Updating to Understeer {version}…"
 msgstr "Updating to Understeer {version}…"
 
-#: understeer/ui/update_check.py:147
+#: understeer/ui/update_check.py:292
 msgid "Understeer {version} is available"
 msgstr "Understeer {version} is available"
 
-#: understeer/ui/update_check.py:149
+#: understeer/ui/update_check.py:294
 msgid "Update Now"
 msgstr "Update Now"
 
-#: understeer/ui/update_check.py:151
+#: understeer/ui/update_check.py:296
 msgid "Download"
 msgstr "Download"
 
-#: understeer/ui/update_check.py:185
+#: understeer/ui/update_check.py:330
 msgid "Update Failed"
 msgstr "Update Failed"
 
-#: understeer/ui/update_check.py:186
+#: understeer/ui/update_check.py:331
 msgid "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 msgstr "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 

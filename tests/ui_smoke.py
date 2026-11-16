@@ -2496,6 +2496,228 @@ def steps(win):
         win._update_state = None
     yield "update installed", update_installed
 
+    # -- test versions: only when asked for, once per release ----------------
+    beta_fetched, beta_pages = [], []
+    beta_answer = {"result": None}
+
+    def fake_fetch_beta(current):
+        beta_fetched.append(current)
+        if isinstance(beta_answer["result"], Exception):
+            raise beta_answer["result"]
+        return beta_answer["result"]
+
+    def beta(version):
+        return {"version": version, "url": updates.RELEASES_URL + "/tag/v" + version}
+
+    def beta_dialog():
+        d = win.get_visible_dialog()
+        return d if isinstance(d, Adw.AlertDialog) and \
+            d.get_heading() == "Test Version Available" else None
+
+    def answer_beta(response):
+        d = beta_dialog()
+        if d is not None:
+            d.emit("response", response)
+            d.force_close()
+        return d
+
+    def beta_off_by_default():
+        beta_answer["fetch"], updates.fetch_beta = updates.fetch_beta, fake_fetch_beta
+        beta_answer["launch"] = Gtk.UriLauncher.launch
+        Gtk.UriLauncher.launch = lambda launcher, *a, **k: \
+            beta_pages.append(launcher.get_uri())
+        check(config.get_setting("beta_notify") is None, "off by default")
+        config.set_setting("update_checked", None)
+        win._start_update_check()
+        check(not beta_fetched, "no beta looked for without asking for it")
+        win._show_preferences("general")
+        row = find_row(win.prefs, "Notify About Test Versions")
+        check(row is not None and row.get_sensitive() and not row.get_active(),
+              "beta preference there, off, can be switched on")
+        beta_answer["result"] = beta("99.1.0-beta.1")
+        if row is not None:
+            row.set_active(True)        # the user switches it on
+        check(config.get_setting("beta_notify") is True, "switched on")
+    yield "beta off by default", beta_off_by_default
+
+    def beta_waits():
+        check(len(beta_fetched) == 1,
+              f"looked once for a beta: {beta_fetched}")
+        check(config.get_setting("beta_latest") == beta("99.1.0-beta.1"),
+              "beta kept")
+        check(beta_dialog() is None, "not asked over the preferences")
+        win.prefs.close()
+        close_dialogs(win)
+        win._offer_beta()
+        check(win.update_banner.get_revealed() and beta_dialog() is None,
+              "a stable update comes first")
+        config.set_setting("update_latest", {"version": "99.9.0-beta.1",
+                                             "url": updates.RELEASES_URL})
+        win._show_update_banner()
+        check(not win.update_banner.get_revealed(),
+              "a beta never reaches the stable banner")
+        config.set_setting("update_latest", None)
+        win._show_update_banner()
+        win._in_background = True
+        win._offer_beta()
+        win._in_background = False
+        check(beta_dialog() is None and config.get_setting("beta_handled") is None,
+              "not asked in the background, and not counted as asked")
+        win._offer_beta()
+        d = beta_dialog()
+        check(d is not None and "99.1.0-beta.1" in d.get_body(),
+              "asked about the beta")
+        check(answer_beta("later") is not None
+              and config.get_setting("beta_handled") == "99.1.0",
+              "Not Now counts as asked")
+        check(not beta_pages, "no page opened")
+    yield "beta asked about once", beta_waits
+
+    def beta_once_per_release():
+        config.set_setting("beta_latest", beta("99.1.0-beta.2"))
+        win._offer_beta()
+        check(beta_dialog() is None, "beta.2 of the same release not asked about")
+        win._look_for_beta()
+        win._start_update_check()
+        check(len(beta_fetched) == 1, "no second look within the day")
+        config.set_setting("beta_latest", beta("99.2.0-beta.1"))
+        win._offer_beta()
+        d = beta_dialog()
+        check(d is not None, "a newer release is asked about")
+        if d is not None:
+            d.close()                   # like Escape
+        check(beta_dialog() is None
+              and config.get_setting("beta_handled") == "99.2.0",
+              "closing counts as asked")
+        config.set_setting("beta_latest", beta("99.3.0-beta.1"))
+        win._offer_beta()
+        answer_beta("view")
+        check(beta_pages == [updates.RELEASES_URL + "/tag/v99.3.0-beta.1"],
+              f"only the beta's page opened: {beta_pages}")
+        check(config.get_setting("beta_handled") == "99.3.0",
+              "View on GitHub counts as asked")
+        check(image.read_bytes() == b"new AppImage", "nothing downloaded")
+    yield "beta once per release", beta_once_per_release
+
+    # -- answers that come late, switching off meanwhile, no doubles --------
+    gate = threading.Event()
+
+    def slow_fetch(current):
+        beta_fetched.append(current)
+        gate.wait(5)                    # the answer comes when the test says
+        return beta("99.6.0-beta.1")
+
+    def look_again():
+        """As if a day had passed: in the settings and in this session."""
+        config.set_setting("beta_checked", None)
+        win._beta_looked = None
+
+    def switched_off_while_asking():
+        updates.fetch_beta = slow_fetch
+        config.set_setting("beta_latest", None)
+        look_again()
+        before = len(beta_fetched)
+        win._look_for_beta()
+        look_again()
+        win._look_for_beta()            # the first one is still asking
+        check(win._beta_looking, "asking GitHub")
+        win.set_beta_notify(False)
+        win.set_beta_notify(True)       # quickly off and on
+        win.set_beta_notify(False)
+        gate.set()
+        beta_answer["before"] = before
+    yield "beta switched off while asking", switched_off_while_asking
+    yield "late answer after switching off", lambda: (
+        check(len(beta_fetched) == beta_answer["before"] + 1,
+              f"one request only: {beta_fetched[beta_answer['before']:]}"),
+        check(not win._beta_looking, "done asking"),
+        check(beta_dialog() is None, "late answer asks nothing"),
+        check(config.get_setting("beta_latest") is None, "late answer not kept"))
+
+    def stable_off_while_asking():
+        gate.clear()
+        look_again()
+        win.set_beta_notify(True)       # looks, as a day "passed"
+        check(win._beta_looking, "asking GitHub again")
+        win.set_update_check(False)
+        gate.set()
+    yield "versions switched off while asking", stable_off_while_asking
+
+    def late_answer_without_versions():
+        check(beta_dialog() is None and config.get_setting("beta_latest") is None,
+              "nothing asked or kept without looking for versions")
+        config.set_setting("update_check", True)    # back on, without a look
+        win._refresh_update_row()
+        look_again()
+        win._look_for_beta()
+    yield "late answer without versions", late_answer_without_versions
+
+    def one_question_only():
+        d = beta_dialog()
+        check(d is not None and "99.6.0-beta.1" in d.get_body(),
+              "asked once the answer came")
+        win._beta_found(beta("99.6.0-beta.1"), None)    # a late double
+        win._beta_found(beta("99.6.0-beta.2"), None)
+        win._offer_beta()
+        check(beta_dialog() is d, "no second question over the first")
+        win.set_beta_notify(False)
+        check(beta_dialog() is None, "question gone when switched off")
+        check(config.get_setting("beta_handled") == "99.3.0",
+              "not counted as answered")
+        win.set_beta_notify(True)       # within the day: no new request
+        check(len(beta_fetched) == beta_answer["before"] + 3,
+              "no request when switched on again within the day")
+        d = beta_dialog()
+        check(d is not None, "the kept beta is asked about again")
+        answer_beta("later")
+        check(config.get_setting("beta_handled") == "99.6.0", "answered")
+        win._beta_found(beta("99.6.0-beta.3"), None)
+        check(beta_dialog() is None, "not asked again for the same release")
+        win._beta_looked = None         # as after a restart
+        win._look_for_beta()
+        check(len(beta_fetched) == beta_answer["before"] + 3,
+              "no request after a restart within the day")
+        updates.fetch_beta = fake_fetch_beta
+        beta_answer.pop("before")
+    yield "one question only", one_question_only
+
+    def beta_offline():
+        beta_answer["result"] = updates.Error("no network")
+        config.set_setting("beta_checked", None)
+        win._beta_looked = None
+        win._look_for_beta()
+    yield "beta offline", beta_offline
+    yield "beta offline handled", lambda: (
+        check(len(beta_fetched) == 5, "looked again after a day"),
+        check(beta_dialog() is None, "nothing shown when offline"),
+        check(updates.due(config.get_setting("beta_checked"),
+                          every=updates.BETA_CHECK_EVERY) is False,
+              "no new look right after a failure"))
+
+    def beta_switched_off():
+        win._show_preferences("general")
+        find_row(win.prefs, "Notify About Test Versions").set_active(False)
+        check(config.get_setting("beta_notify") is False, "switched off")
+        win.prefs.close()
+        close_dialogs(win)
+        config.set_setting("beta_checked", None)
+        win._beta_looked = None
+        config.set_setting("beta_latest", beta("99.4.0-beta.1"))
+        win._look_for_beta()
+        win._offer_beta()
+        check(len(beta_fetched) == 5 and beta_dialog() is None,
+              "neither looked nor asked when off")
+        beta_answer["result"] = None
+        config.set_setting("beta_latest", None)
+        win.set_beta_notify(True)       # on again, for the next step
+    yield "beta switched off", beta_switched_off
+    yield "beta switched on again", lambda: (
+        check(len(beta_fetched) == 6, "looked when switched on again"),
+        check(config.get_setting("beta_latest") is None, "no beta now"),
+        check(beta_dialog() is None, "nothing to ask"),
+        close_dialogs(win),
+        config.set_setting("beta_checked", None))
+
     def update_check_off():
         win._show_preferences("general")
         row = find_row(win.prefs, "Look for New Versions")
@@ -2504,7 +2726,20 @@ def steps(win):
         row.set_active(False)
         check(config.get_setting("update_check") is False, "switched off")
         check(not win.update_banner.get_revealed(), "banner gone when off")
+        beta_row = find_row(win.prefs, "Notify About Test Versions")
+        check(beta_row is not None and not beta_row.get_sensitive()
+              and not beta_row.get_active(), "beta preference off with it")
+        check(config.get_setting("beta_notify") is True,
+              "the beta choice itself is kept")
+        config.set_setting("beta_latest", beta("99.5.0-beta.1"))
+        win._look_for_beta()
         win.prefs.close()
+        win._offer_beta()
+        check(len(beta_fetched) == 6 and beta_dialog() is None,
+              "no beta looked for or asked about without looking for versions")
+        updates.fetch_beta = beta_answer.pop("fetch")
+        close_dialogs(win)
+        Gtk.UriLauncher.launch = beta_answer.pop("launch")
         del os.environ["APPIMAGE"]
         win._show_update_banner()
     yield "update check off", update_check_off
