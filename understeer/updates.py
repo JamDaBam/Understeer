@@ -29,6 +29,10 @@ RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
 DOWNLOAD_URL = RELEASES_URL + "/download/"
 MAX_DOWNLOAD = 200 * 1024 * 1024        # far more than an AppImage needs
 CHECK_EVERY = 3600              # at most one look an hour, also over restarts
+# The tag of a stable release, e.g. v2.3.3: test versions like v2.4.0-beta.1
+# and anything else are never offered. ASCII digits only, as int() would
+# also read other digits.
+STABLE_TAG = re.compile(r"v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")
 
 log = logging.getLogger("understeer.updates")
 
@@ -71,9 +75,15 @@ def _asset(data, version, machine):
 
 def parse_latest(data, machine=None):
     """{"version": "1.10.0", "url": "https://…", "asset": {…} or None}
-    from GitHub's answer."""
+    from GitHub's answer. Only a published stable release counts: one
+    marked as a prerelease or draft, or with any other tag than v1.2.3, is
+    refused, also if GitHub marks a test version as stable by mistake."""
     if not isinstance(data, dict) or not isinstance(data.get("tag_name"), str):
         raise Error("no release in the answer")
+    if data.get("prerelease") is not False or data.get("draft") is not False:
+        raise Error("the release is no published stable release")
+    if not STABLE_TAG.fullmatch(data["tag_name"]):
+        raise Error("the release has no tag of a stable version")
     url = data.get("html_url")
     if not isinstance(url, str) or not url.startswith(RELEASES_URL + "/"):
         url = RELEASES_URL                 # only ever open our own page
