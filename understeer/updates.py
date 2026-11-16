@@ -16,7 +16,6 @@ place of the old file. The running Understeer goes on from its mounted
 image until it is restarted.
 """
 import hashlib
-import http.client
 import json
 import logging
 import os
@@ -27,7 +26,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import USER_AGENT, releases
+from . import USER_AGENT, fetch, releases
 
 LATEST_URL = "https://api.github.com/repos/JamDaBam/Understeer/releases/latest"
 RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
@@ -45,6 +44,7 @@ BETAS_PER_PAGE = 10
 BETAS_URL = ("https://api.github.com/repos/JamDaBam/Understeer/releases"
              f"?per_page={BETAS_PER_PAGE}")
 MAX_BETAS_ANSWER = 1024 * 1024       # ten releases are about 75 KB
+BETAS_DEADLINE = 20                  # seconds for the whole answer
 BETA_TAG = re.compile(r"v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}-beta\.[0-9]{1,4}")
 
 log = logging.getLogger("understeer.updates")
@@ -127,32 +127,15 @@ def is_newer(latest, current):
     return new is not None and old is not None and new > old
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Follows no redirect: the answer must come from BETAS_URL itself, so
-    a redirect fails as an HTTP error."""
-
-    def redirect_request(self, *args, **kwargs):
-        return None
-
-
-def _opener():
-    """urllib with its usual HTTPS (certificates checked), no redirects."""
-    return urllib.request.build_opener(_NoRedirect)
-
-
 def _get_json(url, limit, timeout):
-    """The JSON of an HTTPS answer of at most limit bytes; raises Error."""
+    """The JSON at an https:// address, see fetch.get(); raises Error."""
     if not url.startswith("https://"):
         raise Error("only HTTPS is asked")
-    req = urllib.request.Request(url, headers={
-        "User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
     try:
-        with _opener().open(req, timeout=timeout) as resp:
-            body = resp.read(limit + 1)
-    except (OSError, ValueError, http.client.HTTPException) as e:
+        body = fetch.get(url, "application/vnd.github+json", limit, timeout,
+                         BETAS_DEADLINE)
+    except fetch.Error as e:
         raise Error(str(e)) from e          # offline, timeout, HTTP error
-    if len(body) > limit:
-        raise Error("the answer is too big")
     try:
         return json.loads(body)
     except (ValueError, RecursionError) as e:

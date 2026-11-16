@@ -10,7 +10,7 @@ import urllib.request
 
 import pytest
 
-from understeer import updates
+from understeer import fetch, updates
 
 PAGE = updates.RELEASES_URL + "/tag/"
 
@@ -160,8 +160,11 @@ def test_no_list(data):
 # -- asking GitHub -----------------------------------------------------------
 
 class Answer:
-    def __init__(self, body):
-        self.body = body
+    """An HTTP answer of urllib: 200 OK from the address asked."""
+    def __init__(self, body, status=200, url=None):
+        self.body, self.pos, self.status = body, 0, status
+        self.url = url or updates.BETAS_URL
+        self.headers = {}
 
     def __enter__(self):
         return self
@@ -169,8 +172,13 @@ class Answer:
     def __exit__(self, *a):
         return False
 
-    def read(self, limit):
-        return self.body[:limit]
+    def geturl(self):
+        return self.url
+
+    def read1(self, size):
+        chunk = self.body[self.pos:self.pos + size]
+        self.pos += len(chunk)
+        return chunk
 
 
 class Opener:
@@ -182,6 +190,8 @@ class Opener:
         self.asked.append((req, timeout))
         if isinstance(self.result, BaseException):
             raise self.result
+        if isinstance(self.result, Answer):
+            return self.result
         return Answer(self.result)
 
 
@@ -189,7 +199,7 @@ class Opener:
 def github(monkeypatch):
     def answer(result):
         opener = Opener(result)
-        monkeypatch.setattr(updates, "_opener", lambda: opener)
+        monkeypatch.setattr(fetch, "_opener", lambda: opener)
         return opener
     return answer
 
@@ -258,7 +268,7 @@ def test_fetch_beta_size_limit(github):
     github(exact)
     assert updates.fetch_beta() == beta("2.4.0-beta.1")
     github(exact + b" ")                                # one byte too many
-    with pytest.raises(updates.Error, match="too big"):
+    with pytest.raises(updates.Error, match="more than 1048576 bytes"):
         updates.fetch_beta()
 
 
@@ -269,13 +279,27 @@ def test_unicode_in_an_answer(github):
     assert updates.fetch_beta() == beta("2.4.0-beta.1")
 
 
+@pytest.mark.parametrize("answer", [
+    Answer(b"[]", status=203), Answer(b"[]", status=206),
+    Answer(b"", status=204),
+    Answer(b"[]", url="https://api.github.com/repos/someone/else/releases"),
+    Answer(b"[]", url=updates.BETAS_URL + "&page=2"),
+])
+def test_only_200_from_the_address_asked(github, answer):
+    github(answer)
+    with pytest.raises(updates.Error):
+        updates.fetch_beta()
+
+
 def test_no_redirects_and_checked_certificates():
-    opener = updates._opener()
+    opener = fetch._opener()
     handlers = {type(h) for h in opener.handlers}
-    assert updates._NoRedirect in handlers
+    assert fetch._NoRedirect in handlers
     assert urllib.request.HTTPRedirectHandler not in handlers
-    assert updates._NoRedirect().redirect_request(
-        None, None, 301, "moved", {}, "https://evil.example/") is None
+    with pytest.raises(fetch.Error) as e:
+        fetch._NoRedirect().redirect_request(
+            None, None, 301, "moved", {}, "https://evil.example/")
+    assert e.value.kind == "redirect"
     https = [h for h in opener.handlers
              if isinstance(h, urllib.request.HTTPSHandler)]
     assert https
@@ -287,7 +311,7 @@ def test_no_redirects_and_checked_certificates():
 def test_only_https_is_asked(monkeypatch):
     def refuse():
         raise AssertionError("asked")
-    monkeypatch.setattr(updates, "_opener", refuse)
+    monkeypatch.setattr(fetch, "_opener", refuse)
     with pytest.raises(updates.Error):
         updates._get_json("http://api.github.com/x", 10, 1)
 
