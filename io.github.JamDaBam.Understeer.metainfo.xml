@@ -49,6 +49,35 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <!-- PENDING: no date yet. Before tagging v2.4.0-beta.1, add
+             date="YYYY-MM-DD" of the real release day and make sure
+             appstreamcli validate passes. -->
+        <release version="2.4.0-beta.1" type="development">
+            <description>
+                <p>A test version (beta) for trying out the new Community Library. It is still experimental: please try it and tell what works, what doesn't and what you miss. Whether the library stays in Understeer for good is still open; a community discussion or poll about it is planned.</p>
+                <p xml:lang="de">Eine Testversion (Beta) zum Ausprobieren der neuen Community-Bibliothek. Sie ist noch experimentell: Probiere sie bitte aus und erzähle, was funktioniert, was nicht und was dir fehlt. Ob die Bibliothek dauerhaft in Understeer bleibt, ist noch offen; eine Diskussion oder Umfrage in der Community dazu ist geplant.</p>
+                <ul>
+                    <li>Community Library… on the Presets page shows presets that others shared online; looking at them needs no account</li>
+                    <li xml:lang="de">Community-Bibliothek … auf der Seite Presets zeigt Presets, die andere online geteilt haben; zum Ansehen braucht es kein Konto</li>
+                    <li>Search presets and filter them by game, wheelbase and tag, or with Only my wheelbase show only presets made on the same model as yours</li>
+                    <li xml:lang="de">Presets suchen und nach Spiel, Wheelbase und Tag filtern, oder mit „Nur meine Wheelbase“ nur Presets zeigen, die auf demselben Modell wie deinem entstanden sind</li>
+                    <li>Each preset shows its author, game, wheelbase, values and how well it fits your wheelbase before you import it</li>
+                    <li xml:lang="de">Jedes Preset zeigt vor dem Importieren Autor, Spiel, Wheelbase, Werte und wie gut es zu deiner Wheelbase passt</li>
+                    <li>Import Preset adds it to your presets only after you confirm; nothing reaches the wheelbase until you apply the preset yourself</li>
+                    <li xml:lang="de">„Preset importieren“ fügt es erst nach deiner Bestätigung zu deinen Presets hinzu; zur Wheelbase gelangt nichts, bis du das Preset selbst anwendest</li>
+                    <li>Without a connection, the catalog loaded last is shown</li>
+                    <li xml:lang="de">Ohne Verbindung wird der zuletzt geladene Katalog gezeigt</li>
+                    <li>Share with Community… in the Share menu of a preset prepares it for the catalog; Continue on GitHub… opens the form on GitHub with it filled in, so its details reach GitHub in the link of the page. No issue and no catalog entry is made until you submit the form there yourself (needs a GitHub account), and it is checked before it appears in the catalog</li>
+                    <li xml:lang="de">„In Community teilen…“ im Menü Teilen eines Presets bereitet es für den Katalog vor; „Auf GitHub fortfahren…“ öffnet das Formular auf GitHub damit ausgefüllt, die Angaben gelangen also über den Link der Seite zu GitHub. Ein Issue oder ein Katalogeintrag entsteht erst, wenn du das Formular dort selbst abschickst (braucht ein GitHub-Konto), und es wird geprüft, bevor es im Katalog erscheint</li>
+                    <li>Notify About Test Versions under Preferences → General is optional and off by default: it tells you at most once per upcoming release when a test version of it is out, e.g. once for all betas of 2.5.0, and never downloads or installs a test version</li>
+                    <li xml:lang="de">„Über Testversionen informieren“ unter Einstellungen → Allgemein ist freiwillig und standardmäßig aus: Es sagt höchstens einmal pro kommender Version Bescheid, wenn eine Testversion davon erschienen ist, zum Beispiel einmal für alle Betas von 2.5.0, und lädt oder installiert nie eine Testversion</li>
+                    <li>This test version is not offered by the normal update check, which keeps offering stable versions</li>
+                    <li xml:lang="de">Diese Testversion wird von der normalen Suche nach neuen Versionen nicht angeboten, die weiterhin stabile Versionen anbietet</li>
+                    <li>Bugs, ideas and feedback are welcome in the issue tracker on GitHub, e.g. with Report a Problem… in the main menu</li>
+                    <li xml:lang="de">Fehler, Ideen und Rückmeldungen gern im Issue-Tracker auf GitHub, zum Beispiel über „Problem melden …“ im Hauptmenü</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.3.3" date="2026-11-13">
             <description>
                 <ul>

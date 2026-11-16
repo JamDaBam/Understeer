@@ -103,8 +103,19 @@ def test_shipped_metainfo():
     numbers = [releases.number(r.get("version")) for r in found]
     assert None not in numbers, "a version that can't be ordered"
     assert numbers == sorted(numbers, reverse=True)
-    dates = [r.get("date") for r in found]
+    # Only a test version not released yet may lack its date (it gets the
+    # day it is released); a stable release always has one.
+    for release in found:
+        if release.get("date") is None:
+            assert release.get("type") == "development", release.get("version")
+            assert releases.is_prerelease(release.get("version"))
+        else:
+            assert release.get("type") in (None, "stable", "development")
+    dates = [r.get("date") for r in found if r.get("date") is not None]
     assert dates == sorted(dates, reverse=True)
+    for release in found:
+        assert (release.get("type") == "development") == \
+            releases.is_prerelease(release.get("version")), release.get("version")
     lang = releases._LANG
     for release in found:
         description = release.find("description")
