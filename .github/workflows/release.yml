@@ -1,6 +1,8 @@
 name: Release AppImage
 
 # Push a tag like v1.0.3 to build the AppImage and publish a GitHub release.
+# A tag like v1.1.0-beta.1 is published as a prerelease that never becomes
+# the latest release; any other tag fails before anything is built.
 on:
   push:
     tags:
@@ -10,11 +12,28 @@ permissions:
   contents: write
 
 jobs:
+  tag:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      kind: ${{ steps.tag.outputs.kind }}
+      flags: ${{ steps.tag.outputs.flags }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # The tag only reaches the script as an argument, never as code.
+      - name: Check the tag
+        id: tag
+        run: python3 tools/release_tag.py "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: tag         # no tests for a tag that is never released
     uses: ./.github/workflows/tests.yml
 
   build:
-    needs: test        # no release if a test fails
+    needs: [tag, test] # no release if a test fails
     runs-on: ubuntu-26.04   # fixed, so an image change never breaks a build unnoticed
     steps:
       - uses: actions/checkout@v5
@@ -28,10 +47,33 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: ./build.sh
 
+      # Both files must be there and not empty before anything is published.
+      - name: Check the files to publish
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          for file in "Understeer-$VERSION-x86_64.AppImage" \
+                      "Understeer-$VERSION-x86_64.AppImage.zsync"; do
+            test -s "$file" || { echo "Missing: $file"; exit 1; }
+          done
+
+      # FLAGS is "" for a stable release and "--prerelease --latest=false"
+      # for a beta: fixed words from tools/release_tag.py, not from the tag.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.tag.outputs.version }}
+          KIND: ${{ needs.tag.outputs.kind }}
+          FLAGS: ${{ needs.tag.outputs.flags }}
         run: |
+          read -r -a flags <<< "$FLAGS"
+          case "$KIND" in
+            stable) test "${#flags[@]}" -eq 0 ;;
+            beta) test "${flags[*]}" = "--prerelease --latest=false" ;;
+            *) echo "Unknown kind of release: $KIND"; exit 1 ;;
+          esac
           gh release create "$GITHUB_REF_NAME" \
-            Understeer-*-x86_64.AppImage Understeer-*-x86_64.AppImage.zsync \
-            --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" --generate-notes
+            "Understeer-$VERSION-x86_64.AppImage" \
+            "Understeer-$VERSION-x86_64.AppImage.zsync" \
+            --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" \
+            --generate-notes "${flags[@]}"
