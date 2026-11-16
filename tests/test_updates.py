@@ -254,6 +254,17 @@ def test_a_beta_never_reaches_the_banner(monkeypatch):
     ("1.9.4", "1.9.5", False),
     ("2.0", "1.9.5", True),
     ("1.10.0-rc1", "1.9.5", False),
+    ("2.4.0", "2.4.0-beta.1", True),        # a beta user gets the stable one
+    ("2.4.0", "2.4.0-beta.10", True),
+    ("2.4.1", "2.4.0-beta.2", True),
+    ("2.3.3", "2.4.0-beta.1", False),       # not back to an older stable
+    ("2.4.0-beta.1", "2.3.3", False),       # never a beta, also if newer
+    ("2.4.0-beta.2", "2.4.0-beta.1", False),
+    ("v2.4.0-beta.1", "v2.3.3", False),
+    ("2.4.0", "2.4.0-beta.1-3-gabc", False),  # from git: never compared
+    ("9" * 5000, "2.3.3", False),
+    ("2.4.0", None, False),
+    (None, "2.3.3", False),
 ])
 def test_is_newer(latest, current, expected):
     assert updates.is_newer(latest, current) is expected
@@ -295,3 +306,15 @@ def test_restart_from_home(monkeypatch):
                         lambda argv, **kw: seen.update(kw))
     updates.restart("/home/a/Understeer.AppImage")
     assert seen["cwd"] == os.path.expanduser("~") and seen["start_new_session"]
+
+
+def test_a_saved_beta_is_no_update(monkeypatch):
+    """An answer saved by an older Understeer can't bring a beta to the
+    banner either: only parse_latest and is_newer decide, and both refuse."""
+    for tag in ("v2.4.0-beta.1", "v2.4.0-beta.2"):
+        with pytest.raises(updates.Error):
+            updates.parse_latest({"tag_name": tag, **STABLE})
+        assert not updates.is_newer(tag[1:], "2.3.3")
+    assert updates.is_newer(
+        updates.parse_latest({"tag_name": "v2.4.0", **STABLE})["version"],
+        "2.4.0-beta.2")

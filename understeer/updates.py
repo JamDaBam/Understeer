@@ -105,7 +105,11 @@ def fetch_latest(timeout=10):
 
 
 def is_newer(latest, current):
-    """Whether version latest is newer than current, e.g. "1.10.0" > "1.9.5"."""
+    """Whether the stable version latest is newer than current, e.g.
+    "1.10.0" > "1.9.5", also "2.4.0" > "2.4.0-beta.1". A test version is
+    never offered here, also not one from an old saved answer."""
+    if releases.is_prerelease(latest):
+        return False
     new, old = releases.number(latest), releases.number(current)
     return new is not None and old is not None and new > old
 
