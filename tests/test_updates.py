@@ -1,5 +1,7 @@
+import http.client
 import json
 import os
+import socket
 
 import pytest
 
@@ -318,3 +320,110 @@ def test_a_saved_beta_is_no_update(monkeypatch):
     assert updates.is_newer(
         updates.parse_latest({"tag_name": "v2.4.0", **STABLE})["version"],
         "2.4.0-beta.2")
+
+
+# -- fetch_latest with broken answers: always updates.Error -----------------
+
+class _Answer:
+    def __init__(self, body=b"", error=None):
+        self.body, self.error = body, error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, limit):
+        if self.error is not None:
+            raise self.error
+        return self.body[:limit]
+
+
+def _github(monkeypatch, answer=None, error=None):
+    """urlopen answers with answer, or raises error; beta discovery and
+    downloading must not be touched."""
+    def urlopen(req, timeout):
+        assert req.full_url == updates.LATEST_URL
+        if error is not None:
+            raise error
+        return answer
+
+    def refuse(*a, **k):
+        raise AssertionError("not part of the stable look")
+    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    for name in ("fetch_beta", "newest_beta", "download", "install", "restart"):
+        monkeypatch.setattr(updates, name, refuse)
+    monkeypatch.setattr(updates.fetch, "get", refuse)
+
+
+@pytest.mark.parametrize("error", [
+    http.client.BadStatusLine("garbage"),
+    http.client.LineTooLong("header line"),
+    http.client.IncompleteRead(b"{", 100),
+    http.client.HTTPException("broken"),
+    http.client.RemoteDisconnected("closed"),
+    updates.urllib.error.URLError("no network"),
+    updates.urllib.error.HTTPError(updates.LATEST_URL, 500, "error", {}, None),
+    socket.timeout("timed out"), TimeoutError(), ConnectionResetError(),
+])
+def test_fetch_latest_broken_connection(monkeypatch, error):
+    _github(monkeypatch, error=error)
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert str(e.value)                     # something to log
+
+
+@pytest.mark.parametrize("error", [
+    http.client.IncompleteRead(b'{"tag_name": "v9', 100),
+    TimeoutError("timed out"), ConnectionResetError("reset"),
+])
+def test_fetch_latest_broken_while_reading(monkeypatch, error):
+    _github(monkeypatch, answer=_Answer(error=error))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+@pytest.mark.parametrize("body", [
+    b"[" * 100000 + b"]" * 100000,           # nested too deeply
+    b'{"a":' * 50000 + b"1" + b"}" * 50000,
+    b"[" + b"9" * 5000 + b"]",                # number too long
+    b"\xff\xfe\x00 garbage", b"", b"not json", b"<html>rate limit</html>",
+    b"null", b"[]", b'"v9.0.0"', b"5",
+    b'{"tag_name": "v9.0.0", "prerelease": false, "draft": false' + b" " * 300000 + b"}",
+], ids=["nested lists", "nested objects", "long number", "no UTF-8", "empty",
+        "no json", "html", "null", "list", "text", "number", "cut at 256 KB"])
+def test_fetch_latest_broken_answer(monkeypatch, body):
+    _github(monkeypatch, answer=_Answer(body))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+@pytest.mark.parametrize("flags", [
+    {"prerelease": True, "draft": False}, {"prerelease": False, "draft": True},
+])
+def test_fetch_latest_refuses_prereleases_and_drafts(monkeypatch, flags):
+    _github(monkeypatch, answer=_Answer(
+        json.dumps({"tag_name": "v9.0.0", **flags}).encode()))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+def test_fetch_latest_stable_release_with_asset(monkeypatch):
+    data = {**release(), "html_url": updates.RELEASES_URL + "/tag/v1.10.0"}
+    _github(monkeypatch, answer=_Answer(json.dumps(data).encode()))
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    assert updates.fetch_latest() == {
+        "version": "1.10.0", "url": updates.RELEASES_URL + "/tag/v1.10.0",
+        "asset": {"url": updates.DOWNLOAD_URL
+                  + "v1.10.0/Understeer-1.10.0-x86_64.AppImage",
+                  "sha256": SHA, "size": 5}}
+
+
+@pytest.mark.parametrize("assets", [5, True, 1.5, "abc", {"x": 1}, None, [],
+                                    [5, None, "x", []]])
+def test_assets_that_are_no_list_of_files(assets):
+    """No exception, just no AppImage to update from."""
+    found = updates.parse_latest({"tag_name": "v2.3.3", **STABLE,
+                                  "assets": assets}, "x86_64")
+    assert found["version"] == "2.3.3" and found["asset"] is None

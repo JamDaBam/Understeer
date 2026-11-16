@@ -16,6 +16,7 @@ place of the old file. The running Understeer goes on from its mounted
 image until it is restarted.
 """
 import hashlib
+import http.client
 import json
 import logging
 import os
@@ -73,7 +74,10 @@ def _asset(data, version, machine):
     """{"url", "sha256", "size"} of the AppImage for this machine in a
     release, or None; only files of our own releases, with a checksum."""
     name = f"Understeer-{version}-{machine}.AppImage"
-    for asset in data.get("assets") or []:
+    assets = data.get("assets")
+    if not isinstance(assets, list):
+        return None
+    for asset in assets:
         if not isinstance(asset, dict) or asset.get("name") != name:
             continue
         url, digest = asset.get("browser_download_url"), asset.get("digest")
@@ -112,8 +116,11 @@ def fetch_latest(timeout=10):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read(256 * 1024))
-    except (OSError, ValueError) as e:      # URLError is an OSError
-        raise Error(str(e)) from e
+    # URLError is an OSError; HTTPException: e.g. a broken status line or
+    # an answer cut short; RecursionError: JSON nested too deeply
+    except (OSError, ValueError, http.client.HTTPException,
+            RecursionError) as e:
+        raise Error(str(e) or type(e).__name__) from e
     return parse_latest(data)
 
 
