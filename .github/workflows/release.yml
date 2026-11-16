@@ -2,7 +2,8 @@ name: Release AppImage
 
 # Push a tag like v1.0.3 to build the AppImage and publish a GitHub release.
 # A tag like v1.1.0-beta.1 is published as a prerelease that never becomes
-# the latest release; any other tag fails before anything is built.
+# the latest release; any other tag, or a release without a date or notes
+# in the metainfo file, fails before anything is tested or built.
 on:
   push:
     tags:
@@ -23,8 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # The tag only reaches the script as an argument, never as code.
-      - name: Check the tag
+      # The tag only reaches the script as an argument, never as code. It
+      # also checks the release in the metainfo file (one entry, a real
+      # date, the right type, notes): a test version prepared without its
+      # date stops here. The tag itself stays on GitHub; only the release
+      # is not made.
+      - name: Check the tag and its release notes
         id: tag
         run: python3 tools/release_tag.py "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
