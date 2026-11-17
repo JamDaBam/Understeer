@@ -3792,11 +3792,15 @@ def steps(win):
         check(q.get("template") == "community-preset.yml"
               and q.get("preset-name") == "Share Me" and q.get("author") == "Tester"
               and q.get("catalog-id") == "test-game-share-me"
-              and json.loads(q.get("preset-json", "{}")) == {
+              and json.loads(q.get("preset-json", "{}"))
+              == win.prepared_submission.entry
+              and json.loads(q.get("preset-json", "{}")).get("preset") == {
                   "understeer_preset": 1, "name": "Share Me",
                   "values": {"SEN": 540, "FF": 75, "FOR": 100}}
+              and json.loads(q.get("preset-json", "{}")).get("meta", {}).get(
+                  "drive") == "direct_drive"
               and "acknowledgement" not in q,
-              f"fields filled in, preset only, no box ticked: {sorted(q)}")
+              f"fields filled in, complete entry, no box ticked: {sorted(q)}")
         text = "\n".join(share_labels())
         check("The browser could not be opened: No browser here" in text,
               f"failure told: {text[-200:]!r}")
@@ -3833,8 +3837,8 @@ def steps(win):
         text = "\n".join(share_labels())
         check("Too Long for the Link" in text, "too long for the link told")
         rows = [w for w in walk(share_page()) if isinstance(w, Adw.ActionRow)
-                and w.get_title() == "Preset JSON"]
-        check(len(rows) == 1, "the JSON to copy by hand")
+                and w.get_title() == "Catalog Entry (JSON)"]
+        check(len(rows) == 1, "the catalog entry to copy by hand")
         if rows:
             next(w for w in walk(rows[0]) if isinstance(w, Gtk.Button)).emit("clicked")
         share_read_clipboard()
@@ -3842,9 +3846,10 @@ def steps(win):
 
     def share_json_copied():
         entry = win.prepared_submission.entry
-        check(share["clip"] == [github_form.preset_json(entry)],
-              f"preset JSON copied: {share['clip'][:1]}")
-        check("Copied: Preset JSON" in share_labels(), "copy told")
+        check(share["clip"] == [github_form.entry_text(entry)]
+              and json.loads(share["clip"][0]) == entry,
+              f"complete catalog entry copied: {share['clip'][:1]}")
+        check("Copied: Catalog Entry (JSON)" in share_labels(), "copy told")
         share_button("Continue on GitHub…").emit("clicked")
         url = share["opened"][-1]
         q = dict(urllib.parse.parse_qsl(url.partition("?")[2]))
