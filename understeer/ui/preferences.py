@@ -312,8 +312,14 @@ class PreferencesMixin:
                     r.get_active() != bool(config.get_setting("update_check"))
                     and self.set_update_check(r.get_active()))
         self.update_row = row
+        beta = SwitchRow(title=_("Notify About Test Versions"))
+        beta.connect("notify::active", lambda r, _p: r.get_sensitive() and
+                     r.get_active() != (config.get_setting("beta_notify") is True)
+                     and self.set_beta_notify(r.get_active()))
+        self.beta_row = beta
         self._refresh_update_row()
         group.add(row)
+        group.add(beta)
         return group
 
     def _refresh_update_row(self):
@@ -325,6 +331,22 @@ class PreferencesMixin:
             _("Only in the AppImage; a copy from git is updated with git."))
         row.set_sensitive(possible)
         row.set_active(bool(config.get_setting("update_check")) and possible)
+        beta = getattr(self, "beta_row", None)
+        if beta is None:
+            return
+        looks = possible and config.get_setting("update_check") is True
+        if looks:
+            beta.set_subtitle(_(
+                "Once a day, Understeer looks for a test version of the next "
+                "release and asks once per release whether to show it on "
+                "GitHub. Nothing is installed."))
+        elif possible:
+            beta.set_subtitle(_("Needs “Look for New Versions”."))
+        else:
+            beta.set_subtitle(_("Only in the AppImage; a copy from git is "
+                                "updated with git."))
+        beta.set_sensitive(looks)
+        beta.set_active(looks and config.get_setting("beta_notify") is True)
 
     def _background_group(self):
         """Running in the background and starting at login."""

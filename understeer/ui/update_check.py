@@ -3,6 +3,11 @@ and updating the AppImage from there.
 
 Only the AppImage looks, at start and then every hour (at most once an
 hour, also when started often), and only after the user agreed once.
+
+Test versions (betas) only if the user also switched that on: at most one
+look a day, and at most one question for each release (2.4.0-beta.2
+isn't asked about again after 2.4.0-beta.1). The question only shows the
+beta's page on GitHub; nothing is downloaded or installed.
 """
 import logging
 import os
@@ -24,7 +29,10 @@ TICK_SECONDS = 600      # how often to see whether a look is due
 class UpdateCheckMixin:
     """Part of TunerWindow. Settings: "update_check" (None: not asked yet),
     "update_checked" (time of the last look), "update_latest" (what GitHub
-    answered then, so the banner shows right away at the next start)."""
+    answered then, so the banner shows right away at the next start).
+    Betas: "beta_notify" (only True asks), "beta_checked" (time of the
+    last look), "beta_latest" (the beta found then), "beta_handled" (the
+    release whose beta was asked about, e.g. "2.4.0")."""
 
     def _build_update_banner(self, content_view):
         self.update_banner = Adw.Banner()
@@ -47,9 +55,17 @@ class UpdateCheckMixin:
             return                          # asked when the window opens
         self._show_update_banner()
         self._look_for_update()
+        self._look_for_beta()
+        self._offer_beta()
         if not getattr(self, "_update_tick", 0):
             self._update_tick = GLib.timeout_add_seconds(
-                TICK_SECONDS, lambda: self._look_for_update() or True)
+                TICK_SECONDS, self._update_tick_done)
+
+    def _update_tick_done(self):
+        self._look_for_update()
+        self._look_for_beta()
+        self._offer_beta()          # e.g. once a dialog in the way is gone
+        return True
 
     def _ask_update_check(self):
         """Once: may Understeer ask GitHub for new versions?"""
@@ -85,11 +101,29 @@ class UpdateCheckMixin:
         row = getattr(self, "update_row", None)
         if row is not None and row.get_active() != bool(on):
             row.set_active(bool(on))
+        refresh = getattr(self, "_refresh_update_row", None)
+        if refresh is not None and row is not None:
+            refresh()                       # the beta row depends on it
         if on:
             config.set_setting("update_checked", None)      # look right away
             self._start_update_check()
         else:
+            self._withdraw_beta()
             self._show_update_banner()
+
+    def set_beta_notify(self, on):
+        """Switch asking about test versions on or off (also the
+        preference). Looking for new versions stays as it is."""
+        config.set_setting("beta_notify", bool(on))
+        log.info("Asking about test versions %s", "on" if on else "off")
+        row = getattr(self, "beta_row", None)
+        if row is not None and row.get_active() != bool(on):
+            row.set_active(bool(on))
+        if on:
+            self._look_for_beta()
+            self._offer_beta()
+        else:
+            self._withdraw_beta()
 
     def _look_for_update(self):
         if not config.get_setting("update_check") or not updates.due(
@@ -106,6 +140,117 @@ class UpdateCheckMixin:
         log.info("Newest version on GitHub: %s", latest["version"])
         config.set_setting("update_latest", latest)
         self._show_update_banner()
+
+    # -- test versions ---------------------------------------------------------
+    def _beta_wanted(self):
+        """Whether the user wants to hear of betas: both switched on, in
+        an AppImage that looks for new versions at all."""
+        return (config.get_setting("update_check") is True
+                and config.get_setting("beta_notify") is True
+                and updates.can_check(self._current_version()))
+
+    def _look_for_beta(self):
+        """Ask GitHub for the newest beta, at most once a day (the time is
+        kept before asking, so a failure waits a day too) and never twice
+        at once. The time is also kept here, in case the settings file
+        can't be written."""
+        if (not self._beta_wanted() or getattr(self, "_beta_looking", False)
+                or not updates.due(config.get_setting("beta_checked"),
+                                   every=updates.BETA_CHECK_EVERY)
+                or not updates.due(getattr(self, "_beta_looked", None),
+                                   every=updates.BETA_CHECK_EVERY)):
+            return
+        self._beta_looking, self._beta_looked = True, time.time()
+        config.set_setting("beta_checked", self._beta_looked)
+        current = self._current_version()
+        tasks.in_thread(lambda: updates.fetch_beta(current), self._beta_found,
+                        updates.Error)
+
+    def _beta_found(self, beta, error):
+        self._beta_looking = False
+        if not self._beta_wanted():
+            log.info("Test versions were switched off meanwhile")
+            return                          # a late answer: forget it
+        if error is not None:
+            log.info("Could not look for a test version: %s", error)
+            return
+        log.info("Newest test version on GitHub: %s",
+                 beta["version"] if beta else "none")
+        config.set_setting("beta_latest", beta)
+        self._offer_beta()
+
+    def _beta_to_offer(self):
+        """The beta to ask about now, {"version", "url"}, or None."""
+        if not self._beta_wanted() or self._available_update():
+            return None                     # a stable update comes first
+        beta = updates.checked_beta(config.get_setting("beta_latest"))
+        stable = config.get_setting("update_latest")
+        stable = stable.get("version") if isinstance(stable, dict) else None
+        # asked about: as saved, and in this session in case saving failed
+        handled = (config.get_text("beta_handled"),
+                   getattr(self, "_beta_handled", None))
+        if beta is None or not all(updates.should_offer_beta(
+                beta, self._current_version(), stable, done)
+                for done in handled):
+            return None
+        return beta
+
+    def _offer_beta(self):
+        """Ask once about a new beta, only with the window open in front
+        and nothing else asking; otherwise later, without counting it as
+        asked."""
+        beta = self._beta_to_offer()
+        if (beta is None or getattr(self, "_beta_dialog", None) is not None
+                or getattr(self, "_update_state", None)
+                or not self.get_visible() or self._in_background
+                or self.get_visible_dialog() is not None):
+            return
+        series = updates.beta_series(beta["version"])
+        dialog = Adw.AlertDialog(
+            heading=_("Test Version Available"),
+            body=_("Understeer {version} is a test version of the next "
+                   "release. You can try it and tell what works and what "
+                   "doesn't. Understeer asks only once for each release; "
+                   "nothing is downloaded or installed.").format(
+                       version=beta["version"]))
+        dialog.add_response("later", _("Not Now"))
+        dialog.add_response("view", _("View on GitHub"))
+        dialog.set_default_response("view")
+        dialog.set_close_response("later")
+        dialog.set_response_appearance("view", Adw.ResponseAppearance.SUGGESTED)
+
+        def handled(d, response):
+            if self._beta_dialog is not d:
+                return                      # answered already
+            self._beta_dialog = None
+            self._beta_handled = series
+            config.set_setting("beta_handled", series)
+            log.info("Asked about test version %s: %s", beta["version"],
+                     response)
+            if response == "view":
+                self._open_beta_page(beta)
+
+        dialog.connect("response", handled)
+        dialog.connect("closed", lambda d: handled(d, "later"))
+        self._beta_dialog = dialog
+        log.info("Asking about test version %s", beta["version"])
+        dialog.present(self)
+
+    def _withdraw_beta(self):
+        """Close a question about a beta when it was switched off, without
+        counting it as answered."""
+        dialog, self._beta_dialog = getattr(self, "_beta_dialog", None), None
+        if dialog is not None:
+            log.info("Test versions switched off: question closed")
+            dialog.force_close()
+
+    def _open_beta_page(self, beta):
+        """Open the beta's own page on GitHub, nothing else."""
+        beta = updates.checked_beta(beta)
+        if beta is None:
+            return
+        log.info("Opening the page of test version %s", beta["url"])
+        Gtk.UriLauncher.new(beta["url"]).launch(self, None, None)
 
     def _available_update(self):
         """{"version", "url", "asset"} of a newer version known, or None."""

@@ -10,14 +10,11 @@ so the library can still be browsed offline.
 Nothing here runs on its own: the catalog is loaded when the user opens
 the library (at most once an hour) or asks for it with Refresh.
 """
-import http.client
 import logging
 import time
-import urllib.error
-import urllib.request
 from collections import namedtuple
 
-from . import USER_AGENT, config, library
+from . import config, fetch, library
 
 CATALOG_URL = "https://jamdabam.github.io/Understeer-Presets/catalog.json"
 # Next to the game covers: it can be downloaded again, so it is a cache.
@@ -44,48 +41,13 @@ class Error(Exception):
 Loaded = namedtuple("Loaded", "catalog when")
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """The catalog has one address; a redirect is not followed anywhere."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise Error("redirect", f"redirected to {newurl}")
-
-
-def _opener():
-    return urllib.request.build_opener(_NoRedirect)
-
-
 def download(timeout=TIMEOUT, deadline=DEADLINE):
     """The bytes of the catalog at CATALOG_URL; raises Error."""
-    request = urllib.request.Request(CATALOG_URL, headers={
-        "User-Agent": USER_AGENT, "Accept": "application/json"})
-    start = time.monotonic()
-    data = bytearray()
     try:
-        with _opener().open(request, timeout=timeout) as response:
-            if response.status != 200 or response.geturl() != CATALOG_URL:
-                raise Error("http", f"HTTP {response.status}", response.status)
-            length = response.headers.get("Content-Length", "")
-            if length.isdigit() and int(length) > library.MAX_CATALOG_BYTES:
-                raise Error("too_big", f"{length} bytes announced")
-            while chunk := response.read(64 * 1024):
-                data += chunk
-                if len(data) > library.MAX_CATALOG_BYTES:
-                    raise Error("too_big", "more than the catalog may have")
-                if time.monotonic() - start > deadline:
-                    raise Error("timeout", "the download took too long")
-    except Error:
-        raise
-    except urllib.error.HTTPError as e:
-        raise Error("http", f"HTTP {e.code}", e.code) from None
-    except TimeoutError as e:
-        raise Error("timeout", str(e) or "timed out") from None
-    except urllib.error.URLError as e:
-        kind = "timeout" if isinstance(e.reason, TimeoutError) else "offline"
-        raise Error(kind, str(e.reason)) from None
-    except (OSError, http.client.HTTPException, ValueError) as e:
-        raise Error("offline", str(e) or type(e).__name__) from None
-    return bytes(data)
+        return fetch.get(CATALOG_URL, "application/json",
+                         library.MAX_CATALOG_BYTES, timeout, deadline)
+    except fetch.Error as e:
+        raise Error(e.kind, str(e), e.code) from None
 
 
 def parse(raw):

@@ -1,5 +1,7 @@
+import http.client
 import json
 import os
+import socket
 
 import pytest
 
@@ -24,10 +26,15 @@ def test_due(last, now, expected):
     assert updates.due(last, now) is expected
 
 
+# What GitHub says of every published stable release
+STABLE = {"prerelease": False, "draft": False}
+
+
 def test_parse_latest():
     page = updates.RELEASES_URL + "/tag/v1.10.0"
-    assert updates.parse_latest({"tag_name": "v1.10.0", "html_url": page}) == {
-        "version": "1.10.0", "url": page, "asset": None}
+    assert updates.parse_latest(
+        {"tag_name": "v1.10.0", "html_url": page, **STABLE}) == {
+            "version": "1.10.0", "url": page, "asset": None}
 
 
 SHA = "a" * 64
@@ -35,7 +42,7 @@ SHA = "a" * 64
 
 def release(name="Understeer-1.10.0-x86_64.AppImage", url=None, digest="sha256:" + SHA):
     url = url or updates.DOWNLOAD_URL + "v1.10.0/" + name
-    return {"tag_name": "v1.10.0", "assets": [
+    return {"tag_name": "v1.10.0", **STABLE, "assets": [
         {"name": name + ".zsync", "browser_download_url": url + ".zsync",
          "digest": digest},
         {"name": name, "browser_download_url": url, "digest": digest, "size": 5}]}
@@ -165,14 +172,82 @@ def test_restart_waits_for_the_old_process(tmp_path):
 @pytest.mark.parametrize("url", [None, "https://evil.example/x",
                                  "https://github.com/someone/else/releases/x"])
 def test_parse_latest_opens_only_our_page(url):
-    assert updates.parse_latest({"tag_name": "v2.0.0", "html_url": url})["url"] \
+    assert updates.parse_latest(
+        {"tag_name": "v2.0.0", "html_url": url, **STABLE})["url"] \
         == updates.RELEASES_URL
 
 
-@pytest.mark.parametrize("data", [None, [], {}, {"tag_name": 5}])
+@pytest.mark.parametrize("data", [None, [], {}, {"tag_name": 5},
+                                  {"tag_name": 5, **STABLE}, {**STABLE}])
 def test_parse_latest_refuses(data):
     with pytest.raises(updates.Error):
         updates.parse_latest(data)
+
+
+@pytest.mark.parametrize("tag", ["v2.3.3", "v1.10.0", "v10.0.12"])
+def test_parse_latest_takes_stable_tags(tag):
+    assert updates.parse_latest({"tag_name": tag, **STABLE})["version"] == tag[1:]
+
+
+@pytest.mark.parametrize("flags", [
+    {"prerelease": True, "draft": False},           # a beta, as it should be
+    {"prerelease": False, "draft": True},
+    {"prerelease": True, "draft": True},
+    {"draft": False},                               # flags missing
+    {"prerelease": False},
+    {},
+    {"prerelease": "false", "draft": False},        # flags of the wrong type
+    {"prerelease": 0, "draft": False},
+    {"prerelease": False, "draft": None},
+    {"prerelease": None, "draft": False},
+])
+def test_parse_latest_refuses_all_but_published_stable(flags):
+    with pytest.raises(updates.Error):
+        updates.parse_latest({"tag_name": "v2.4.0", **flags})
+
+
+@pytest.mark.parametrize("tag", [
+    "v2.4.0-beta.1", "v2.4.0-beta.2", "v2.4.0-rc1", "v2.4.0-alpha",
+    "v2.4.0-3-gabc", "v2.4.0+build", "2.4.0-beta.1",
+])
+def test_parse_latest_refuses_test_versions_marked_stable(tag):
+    """GitHub marks a beta as stable by mistake: still not offered."""
+    with pytest.raises(updates.Error):
+        updates.parse_latest({"tag_name": tag, **STABLE})
+
+
+@pytest.mark.parametrize("tag", [
+    "", "v", "2.4.0", "V2.4.0", "v2.4", "v2", "v2.4.0.1", "vv2.4.0",
+    " v2.4.0", "v2.4.0 ", "v2.4.0\n", "v2..0", "v-2.4.0", "v2.4.x",
+    "v12345.0.0", "v٢.٤.٠", "latest", "../v2.4.0",
+])
+def test_parse_latest_refuses_malformed_tags(tag):
+    with pytest.raises(updates.Error):
+        updates.parse_latest({"tag_name": tag, **STABLE})
+
+
+def test_a_beta_never_reaches_the_banner(monkeypatch):
+    """Whatever GitHub answers for a beta, fetch_latest raises instead of
+    returning a version that is_newer could compare."""
+    for flags in ({"prerelease": True, "draft": False}, STABLE):
+        body = json.dumps({"tag_name": "v2.4.0-beta.1", **flags,
+                           "html_url": updates.RELEASES_URL + "/tag/v2.4.0-beta.1",
+                           "assets": release()["assets"]}).encode()
+
+        class Answer:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self, limit):
+                return body
+
+        monkeypatch.setattr(updates.urllib.request, "urlopen",
+                            lambda req, timeout: Answer())
+        with pytest.raises(updates.Error):
+            updates.fetch_latest()
 
 
 @pytest.mark.parametrize("latest, current, expected", [
@@ -181,6 +256,17 @@ def test_parse_latest_refuses(data):
     ("1.9.4", "1.9.5", False),
     ("2.0", "1.9.5", True),
     ("1.10.0-rc1", "1.9.5", False),
+    ("2.4.0", "2.4.0-beta.1", True),        # a beta user gets the stable one
+    ("2.4.0", "2.4.0-beta.10", True),
+    ("2.4.1", "2.4.0-beta.2", True),
+    ("2.3.3", "2.4.0-beta.1", False),       # not back to an older stable
+    ("2.4.0-beta.1", "2.3.3", False),       # never a beta, also if newer
+    ("2.4.0-beta.2", "2.4.0-beta.1", False),
+    ("v2.4.0-beta.1", "v2.3.3", False),
+    ("2.4.0", "2.4.0-beta.1-3-gabc", False),  # from git: never compared
+    ("9" * 5000, "2.3.3", False),
+    ("2.4.0", None, False),
+    (None, "2.3.3", False),
 ])
 def test_is_newer(latest, current, expected):
     assert updates.is_newer(latest, current) is expected
@@ -195,7 +281,7 @@ def test_fetch_latest(monkeypatch):
             return False
 
         def read(self, limit):
-            return json.dumps({"tag_name": "v9.0.0"}).encode()
+            return json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()
 
     seen = {}
 
@@ -222,3 +308,122 @@ def test_restart_from_home(monkeypatch):
                         lambda argv, **kw: seen.update(kw))
     updates.restart("/home/a/Understeer.AppImage")
     assert seen["cwd"] == os.path.expanduser("~") and seen["start_new_session"]
+
+
+def test_a_saved_beta_is_no_update(monkeypatch):
+    """An answer saved by an older Understeer can't bring a beta to the
+    banner either: only parse_latest and is_newer decide, and both refuse."""
+    for tag in ("v2.4.0-beta.1", "v2.4.0-beta.2"):
+        with pytest.raises(updates.Error):
+            updates.parse_latest({"tag_name": tag, **STABLE})
+        assert not updates.is_newer(tag[1:], "2.3.3")
+    assert updates.is_newer(
+        updates.parse_latest({"tag_name": "v2.4.0", **STABLE})["version"],
+        "2.4.0-beta.2")
+
+
+# -- fetch_latest with broken answers: always updates.Error -----------------
+
+class _Answer:
+    def __init__(self, body=b"", error=None):
+        self.body, self.error = body, error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, limit):
+        if self.error is not None:
+            raise self.error
+        return self.body[:limit]
+
+
+def _github(monkeypatch, answer=None, error=None):
+    """urlopen answers with answer, or raises error; beta discovery and
+    downloading must not be touched."""
+    def urlopen(req, timeout):
+        assert req.full_url == updates.LATEST_URL
+        if error is not None:
+            raise error
+        return answer
+
+    def refuse(*a, **k):
+        raise AssertionError("not part of the stable look")
+    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    for name in ("fetch_beta", "newest_beta", "download", "install", "restart"):
+        monkeypatch.setattr(updates, name, refuse)
+    monkeypatch.setattr(updates.fetch, "get", refuse)
+
+
+@pytest.mark.parametrize("error", [
+    http.client.BadStatusLine("garbage"),
+    http.client.LineTooLong("header line"),
+    http.client.IncompleteRead(b"{", 100),
+    http.client.HTTPException("broken"),
+    http.client.RemoteDisconnected("closed"),
+    updates.urllib.error.URLError("no network"),
+    updates.urllib.error.HTTPError(updates.LATEST_URL, 500, "error", {}, None),
+    socket.timeout("timed out"), TimeoutError(), ConnectionResetError(),
+])
+def test_fetch_latest_broken_connection(monkeypatch, error):
+    _github(monkeypatch, error=error)
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert str(e.value)                     # something to log
+
+
+@pytest.mark.parametrize("error", [
+    http.client.IncompleteRead(b'{"tag_name": "v9', 100),
+    TimeoutError("timed out"), ConnectionResetError("reset"),
+])
+def test_fetch_latest_broken_while_reading(monkeypatch, error):
+    _github(monkeypatch, answer=_Answer(error=error))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+@pytest.mark.parametrize("body", [
+    b"[" * 100000 + b"]" * 100000,           # nested too deeply
+    b'{"a":' * 50000 + b"1" + b"}" * 50000,
+    b"[" + b"9" * 5000 + b"]",                # number too long
+    b"\xff\xfe\x00 garbage", b"", b"not json", b"<html>rate limit</html>",
+    b"null", b"[]", b'"v9.0.0"', b"5",
+    b'{"tag_name": "v9.0.0", "prerelease": false, "draft": false' + b" " * 300000 + b"}",
+], ids=["nested lists", "nested objects", "long number", "no UTF-8", "empty",
+        "no json", "html", "null", "list", "text", "number", "cut at 256 KB"])
+def test_fetch_latest_broken_answer(monkeypatch, body):
+    _github(monkeypatch, answer=_Answer(body))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+@pytest.mark.parametrize("flags", [
+    {"prerelease": True, "draft": False}, {"prerelease": False, "draft": True},
+])
+def test_fetch_latest_refuses_prereleases_and_drafts(monkeypatch, flags):
+    _github(monkeypatch, answer=_Answer(
+        json.dumps({"tag_name": "v9.0.0", **flags}).encode()))
+    with pytest.raises(updates.Error):
+        updates.fetch_latest()
+
+
+def test_fetch_latest_stable_release_with_asset(monkeypatch):
+    data = {**release(), "html_url": updates.RELEASES_URL + "/tag/v1.10.0"}
+    _github(monkeypatch, answer=_Answer(json.dumps(data).encode()))
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    assert updates.fetch_latest() == {
+        "version": "1.10.0", "url": updates.RELEASES_URL + "/tag/v1.10.0",
+        "asset": {"url": updates.DOWNLOAD_URL
+                  + "v1.10.0/Understeer-1.10.0-x86_64.AppImage",
+                  "sha256": SHA, "size": 5}}
+
+
+@pytest.mark.parametrize("assets", [5, True, 1.5, "abc", {"x": 1}, None, [],
+                                    [5, None, "x", []]])
+def test_assets_that_are_no_list_of_files(assets):
+    """No exception, just no AppImage to update from."""
+    found = updates.parse_latest({"tag_name": "v2.3.3", **STABLE,
+                                  "assets": assets}, "x86_64")
+    assert found["version"] == "2.3.3" and found["asset"] is None

@@ -1,23 +1,86 @@
 name: Release AppImage
 
 # Push a tag like v1.0.3 to build the AppImage and publish a GitHub release.
+# A tag like v1.1.0-beta.1 is published as a prerelease that never becomes
+# the latest release; any other tag, or a release without a date or notes
+# in the metainfo file, fails before anything is tested or built.
 on:
   push:
     tags:
       - "v*"
 
+# Read-only by default; only the job that publishes the release may write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  tag:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      kind: ${{ steps.tag.outputs.kind }}
+      flags: ${{ steps.tag.outputs.flags }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0   # all history and branches, for the check of main
+
+      # The tag only reaches the script as an argument, never as code. It
+      # also checks the release in the metainfo file (one entry, a real
+      # date, the right type, notes): a test version prepared without its
+      # date stops here. The tag itself stays on GitHub; only the release
+      # is not made.
+      - name: Check the tag and its release notes
+        id: tag
+        run: python3 tools/release_tag.py "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      # Only a commit merged into main is released: the tag must point to
+      # the commit checked out, and it must be in the history of main of
+      # this repository. Anything that can't be told for sure fails.
+      - name: Check that the tagged commit is on main
+        run: |
+          fail() { echo "Not released: $*" >&2; exit 1; }
+          expected="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          origin="$(git remote get-url origin)" || fail "there is no remote origin"
+          [ "${origin%.git}" = "$expected" ] || fail "origin is $origin, not $expected"
+          [ "$(git rev-parse --is-shallow-repository)" = false ] \
+            || fail "the history is incomplete (shallow clone)"
+          tagged="$(git rev-parse --verify --quiet "refs/tags/$GITHUB_REF_NAME^{commit}")" \
+            || fail "there is no tag $GITHUB_REF_NAME"
+          head="$(git rev-parse --verify --quiet "HEAD^{commit}")" \
+            || fail "no commit is checked out"
+          [ "$tagged" = "$head" ] || fail "the tag points to $tagged, not to $head"
+          # The commit of the push that started this run (for an annotated
+          # tag GITHUB_SHA may name the tag object; ^{commit} resolves both)
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "GITHUB_SHA is no commit id"
+          pushed="$(git rev-parse --verify --quiet "$GITHUB_SHA^{commit}")" \
+            || fail "the pushed commit $GITHUB_SHA is not here"
+          [ "$pushed" = "$head" ] || fail "the push was for $pushed, not for $head"
+          main="$(git rev-parse --verify --quiet "refs/remotes/origin/main^{commit}")" \
+            || fail "origin/main is missing"
+          status=0
+          git merge-base --is-ancestor "$head" "$main" || status=$?
+          case "$status" in
+            0) echo "$head is in the history of main ($main)" ;;
+            1) fail "$head is not in the history of main; tag a commit merged into main" ;;
+            *) fail "git could not tell whether $head is in the history of main" ;;
+          esac
+
   test:
+    needs: tag         # no tests for a tag that is never released
+    permissions:
+      contents: read
     uses: ./.github/workflows/tests.yml
 
   build:
-    needs: test        # no release if a test fails
+    needs: [tag, test] # no release if a test fails
     runs-on: ubuntu-26.04   # fixed, so an image change never breaks a build unnoticed
+    permissions:
+      contents: write  # gh release create
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # From the metainfo file; stops here if they weren't written yet.
       - name: Release notes
@@ -28,10 +91,51 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: ./build.sh
 
+      # The files must be there and not empty before anything is published.
+      # A stable AppImage carries update information and has its .zsync
+      # file; a beta has neither, so AppImage managers can't take an older
+      # stable version for an update of it.
+      - name: Check the files to publish
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+          KIND: ${{ needs.tag.outputs.kind }}
+        run: |
+          app="Understeer-$VERSION-x86_64.AppImage"
+          test -s "$app" || { echo "Missing: $app"; exit 1; }
+          # The strings in the AppImage's .upd_info section; none if it is
+          # empty or missing. readelf fails on anything but an ELF file.
+          dump="$(readelf -p .upd_info "$app")"
+          info="$(sed -nE 's/^[[:space:]]*\[[[:space:]]*[0-9a-f]+\][[:space:]]+//p' <<< "$dump")"
+          expected='gh-releases-zsync|JamDaBam|Understeer|latest|Understeer-*x86_64.AppImage.zsync'
+          case "$KIND" in
+            stable)
+              test -s "$app.zsync" || { echo "Missing: $app.zsync"; exit 1; }
+              test "$info" = "$expected" \
+                || { echo "Not the expected update information in $app: $info"; exit 1; } ;;
+            beta)
+              test ! -e "$app.zsync" || { echo "A beta has no $app.zsync"; exit 1; }
+              test -z "$info" \
+                || { echo "Update information in the beta $app: $info"; exit 1; } ;;
+            *) echo "Unknown kind of release: $KIND"; exit 1 ;;
+          esac
+
+      # FLAGS is "" for a stable release and "--prerelease --latest=false"
+      # for a beta: fixed words from tools/release_tag.py, not from the tag.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.tag.outputs.version }}
+          KIND: ${{ needs.tag.outputs.kind }}
+          FLAGS: ${{ needs.tag.outputs.flags }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            Understeer-*-x86_64.AppImage Understeer-*-x86_64.AppImage.zsync \
-            --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" --generate-notes
+          read -r -a flags <<< "$FLAGS"
+          files=("Understeer-$VERSION-x86_64.AppImage")
+          case "$KIND" in
+            stable) test "${#flags[@]}" -eq 0
+                    files+=("Understeer-$VERSION-x86_64.AppImage.zsync") ;;
+            beta) test "${flags[*]}" = "--prerelease --latest=false" ;;
+            *) echo "Unknown kind of release: $KIND"; exit 1 ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+            --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" \
+            --generate-notes "${flags[@]}"

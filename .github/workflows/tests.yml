@@ -8,11 +8,15 @@ on:
   pull_request:
   workflow_call:
 
+# The tests only read the repository, also when release.yml calls them.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-26.04   # fixed, so an image change never breaks a build unnoticed
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # The system Python with pytest from the distribution, as in the README.
       # GTK 4, Libadwaita and Xvfb (an invisible screen) let the UI test

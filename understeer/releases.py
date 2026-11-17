@@ -6,12 +6,21 @@ are written down. Translations are the same element again with xml:lang,
 e.g. <li xml:lang="de">. Works without GTK.
 """
 import pathlib
+import re
 import xml.etree.ElementTree as ET
 
 from . import APP_ID, DATA_DIR
 
 METAINFO = DATA_DIR / f"{APP_ID}.metainfo.xml"
 _LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+
+# A released version: 1 to 4 numbers, e.g. 2.4.0, and maybe a test
+# version of it, e.g. 2.4.0-beta.1. ASCII digits only, at most 6 each, as
+# int() would also read other digits, spaces and "_"; any other suffix,
+# e.g. -rc1 or the -3-gabc of a build from git, is no released version.
+_VERSION = re.compile(r"([0-9]{1,6}(?:\.[0-9]{1,6}){0,3})(?:-beta\.([0-9]{1,6}))?",
+                      re.ASCII)
+_PARTS = 4
 
 
 def plain_version(version):
@@ -135,11 +144,27 @@ def markdown(version, path=None):
 
 
 def number(version):
-    """(1, 9, 5) of "1.9.5" or "v1.9.5"; None for e.g. "1.9.5-3-gabc"."""
-    try:
-        return tuple(int(n) for n in plain_version(version).split("."))
-    except ValueError:
+    """A key to order versions by, e.g. ((1, 9, 5, 0), 1, 0) of "1.9.5" or
+    "v1.9.5", ((2, 4, 0, 0), 0, 1) of "2.4.0-beta.1"; None for anything
+    else, e.g. "1.9.5-3-gabc" or "2.4.0-rc1".
+
+    2.3.3 < 2.4.0-beta.1 < 2.4.0-beta.2 < 2.4.0 < 2.4.1: a stable release
+    is newer than every beta of it. Missing numbers count as 0, so "2.0"
+    is "2.0.0"."""
+    match = _VERSION.fullmatch(plain_version(version))
+    if match is None:
         return None
+    parts = [int(n) for n in match[1].split(".")]
+    parts += [0] * (_PARTS - len(parts))
+    if match[2] is None:
+        return tuple(parts), 1, 0
+    return tuple(parts), 0, int(match[2])
+
+
+def is_prerelease(version):
+    """Whether version is a test version like "2.4.0-beta.1"."""
+    key = number(version)
+    return key is not None and key[1] == 0
 
 
 def should_announce(current, last, used_before, path=None):

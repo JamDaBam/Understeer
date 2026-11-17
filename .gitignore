@@ -4,3 +4,6 @@ appimagetool-*.AppImage
 __pycache__/
 *.zsync
 .pytest_cache/
+/runtime-x86_64
+/runtime-x86_64.download.*
+/appimagetool-x86_64.AppImage.download.*
