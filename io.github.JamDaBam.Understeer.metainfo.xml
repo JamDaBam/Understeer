@@ -49,10 +49,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <!-- PENDING: no date yet. Before tagging v2.4.0-beta.2, add
-             date="YYYY-MM-DD" of the real release day and make sure
-             appstreamcli validate passes. -->
-        <release version="2.4.0-beta.2" type="development">
+        <release version="2.4.0-beta.2" date="2026-11-17" type="development">
             <description>
                 <p>The second test version (beta) of the Community Library. It makes a shared preset easier to add to the catalog.</p>
                 <p xml:lang="de">Die zweite Testversion (Beta) der Community-Bibliothek. Sie macht es einfacher, ein geteiltes Preset in den Katalog aufzunehmen.</p>
