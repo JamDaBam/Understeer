@@ -163,7 +163,7 @@ Run the tests with `python3 -m pytest` (needs pytest, for example `sudo apt inst
 The screenshots in `docs/` are made the same way: `python3 tools/screenshots.py` runs Understeer with a fake wheelbase and example presets and games in a home folder of its own and saves them, in a 1040 px window and one in a maximized Full HD window. Your configuration isn't touched; only the covers of the example games are copied from your Steam cache, if it has them.
 GitHub runs them on every push and pull request, and a release is only built when they pass.
 
-To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.
+To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0` on a commit that is already on `main`; the release build refuses a tag on any commit not in the history of `main`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.
 
 ### Build tools
 

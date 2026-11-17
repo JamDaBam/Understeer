@@ -214,6 +214,7 @@ def test_workflow_checks_the_tag_before_anything_else(workflow):
     assert re.search(r"^  test:\n    needs: tag\b", workflow, re.M)
     assert re.search(r"^  build:\n    needs: \[tag, test\]", workflow, re.M)
     assert steps(workflow) == ["Check the tag and its release notes",
+                               "Check that the tagged commit is on main",
                                "Release notes", "Build AppImage",
                                "Check the files to publish", "Publish release"]
     # the tag job runs the check with the tag only, never another file
@@ -798,3 +799,188 @@ def test_a_mutable_reference_is_found(workflow, ref):
     """Putting a tag, branch or short SHA back makes the check fail."""
     changed = workflow.replace(CHECKOUT, ref, 1)
     assert unpinned(changed) == [ref]
+
+
+# -- only commits on main are released --------------------------------------------
+
+ON_MAIN = "Check that the tagged commit is on main"
+GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+           "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.org",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.org"}
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", *args], cwd=cwd, env=GIT_ENV, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def upstream(tmp_path_factory):
+    """A repository like the one on GitHub: main with an older commit, a
+    feature merged into it, a branch never merged and one with unrelated
+    history, and release tags (lightweight and annotated) on each."""
+    repo = tmp_path_factory.mktemp("upstream")
+    git(repo, "init", "-q", "-b", "main")
+
+    def commit(name):
+        (repo / name).write_text(name)
+        git(repo, "add", name)
+        git(repo, "commit", "-q", "-m", name)
+        return git(repo, "rev-parse", "HEAD")
+
+    old = commit("one")
+    commit("two")
+    git(repo, "checkout", "-q", "-b", "feature")
+    merged = commit("feature")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
+    git(repo, "checkout", "-q", "-b", "wip")
+    unmerged = commit("wip")
+    git(repo, "checkout", "-q", "--orphan", "other")
+    unrelated = commit("other")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "tag", "v2.3.3", old)                               # older main
+    git(repo, "tag", "v2.4.0")                                    # main now
+    git(repo, "tag", "-a", "-m", "beta", "v2.4.0-beta.1", merged)  # annotated
+    git(repo, "tag", "-a", "-m", "beta", "v2.4.0-beta.3")         # annotated
+    git(repo, "tag", "v2.4.0-beta.2", unmerged)
+    git(repo, "tag", "-a", "-m", "x", "v2.5.0", unrelated)
+    return repo
+
+
+def checkout(tmp_path, upstream, tag, *clone_args):
+    """What actions/checkout makes of a tag push with fetch-depth: 0: a
+    clone of the repository with the tag checked out."""
+    work = tmp_path / "work"
+    git(tmp_path, "clone", "-q", "--no-checkout", *clone_args,
+        f"file://{upstream}", str(work))
+    git(work, "checkout", "-q", "--detach", f"refs/tags/{tag}")
+    return work
+
+
+def check_on_main(workflow, cwd, upstream, tag, path=None, sha=None):
+    """sha: GITHUB_SHA of the push; by default the tag's commit, as GitHub
+    sets it for a tag push."""
+    if sha is None:
+        sha = subprocess.run(["git", "rev-parse", f"refs/tags/{tag}^{{commit}}"],
+                             cwd=upstream, env=GIT_ENV, capture_output=True,
+                             text=True).stdout.strip()
+    env = {**GIT_ENV, "GITHUB_REF_NAME": tag, "GITHUB_SERVER_URL": "file://",
+           "GITHUB_REPOSITORY": str(upstream)[1:], "GITHUB_SHA": sha}
+    if path:
+        env["PATH"] = f"{path}:{env['PATH']}"
+    return subprocess.run(["bash", "-e", "-o", "pipefail", "-c",
+                           run_block(workflow, ON_MAIN)], cwd=cwd, env=env,
+                          capture_output=True, text=True, timeout=30)
+
+
+@pytest.mark.parametrize("tag", [
+    "v2.4.0",          # the commit main is at
+    "v2.3.3",          # an older commit of main
+    "v2.4.0-beta.1",   # a feature commit merged into main, annotated tag
+    "v2.4.0-beta.3",   # annotated tag on main
+])
+def test_a_tag_on_main_is_released(workflow, tmp_path, upstream, tag):
+    work = checkout(tmp_path, upstream, tag)
+    done = check_on_main(workflow, work, upstream, tag)
+    assert done.returncode == 0, done.stderr
+    assert "is in the history of main" in done.stdout
+
+
+@pytest.mark.parametrize("tag", [
+    "v2.4.0-beta.2",   # a branch never merged (a beta)
+    "v2.5.0",          # unrelated history (a stable tag)
+])
+def test_a_tag_off_main_is_refused(workflow, tmp_path, upstream, tag):
+    work = checkout(tmp_path, upstream, tag)
+    done = check_on_main(workflow, work, upstream, tag)
+    assert done.returncode == 1
+    assert "is not in the history of main" in done.stderr
+
+
+def test_missing_main_is_refused(workflow, tmp_path, upstream):
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    git(work, "update-ref", "-d", "refs/remotes/origin/main")
+    done = check_on_main(workflow, work, upstream, "v2.4.0")
+    assert done.returncode == 1 and "origin/main is missing" in done.stderr
+
+
+def test_a_shallow_clone_is_refused(workflow, tmp_path, upstream):
+    """Like the default checkout (depth 1): too little history to tell."""
+    work = checkout(tmp_path, upstream, "v2.3.3", "--depth", "1",
+                    "--no-single-branch")
+    done = check_on_main(workflow, work, upstream, "v2.3.3")
+    assert done.returncode == 1 and "shallow" in done.stderr
+
+
+def test_another_remote_is_refused(workflow, tmp_path, upstream):
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    git(work, "remote", "set-url", "origin", "file:///somewhere/else")
+    done = check_on_main(workflow, work, upstream, "v2.4.0")
+    assert done.returncode == 1 and "not file://" in done.stderr
+
+
+def test_the_tag_must_be_what_is_checked_out(workflow, tmp_path, upstream):
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    done = check_on_main(workflow, work, upstream, "v2.3.3")
+    assert done.returncode == 1 and "the tag points to" in done.stderr
+    done = check_on_main(workflow, work, upstream, "v9.9.9")
+    assert done.returncode == 1 and "there is no tag v9.9.9" in done.stderr
+
+
+@pytest.mark.parametrize("tag", ["v2.4.0-beta.1", "v2.4.0-beta.3"])
+def test_an_annotated_tag_may_come_as_its_tag_object(workflow, tmp_path,
+                                                     upstream, tag):
+    """GITHUB_SHA naming the tag object instead of its commit still matches."""
+    work = checkout(tmp_path, upstream, tag)
+    tag_object = git(upstream, "rev-parse", f"refs/tags/{tag}")
+    assert tag_object != git(upstream, "rev-parse", f"refs/tags/{tag}^{{commit}}")
+    done = check_on_main(workflow, work, upstream, tag, sha=tag_object)
+    assert done.returncode == 0, done.stderr
+
+
+def test_the_checkout_must_be_the_pushed_commit(workflow, tmp_path, upstream):
+    """The tag points to the checked-out commit, but the push that started
+    the run was for another one (e.g. the tag was moved): refused."""
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    other = git(upstream, "rev-parse", "refs/tags/v2.3.3^{commit}")
+    done = check_on_main(workflow, work, upstream, "v2.4.0", sha=other)
+    assert done.returncode == 1 and "the push was for" in done.stderr
+
+
+@pytest.mark.parametrize("sha", ["", "HEAD", "--help", "abc123", "A" * 40,
+                                 "f" * 40, "0" * 40 + "\n", "v2.4.0"])
+def test_a_bad_github_sha_is_refused(workflow, tmp_path, upstream, sha):
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    done = check_on_main(workflow, work, upstream, "v2.4.0", sha=sha)
+    assert done.returncode == 1
+    assert "no commit id" in done.stderr or "is not here" in done.stderr
+
+
+def test_git_failures_are_refused(workflow, tmp_path, upstream):
+    # no repository at all
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    done = check_on_main(workflow, empty, upstream, "v2.4.0")
+    assert done.returncode == 1 and "Not released" in done.stderr
+    # git fails in the ancestry check itself (not "no" but an error)
+    work = checkout(tmp_path, upstream, "v2.4.0")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    real = subprocess.run(["sh", "-c", "command -v git"], capture_output=True,
+                          text=True).stdout.strip()
+    (bin_dir / "git").write_text(
+        f'#!/bin/sh\n[ "$1" = merge-base ] && exit 128\nexec "{real}" "$@"\n')
+    (bin_dir / "git").chmod(0o755)
+    done = check_on_main(workflow, work, upstream, "v2.4.0", path=bin_dir)
+    assert done.returncode == 1 and "could not tell" in done.stderr
+
+
+def test_the_main_check_is_in_the_tag_job(workflow):
+    tag_job, rest = workflow.split("\n  test:", 1)
+    assert f"- name: {ON_MAIN}" in tag_job and ON_MAIN not in rest
+    assert "fetch-depth: 0" in tag_job and "fetch-depth" not in rest
+    # the jobs after it can't start without it
+    assert re.search(r"^  test:\n    needs: tag\b", workflow, re.M)
+    assert re.search(r"^  build:\n    needs: \[tag, test\]", workflow, re.M)
+    assert "continue-on-error" not in workflow and "if:" not in workflow

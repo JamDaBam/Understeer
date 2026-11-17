@@ -24,6 +24,8 @@ jobs:
       flags: ${{ steps.tag.outputs.flags }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0   # all history and branches, for the check of main
 
       # The tag only reaches the script as an argument, never as code. It
       # also checks the release in the metainfo file (one entry, a real
@@ -33,6 +35,38 @@ jobs:
       - name: Check the tag and its release notes
         id: tag
         run: python3 tools/release_tag.py "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      # Only a commit merged into main is released: the tag must point to
+      # the commit checked out, and it must be in the history of main of
+      # this repository. Anything that can't be told for sure fails.
+      - name: Check that the tagged commit is on main
+        run: |
+          fail() { echo "Not released: $*" >&2; exit 1; }
+          expected="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          origin="$(git remote get-url origin)" || fail "there is no remote origin"
+          [ "${origin%.git}" = "$expected" ] || fail "origin is $origin, not $expected"
+          [ "$(git rev-parse --is-shallow-repository)" = false ] \
+            || fail "the history is incomplete (shallow clone)"
+          tagged="$(git rev-parse --verify --quiet "refs/tags/$GITHUB_REF_NAME^{commit}")" \
+            || fail "there is no tag $GITHUB_REF_NAME"
+          head="$(git rev-parse --verify --quiet "HEAD^{commit}")" \
+            || fail "no commit is checked out"
+          [ "$tagged" = "$head" ] || fail "the tag points to $tagged, not to $head"
+          # The commit of the push that started this run (for an annotated
+          # tag GITHUB_SHA may name the tag object; ^{commit} resolves both)
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "GITHUB_SHA is no commit id"
+          pushed="$(git rev-parse --verify --quiet "$GITHUB_SHA^{commit}")" \
+            || fail "the pushed commit $GITHUB_SHA is not here"
+          [ "$pushed" = "$head" ] || fail "the push was for $pushed, not for $head"
+          main="$(git rev-parse --verify --quiet "refs/remotes/origin/main^{commit}")" \
+            || fail "origin/main is missing"
+          status=0
+          git merge-base --is-ancestor "$head" "$main" || status=$?
+          case "$status" in
+            0) echo "$head is in the history of main ($main)" ;;
+            1) fail "$head is not in the history of main; tag a commit merged into main" ;;
+            *) fail "git could not tell whether $head is in the history of main" ;;
+          esac
 
   test:
     needs: tag         # no tests for a tag that is never released
