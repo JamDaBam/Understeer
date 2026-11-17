@@ -179,6 +179,26 @@ def test_a_bad_tag_fails_before_the_file_is_read(tmp_path):
         release_tag.check_metainfo("v2.4.0-rc1", tmp_path / "missing.xml")
 
 
+def test_a_prepared_next_beta_waits_for_its_date(metainfo):
+    """While the next beta is prepared without its date, it can't be
+    released yet, and the dated releases below it still can."""
+    path = metainfo(release_xml(
+        entry("2.4.0-beta.2", None, "development"),
+        entry("2.4.0-beta.1", "2026-11-17", "development"),
+        entry("2.3.3", "2026-11-13")))
+    with pytest.raises(ValueError, match="no date yet"):
+        release_tag.check_metainfo("v2.4.0-beta.2", path)
+    done = run("--metainfo", str(path), "v2.4.0-beta.2")
+    assert done.returncode == 1 and done.stdout == ""
+    assert "has no date yet" in done.stderr
+    release_tag.check_metainfo("v2.4.0-beta.1", path)
+    release_tag.check_metainfo("v2.3.3", path)
+    assert run("--metainfo", str(path), "v2.4.0-beta.1").stdout == (
+        "version=2.4.0-beta.1\nkind=beta\nflags=--prerelease --latest=false\n")
+    assert run("--metainfo", str(path), "v2.3.3").stdout == \
+        "version=2.3.3\nkind=stable\nflags=\n"
+
+
 def test_script_refuses_an_unready_release(metainfo):
     """Fails with a message, and nothing reaches $GITHUB_OUTPUT."""
     path = str(metainfo(release_xml(entry("2.4.0-beta.1", None, "development"))))
@@ -188,14 +208,15 @@ def test_script_refuses_an_unready_release(metainfo):
 
 
 def test_the_shipped_metainfo():
-    """2.3.3 and 2.4.0-beta.1 are both dated and ready; the beta is
-    published as a prerelease that doesn't become the latest release."""
+    """2.3.3, 2.4.0-beta.1 and 2.4.0-beta.2 are dated and ready; each beta
+    is published as a prerelease that doesn't become the latest release."""
     release_tag.check_metainfo("v2.3.3")
-    release_tag.check_metainfo("v2.4.0-beta.1")
-    done = run("v2.4.0-beta.1")
-    assert done.returncode == 0
-    assert done.stdout == (
-        "version=2.4.0-beta.1\nkind=beta\nflags=--prerelease --latest=false\n")
+    for beta in ("2.4.0-beta.1", "2.4.0-beta.2"):
+        release_tag.check_metainfo(f"v{beta}")
+        done = run(f"v{beta}")
+        assert done.returncode == 0, done.stderr
+        assert done.stdout == (
+            f"version={beta}\nkind=beta\nflags=--prerelease --latest=false\n")
     assert run("v2.3.3").stdout == "version=2.3.3\nkind=stable\nflags=\n"
 
 
