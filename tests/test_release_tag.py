@@ -232,11 +232,74 @@ def test_workflow_publishes_with_the_flags_of_the_tag(workflow):
     assert 'files+=("Understeer-$VERSION-x86_64.AppImage.zsync")' in publish
 
 
-def test_workflow_keeps_its_permissions(workflow):
-    assert re.findall(r"^\s*(\w+): (read|write)$", workflow, re.M) == [
-        ("contents", "write"), ("contents", "read")]
-    assert "secrets." not in workflow
-    assert "pull_request" not in workflow
+TESTS_WORKFLOW = ROOT / ".github" / "workflows" / "tests.yml"
+
+
+def permissions(text):
+    """{None: the workflow's permissions, job: its own} as written, from
+    the indentation (the CI has no YAML library). A value on the same line,
+    e.g. "permissions: write-all", is kept as text."""
+    found, job, in_jobs = {}, None, False
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("jobs:"):
+            in_jobs = True
+            continue
+        m = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if in_jobs and m:
+            job = m.group(1)
+            continue
+        m = re.match(r"^( *)permissions:\s*(.*?)\s*(#.*)?$", line)
+        if not m:
+            continue
+        key = job if in_jobs else None
+        assert key not in found, f"permissions twice for {key}"
+        if m.group(2):
+            found[key] = m.group(2)
+            continue
+        scopes, indent = {}, len(m.group(1))
+        for inner in lines[i + 1:]:
+            if not inner.strip() or inner.strip().startswith("#"):
+                continue
+            if len(inner) - len(inner.lstrip()) <= indent:
+                break
+            name, value = inner.split("#")[0].split(":")
+            scopes[name.strip()] = value.strip()
+        found[key] = scopes
+    return found
+
+
+def job_names(text):
+    return re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", text.split("\njobs:\n", 1)[1],
+                      re.M)
+
+
+def test_release_workflow_has_least_privilege(workflow):
+    perms = permissions(workflow)
+    assert perms == {None: {"contents": "read"},          # the default
+                     "tag": {"contents": "read"},
+                     "test": {"contents": "read"},
+                     "build": {"contents": "write"}}    # gh release create
+    # every job says what it gets, so none inherits more by accident
+    assert set(job_names(workflow)) == {"tag", "test", "build"}
+    assert "secrets." not in workflow and "pull_request" not in workflow
+    assert "write-all" not in workflow and "read-all" not in workflow
+
+
+def test_the_test_workflow_only_reads():
+    text = TESTS_WORKFLOW.read_text(encoding="utf-8")
+    assert permissions(text) == {None: {"contents": "read"}}
+    assert "write" not in text and "secrets." not in text
+
+
+def test_the_permission_reader():
+    text = ("on: push\npermissions:\n  contents: read  # c\n\njobs:\n"
+            "  a:\n    permissions: write-all\n    steps: []\n"
+            "  b:\n    permissions:\n      contents: write\n"
+            "      packages: read\n    runs-on: x\n")
+    assert permissions(text) == {None: {"contents": "read"}, "a": "write-all",
+                                 "b": {"contents": "write", "packages": "read"}}
+    assert job_names(text) == ["a", "b"]
 
 
 def test_workflow_puts_no_expression_into_a_script(workflow):

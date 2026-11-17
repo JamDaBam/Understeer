@@ -9,8 +9,9 @@ on:
     tags:
       - "v*"
 
+# Read-only by default; only the job that publishes the release may write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   tag:
@@ -35,11 +36,15 @@ jobs:
 
   test:
     needs: tag         # no tests for a tag that is never released
+    permissions:
+      contents: read
     uses: ./.github/workflows/tests.yml
 
   build:
     needs: [tag, test] # no release if a test fails
     runs-on: ubuntu-26.04   # fixed, so an image change never breaks a build unnoticed
+    permissions:
+      contents: write  # gh release create
     steps:
       - uses: actions/checkout@v5
 
