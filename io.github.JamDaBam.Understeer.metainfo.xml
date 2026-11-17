@@ -49,6 +49,27 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <!-- PENDING: no date yet. Before tagging v2.4.0-beta.2, add
+             date="YYYY-MM-DD" of the real release day and make sure
+             appstreamcli validate passes. -->
+        <release version="2.4.0-beta.2" type="development">
+            <description>
+                <p>The second test version (beta) of the Community Library. It makes a shared preset easier to add to the catalog.</p>
+                <p xml:lang="de">Die zweite Testversion (Beta) der Community-Bibliothek. Sie macht es einfacher, ein geteiltes Preset in den Katalog aufzunehmen.</p>
+                <ul>
+                    <li>Share with Community… now fills in the complete catalog entry on GitHub, which a maintainer can copy into the catalog as it is after reviewing it</li>
+                    <li xml:lang="de">„In Community teilen…“ trägt auf GitHub jetzt den vollständigen Katalogeintrag ein, den ein Maintainer nach der Prüfung unverändert in den Katalog übernehmen kann</li>
+                    <li>The entry gets the drive of the chosen wheelbase (belt or direct drive) by itself; your settings and values stay exactly as they are, and no torque is added</li>
+                    <li xml:lang="de">Der Eintrag bekommt die Antriebsart der gewählten Wheelbase (Riemen oder Direktantrieb) von selbst; deine Einstellungen und Werte bleiben genau so, wie sie sind, und es wird kein Drehmoment ergänzt</li>
+                    <li>When a submission is too long for the link, Too Long for the Link offers the complete entry to copy, so nothing is cut</li>
+                    <li xml:lang="de">Ist eine Einreichung zu lang für den Link, bietet „Zu lang für den Link“ den vollständigen Eintrag zum Kopieren an, sodass nichts gekürzt wird</li>
+                    <li>Submissions from 2.4.0-beta.1 are still accepted</li>
+                    <li xml:lang="de">Einreichungen aus 2.4.0-beta.1 werden weiterhin angenommen</li>
+                    <li>Every submission is still reviewed and checked by a maintainer before it appears in the catalog</li>
+                    <li xml:lang="de">Jede Einreichung wird weiterhin von einem Maintainer geprüft, bevor sie im Katalog erscheint</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.4.0-beta.1" date="2026-11-17" type="development">
             <description>
                 <p>A test version (beta) for trying out the new Community Library. It is still experimental: please try it and tell what works, what doesn't and what you miss. Whether the library stays in Understeer for good is still open; a community discussion or poll about it is planned.</p>
