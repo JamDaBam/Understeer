@@ -168,7 +168,8 @@ submission.entry_json(result.entry)   # the entry as text, deterministic
 - **Required:** preset name, `game`, `wheelbase`, `author` and
   `description`. `author` is only what the user typed or confirmed;
   nothing fills it in. `wheelbase` must be one of the names Understeer
-  shows; an optional `drive` must match it.
+  shows; an optional `drive` must match it. Without one, the entry gets
+  the wheelbase's drive; `torque_nm` is never filled in.
 - **Nothing is cut or changed quietly.** A text over its limit (as in
   the tables above), with a line break where one line is expected, or
   with control or invisible characters is refused. Only spacing is
@@ -203,17 +204,23 @@ GitHub…**: it opens the submission form of the preset repository
 (`.github/ISSUE_TEMPLATE/community-preset.yml`) in the default browser,
 through `Gtk.UriLauncher`, with the fields filled in from URL parameters
 named after the form's field ids (`understeer/github_form.py`). The
-field *Preset JSON* gets only the preset
-(`{"understeer_preset": 1, "name": …, "values": {…}}`); the metadata and
-the proposed id go into their own fields, and no acknowledgement box is
-ticked. The user checks everything there and submits the issue
+field *Catalog Entry (JSON)* (id `preset-json`) gets the complete
+catalog entry (`{"id": …, "meta": …, "preset": …}`) as
+`submission.entry_json` writes it, with every `` ` `` written as
+```, so a maintainer can copy it into `catalog.json` after
+reviewing it. Its `meta.drive` is the drive of the chosen wheelbase;
+`torque_nm` is never filled in. The metadata and the proposed id also go
+into their own readable fields, and no acknowledgement box is ticked.
+Older versions put only the preset
+(`{"understeer_preset": 1, "name": …, "values": {…}}`) into that field;
+the form still accepts it. The user checks everything there and submits the issue
 themselves; Understeer never submits anything, and says GitHub opened
 only when the browser reports it.
 
 GitHub doesn't state a length limit for such addresses. Filling in the
 form was tested with an address of about 830 characters; Understeer keeps
 addresses to 2000 characters (`MAX_URL_CHARS`). When a submission doesn't
-fit, whole fields are left out of the address, the preset JSON first,
+fit, whole fields are left out of the address, the catalog entry first,
 then the description, and the page lists them with a **Copy** button
 each, to paste into their fields on GitHub. Nothing is cut short, and
 nothing is copied unless the user clicks. The address holds only the

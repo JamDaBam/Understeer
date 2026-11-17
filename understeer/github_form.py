@@ -4,13 +4,18 @@ with a prepared submission filled in.
 The form (.github/ISSUE_TEMPLATE/community-preset.yml in the preset
 repository) takes its fields from URL parameters named after their ids.
 Only the public submission goes into the address: the fields the user
-entered and checked, the proposed id and the preset itself, never anything
-else. Nothing here opens a browser or the network; it only builds text.
+entered and checked, the proposed id and the complete catalog entry,
+never anything else. Nothing here opens a browser or the network; it
+only builds text.
+
+The form's field "Catalog Entry (JSON)" keeps its old id "preset-json",
+so the addresses of older versions, which put only the preset there,
+still fill it in.
 
 GitHub doesn't say how long such an address may be. Filling in the form
 was tested with an address of about 830 characters, which is no general
 limit of GitHub or of browsers. So an address is kept to MAX_URL_CHARS;
-when everything doesn't fit, whole fields are left out, the preset JSON
+when everything doesn't fit, whole fields are left out, the catalog entry
 first, and the user copies them into the form. Nothing is ever cut short.
 """
 import json
@@ -37,11 +42,17 @@ LEAVE_OUT = ("preset-json", "description", "tags", "game", "preset-name",
 Plan = namedtuple("Plan", "url values left_out")
 
 
-def preset_json(entry):
-    """The form's "Preset JSON": only the preset, as Understeer copies it
-    with Share → Copy as JSON, never the whole catalog entry."""
-    return json.dumps(entry["preset"], indent=2, ensure_ascii=False,
-                      allow_nan=False)
+def entry_text(entry):
+    """The form's "Catalog Entry (JSON)": the complete catalog entry as
+    submission.entry_json() writes it (two spaces, Unicode as it is), to
+    copy into catalog.json as it is. Every ` is written as \\u0060, which
+    reads back as the same text: GitHub shows the field in a Markdown code
+    block, which a ``` in a description would otherwise end. In JSON a `
+    can only stand inside a string, so nothing else changes."""
+    text = submission.entry_json(entry).replace("`", "\\u0060")
+    if json.loads(text) != entry:           # never send something else
+        raise ValueError("the entry doesn't read back as it is")
+    return text
 
 
 def _checked(entry):
@@ -75,7 +86,7 @@ def values(entry):
             "game": meta["game"], "wheelbase": meta["wheelbase"],
             "author": meta["author"], "description": meta["description"],
             "tags": ", ".join(meta.get("tags", ())), "catalog-id": entry["id"],
-            "preset-json": preset_json(entry)}
+            "preset-json": entry_text(entry)}
 
 
 def url(fields):

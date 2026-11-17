@@ -121,6 +121,51 @@ def test_every_known_wheelbase_is_accepted():
         assert submit(wheelbase=name, drive=drive).entry["meta"]["wheelbase"] == name
 
 
+# Written out, so a change of the device list shows up here
+DRIVES = {
+    "ClubSport Wheel Base V2": "belt",
+    "ClubSport Wheel Base V2.5": "belt",
+    "CSL Elite Wheel Base": "belt",
+    "CSL Elite Wheel Base (PS4)": "belt",
+    "CSR Elite Wheel Base": "belt",
+    "CSL DD": "direct_drive",
+    "Podium Wheel Base DD1": "direct_drive",
+    "Podium Wheel Base DD2": "direct_drive",
+}
+
+
+def test_the_eight_wheelbases_and_their_drive():
+    assert submission.WHEELBASE_DRIVES == DRIVES
+
+
+@pytest.mark.parametrize("wheelbase, drive", sorted(DRIVES.items()))
+def test_drive_comes_from_the_wheelbase(wheelbase, drive):
+    """Without a drive, the entry gets the wheelbase's; never a torque."""
+    meta = submit(wheelbase=wheelbase).entry["meta"]
+    assert meta["drive"] == drive
+    assert "torque_nm" not in meta
+    assert submit(wheelbase=wheelbase, drive=drive).entry["meta"]["drive"] == drive
+
+
+@pytest.mark.parametrize("wheelbase, drive", sorted(DRIVES.items()))
+def test_drive_of_another_wheelbase_is_refused(wheelbase, drive):
+    other = "belt" if drive == "direct_drive" else "direct_drive"
+    assert problems(wheelbase=wheelbase, drive=other) == (
+        Problem("drive", "not_this_wheelbase"),)
+
+
+@pytest.mark.parametrize("wheelbase", [None, "", "Moza R9"])
+def test_no_drive_without_a_known_wheelbase(wheelbase):
+    """An unknown or missing wheelbase is refused; no drive is guessed."""
+    found = problems(wheelbase=wheelbase)
+    assert {p.field for p in found} == {"wheelbase"}
+
+
+def test_given_torque_is_kept_and_not_derived():
+    assert submit(torque_nm=8).entry["meta"]["torque_nm"] == 8
+    assert "torque_nm" not in submit().entry["meta"]
+
+
 @pytest.mark.parametrize("changes, problem", [
     (dict(drive="belt"), Problem("drive", "not_this_wheelbase")),
     (dict(drive="gear"), Problem("drive", "invalid")),
@@ -249,10 +294,13 @@ def test_serial_like_codes_are_warned_about():
 
 def test_nothing_is_added_that_wasnt_passed():
     """No folder, user, path, device or machine data ends up in the entry:
-    it holds the given fields and the settings, nothing else."""
+    it holds the given fields, the drive of the given wheelbase and the
+    settings, nothing else."""
     entry = submit().entry
     assert set(entry) == {"id", "meta", "preset"}
-    assert set(entry["meta"]) == {"author", "game", "wheelbase", "description"}
+    assert set(entry["meta"]) == {"author", "game", "wheelbase", "drive",
+                                  "description"}
+    assert entry["meta"]["drive"] == submission.WHEELBASE_DRIVES[META["wheelbase"]]
     assert set(entry["preset"]) == {"understeer_preset", "name", "values"}
 
 

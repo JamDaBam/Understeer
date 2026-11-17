@@ -204,6 +204,9 @@ def prepare(name, values, *, author, game, wheelbase, description, tags=(),
 
     author must be what the user typed or confirmed; nothing here fills it
     in. wheelbase is one of the names Understeer shows (WHEELBASE_DRIVES).
+    drive: without one, the wheelbase's drive from WHEELBASE_DRIVES, as
+    each known wheelbase has exactly one; a different one is refused.
+    torque_nm is never filled in: a wheelbase doesn't say its torque.
     entry_id: the id to use, else suggest_id() avoiding taken_ids (the ids
     of the catalog). private_words: words the caller knows are private,
     such as the login name, to warn about; they aren't put anywhere."""
@@ -261,10 +264,10 @@ def prepare(name, values, *, author, game, wheelbase, description, tags=(),
     if problems:
         raise Invalid(problems)
 
+    if drive is None:
+        drive = WHEELBASE_DRIVES[wheelbase]     # checked above: a known one
     meta = {"author": clean["author"], "game": clean["game"],
-            "wheelbase": wheelbase}
-    if drive is not None:
-        meta["drive"] = drive
+            "wheelbase": wheelbase, "drive": drive}
     if torque_nm is not None:
         meta["torque_nm"] = torque_nm
     meta["description"] = clean["description"]

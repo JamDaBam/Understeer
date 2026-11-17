@@ -130,7 +130,7 @@ def test_dialog_sends_and_writes_nothing():
 
 
 @pytest.mark.parametrize("field, label", [
-    ("preset-json", "Preset JSON"), ("description", "Description"),
+    ("preset-json", "Catalog Entry (JSON)"), ("description", "Description"),
     ("preset-name", "Preset name"), ("wheelbase", "Wheelbase model")])
 def test_github_labels(field, label):
     """Fields to copy are named as the form on GitHub names them."""

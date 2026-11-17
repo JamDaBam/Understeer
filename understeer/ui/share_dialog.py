@@ -34,7 +34,7 @@ GITHUB_LABELS = {"title": "Title", "preset-name": "Preset name",
                  "author": "Author", "description": "Description",
                  "tags": "Tags (optional)",
                  "catalog-id": "Proposed catalog ID (optional)",
-                 "preset-json": "Preset JSON"}
+                 "preset-json": "Catalog Entry (JSON)"}
 
 
 def open_uri(parent, uri, done):
