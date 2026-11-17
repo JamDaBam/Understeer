@@ -751,3 +751,50 @@ def test_a_stable_release_with_an_empty_section_is_refused(release_dir, workflow
     failed, output = run_steps(release_dir, workflow, "v2.3.3",
                                {STABLE_APP: "EMPTY SECTION", **ZSYNC})
     assert failed == "Check the files to publish" and WRONG in output
+
+
+# -- external Actions pinned to full commit SHAs ---------------------------------
+
+CHECKOUT = "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"  # v5.1.0
+USES = re.compile(r"^\s*(?:-\s*)?uses:\s*(\S+)(.*)$", re.M)
+PINNED = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@[0-9a-f]{40}")
+
+
+def action_refs(text):
+    """[(reference, rest of the line)] of every uses: in a workflow."""
+    return USES.findall(text)
+
+
+def unpinned(text):
+    """External Actions not pinned to a full commit SHA; local workflows
+    (./...) are part of this repository and need none."""
+    return [ref for ref, _rest in action_refs(text)
+            if not ref.startswith("./") and not PINNED.fullmatch(ref)]
+
+
+@pytest.mark.parametrize("path", [WORKFLOW, TESTS_WORKFLOW], ids=["release", "tests"])
+def test_actions_are_pinned_to_commits(path):
+    text = path.read_text(encoding="utf-8")
+    assert unpinned(text) == []
+    external = [(ref, rest) for ref, rest in action_refs(text)
+                if not ref.startswith("./")]
+    assert external and all(ref == CHECKOUT for ref, _ in external)
+    assert all(rest.strip() == "# v5.1.0" for _, rest in external)
+
+
+def test_the_local_test_workflow_stays_local(workflow):
+    refs = [ref for ref, _ in action_refs(workflow)]
+    assert refs.count("./.github/workflows/tests.yml") == 1
+    assert TESTS_WORKFLOW.exists()
+
+
+@pytest.mark.parametrize("ref", [
+    "actions/checkout@v5", "actions/checkout@v5.1.0", "actions/checkout@main",
+    "actions/checkout@releases/v5", "actions/checkout@fbc6f39",
+    "actions/checkout@" + "F" * 40, "actions/checkout@" + "f" * 39,
+    "actions/checkout@" + "f" * 41, "actions/checkout", "docker://alpine:3",
+])
+def test_a_mutable_reference_is_found(workflow, ref):
+    """Putting a tag, branch or short SHA back makes the check fail."""
+    changed = workflow.replace(CHECKOUT, ref, 1)
+    assert unpinned(changed) == [ref]

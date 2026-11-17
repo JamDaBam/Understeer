@@ -23,7 +23,7 @@ jobs:
       kind: ${{ steps.tag.outputs.kind }}
       flags: ${{ steps.tag.outputs.flags }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # The tag only reaches the script as an argument, never as code. It
       # also checks the release in the metainfo file (one entry, a real
@@ -46,7 +46,7 @@ jobs:
     permissions:
       contents: write  # gh release create
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # From the metainfo file; stops here if they weren't written yet.
       - name: Release notes

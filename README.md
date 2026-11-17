@@ -171,6 +171,8 @@ To release a version, first add it with its changes (in English and German, see 
 
 So a new upstream build makes the build fail on purpose. To take it, review the new file, put its SHA-256 into `build.sh`, run the tests and build and check an AppImage before releasing with it. The checksum only shows that the file is the one that was reviewed, not who made it; it doesn't keep upstream from removing the file, and the builds are not bit-for-bit reproducible.
 
+The GitHub Actions the workflows use are pinned to full commit SHAs, with their version in a comment. To update one, check on the official repository which commit the new release tag points to, then change the SHA and the comment together.
+
 ## Credits & License
 
 - Understeer started as a fork of [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi and has since been rewritten as its own project. Thanks for the starting point!
