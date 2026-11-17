@@ -1,5 +1,6 @@
 """Which tags are released, and how: stable, or as a prerelease that never
 becomes the latest release. Nothing here creates a tag or a release."""
+import hashlib
 import importlib.util
 import os
 import shutil
@@ -285,30 +286,104 @@ def test_build_kind_from_the_command_line():
         assert (done.returncode, done.stdout) == (0, kind + "\n")
 
 
-def build_step(tmp_path, version):
-    """Run the last step of build.sh (making the AppImage) with a stand-in
-    for appimagetool that notes its arguments; nothing is downloaded."""
-    text = BUILD.read_text(encoding="utf-8")
-    step = text[text.index('echo "=== Step 6'):]
-    (tmp_path / "tools").mkdir()
-    shutil.copy(SCRIPT, tmp_path / "tools" / "release_tag.py")
-    (tmp_path / "understeer").symlink_to(ROOT / "understeer")
-    (tmp_path / "AppDir" / "usr" / "share" / "understeer").mkdir(parents=True)
-    tool = tmp_path / "appimagetool-x86_64.AppImage"
-    tool.write_text('#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done '
-                    '> args.txt\n')
-    tool.chmod(0o755)
-    env = {**os.environ, "VERSION": version, "TOOL": tool.name}
-    done = subprocess.run(["bash", "-e", "-c", step], cwd=tmp_path, env=env,
-                          capture_output=True, text=True, timeout=30)
+# The build tools as pinned in build.sh, and stand-ins for the tests: the
+# test copy of build.sh pins these instead, so nothing real is downloaded
+# or run.
+TOOL_URL = ("https://github.com/AppImage/appimagetool/releases/download/"
+            "continuous/appimagetool-x86_64.AppImage")
+TOOL_SHA256 = "e8c1169c4af66c3184d7ee110713d4be04befe671fa358e2c1591ee840553b03"
+RUNTIME_URL = ("https://github.com/AppImage/type2-runtime/releases/download/"
+               "continuous/runtime-x86_64")
+RUNTIME_SHA256 = "617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46"
+FAKE_TOOL = (b'#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done '
+             b'> args.txt\n')
+FAKE_RUNTIME = b"\x7fELF a stand-in for the runtime\n"
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+class Build:
+    """Steps 5 and 6 of build.sh in a folder of their own, with a wget that
+    serves files from server/ (and notes each call) and an appimagetool
+    stand-in that notes its arguments in args.txt."""
+
+    def __init__(self, tmp_path):
+        self.dir = tmp_path / "build"
+        self.server = tmp_path / "server"
+        self.log = tmp_path / "wget.log"
+        for d in (self.dir, self.server, tmp_path / "bin"):
+            d.mkdir()
+        (self.dir / "tools").mkdir()
+        shutil.copy(SCRIPT, self.dir / "tools" / "release_tag.py")
+        (self.dir / "understeer").symlink_to(ROOT / "understeer")
+        (self.dir / "AppDir" / "usr" / "share" / "understeer").mkdir(parents=True)
+        wget = tmp_path / "bin" / "wget"
+        wget.write_text(
+            '#!/bin/sh\necho "$@" >> "$WGET_LOG"\nout=; url=\n'
+            'while [ $# -gt 0 ]; do case "$1" in -O) out="$2"; shift 2;; '
+            '-*) shift;; *) url="$1"; shift;; esac; done\n'
+            'if [ -n "$WGET_FAIL" ]; then printf partial > "$out"; exit 4; fi\n'
+            'cat "$FAKE_SERVER/$(basename "$url")" > "$out"\n')
+        wget.chmod(0o755)
+        self.path = f"{tmp_path / 'bin'}:{os.environ['PATH']}"
+        self.serve(FAKE_TOOL, FAKE_RUNTIME)
+
+    def serve(self, tool, runtime):
+        (self.server / "appimagetool-x86_64.AppImage").write_bytes(tool)
+        (self.server / "runtime-x86_64").write_bytes(runtime)
+
+    def cache(self, tool=FAKE_TOOL, runtime=FAKE_RUNTIME):
+        if tool is not None:
+            (self.dir / "appimagetool-x86_64.AppImage").write_bytes(tool)
+        if runtime is not None:
+            (self.dir / "runtime-x86_64").write_bytes(runtime)
+
+    def run(self, version="v2.3.3", wget_fails=False,
+            tool_sha=sha256(FAKE_TOOL), runtime_sha=sha256(FAKE_RUNTIME)):
+        text = BUILD.read_text(encoding="utf-8")
+        step = text[text.index('echo "=== Step 5'):]
+        step = step.replace(TOOL_SHA256, tool_sha).replace(RUNTIME_SHA256,
+                                                            runtime_sha)
+        env = {**os.environ, "VERSION": version, "PATH": self.path,
+               "WGET_LOG": str(self.log), "FAKE_SERVER": str(self.server),
+               "WGET_FAIL": "1" if wget_fails else ""}
+        return subprocess.run(["bash", "-e", "-c", step], cwd=self.dir, env=env,
+                              capture_output=True, text=True, timeout=30)
+
+    @property
+    def args(self):
+        path = self.dir / "args.txt"
+        return path.read_text().splitlines() if path.exists() else None
+
+    @property
+    def downloads(self):
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def file(self, name):
+        return self.dir / name
+
+
+@pytest.fixture
+def build(tmp_path):
+    return Build(tmp_path)
+
+
+def build_step(build, version):
+    """A build with both tools already there and right."""
+    build.cache()
+    done = build.run(version)
     assert done.returncode == 0, done.stderr
-    return (tmp_path / "args.txt").read_text().splitlines(), done.stdout
+    return build.args, done.stdout
 
 
-def test_a_stable_build_keeps_its_update_information(tmp_path):
-    args, _out = build_step(tmp_path, "v2.3.3")
-    assert args == ["-u", UPDATE_INFO, "AppDir", "Understeer-2.3.3-x86_64.AppImage"]
-    assert (tmp_path / "AppDir/usr/share/understeer/VERSION").read_text() == "2.3.3\n"
+def test_a_stable_build_keeps_its_update_information(build):
+    args, _out = build_step(build, "v2.3.3")
+    assert args == ["--runtime-file", "runtime-x86_64", "-u", UPDATE_INFO,
+                    "AppDir", "Understeer-2.3.3-x86_64.AppImage"]
+    assert (build.dir / "AppDir/usr/share/understeer/VERSION").read_text() \
+        == "2.3.3\n"
 
 
 @pytest.mark.parametrize("version, name, kind", [
@@ -316,11 +391,135 @@ def test_a_stable_build_keeps_its_update_information(tmp_path):
     ("2.3.3-8-g37781ef-dirty", "2.3.3-8-g37781ef-dirty", "development"),
     ("dev", "dev", "development"),
 ])
-def test_other_builds_have_no_update_information(tmp_path, version, name, kind):
-    args, out = build_step(tmp_path, version)
-    assert args == ["AppDir", f"Understeer-{name}-x86_64.AppImage"]
+def test_other_builds_have_no_update_information(build, version, name, kind):
+    args, out = build_step(build, version)
+    assert args == ["--runtime-file", "runtime-x86_64", "AppDir",
+                    f"Understeer-{name}-x86_64.AppImage"]
     assert "-u" not in args and UPDATE_INFO not in args
     assert f"No update information in a {kind} build" in out
+
+
+# -- getting the pinned build tools ----------------------------------------------
+
+def test_missing_tools_are_downloaded_checked_and_used(build):
+    done = build.run("v2.4.0-beta.1")
+    assert done.returncode == 0, done.stderr
+    # each from its fixed address, into a temporary file first
+    calls = [line.split() for line in build.downloads]
+    assert [c[-1] for c in calls] == [RUNTIME_URL, TOOL_URL]
+    assert [c[2].startswith(n + ".download.") for c, n in zip(
+        calls, ("runtime-x86_64", "appimagetool-x86_64.AppImage"))] == [True, True]
+    assert build.file("appimagetool-x86_64.AppImage").read_bytes() == FAKE_TOOL
+    assert build.file("runtime-x86_64").read_bytes() == FAKE_RUNTIME
+    assert os.access(build.file("appimagetool-x86_64.AppImage"), os.X_OK)
+    assert not list(build.dir.glob("*.download.*"))     # moved into place
+    assert build.args[:2] == ["--runtime-file", "runtime-x86_64"]
+
+
+def test_checked_tools_are_not_downloaded_again(build):
+    build_step(build, "v2.3.3")
+    assert build.downloads == []
+
+
+@pytest.mark.parametrize("which", ["tool", "runtime"])
+def test_a_changed_upstream_file_stops_the_build(build, which):
+    """Upstream replaced the file: the build fails on purpose, nothing of
+    the new file is used, and the pinned value stays as it is."""
+    changed = b"#!/bin/sh\necho changed > args.txt\n"
+    if which == "tool":
+        build.serve(changed, FAKE_RUNTIME)
+    else:
+        build.serve(FAKE_TOOL, changed)
+    done = build.run()
+    assert done.returncode != 0
+    assert "is not the expected file" in done.stderr
+    assert "update the SHA-256 in build.sh" in done.stderr
+    assert build.args is None                           # nothing ran
+    name = "appimagetool-x86_64.AppImage" if which == "tool" else "runtime-x86_64"
+    assert not build.file(name).exists()                # not put in place
+    assert len(list(build.dir.glob(name + ".download.*"))) == 1
+    assert TOOL_SHA256 in BUILD.read_text() and RUNTIME_SHA256 in BUILD.read_text()
+
+
+def test_a_failed_download_leaves_no_usable_tool(build):
+    done = build.run(wget_fails=True)
+    assert done.returncode != 0
+    assert "could not download" in done.stderr
+    assert build.args is None
+    assert not build.file("runtime-x86_64").exists()
+    assert not build.file("appimagetool-x86_64.AppImage").exists()
+    # the incomplete file has another name, so no later build takes it
+    assert [p.read_bytes() for p in build.dir.glob("*.download.*")] == [b"partial"]
+    done = build.run()                                  # the next try works
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize("tool, runtime", [
+    (FAKE_TOOL + b"#", FAKE_RUNTIME),                   # changed tool
+    (FAKE_TOOL[:-5], FAKE_RUNTIME),                     # cut short
+    (b"", FAKE_RUNTIME),                                # empty
+    (FAKE_TOOL, FAKE_RUNTIME + b"x"),                   # changed runtime
+    (FAKE_TOOL, b""),
+], ids=["changed tool", "tool cut short", "empty tool", "changed runtime",
+        "empty runtime"])
+def test_a_wrong_cached_tool_stops_the_build_and_stays(build, tool, runtime):
+    build.cache(tool, runtime)
+    done = build.run()
+    assert done.returncode != 0
+    assert "is not the expected file" in done.stderr
+    assert "move it away" in done.stderr
+    assert build.args is None                           # nothing ran
+    assert build.downloads == []                        # nor replaced
+    assert build.file("appimagetool-x86_64.AppImage").read_bytes() == tool
+    assert build.file("runtime-x86_64").read_bytes() == runtime
+
+
+@pytest.mark.parametrize("name", ["appimagetool-x86_64.AppImage", "runtime-x86_64"])
+def test_a_link_or_folder_at_a_tool_path_stops_the_build(build, tmp_path, name):
+    build.cache()
+    target = tmp_path / "elsewhere"
+    target.write_bytes((build.dir / name).read_bytes())  # even a right one
+    (build.dir / name).unlink()
+    (build.dir / name).symlink_to(target)
+    done = build.run()
+    assert done.returncode != 0 and "not a regular file" in done.stderr
+    assert build.args is None and build.downloads == []
+    (build.dir / name).unlink()
+    (build.dir / name).mkdir()
+    done = build.run()
+    assert done.returncode != 0 and "not a regular file" in done.stderr
+    assert build.args is None
+
+
+@pytest.mark.parametrize("name", ["appimagetool-x86_64.AppImage", "runtime-x86_64"])
+def test_a_broken_link_is_no_missing_tool(build, tmp_path, name):
+    """A link to nowhere is refused, not taken as missing and downloaded
+    through (which would write the download where the link points)."""
+    build.cache()
+    (build.dir / name).unlink()
+    (build.dir / name).symlink_to(tmp_path / "nowhere")
+    done = build.run()
+    assert done.returncode != 0 and "not a regular file" in done.stderr
+    assert build.args is None and build.downloads == []
+    assert not (tmp_path / "nowhere").exists()
+
+
+def test_the_pinned_tools_in_build_sh():
+    text = BUILD.read_text(encoding="utf-8")
+    assert f'TOOL_URL="{TOOL_URL}"' in text
+    assert f'TOOL_SHA256="{TOOL_SHA256}"' in text
+    assert f'RUNTIME_URL="{RUNTIME_URL}"' in text
+    assert f'RUNTIME_SHA256="{RUNTIME_SHA256}"' in text
+    # one way to download, only when missing; no -N that replaces a file
+    assert text.count("wget ") == 1 and "wget -N" not in text
+    # every run of the tool gets the checked runtime, and is checked first
+    runs = [line for line in text.splitlines() if '"./$TOOL"' in line]
+    assert len(runs) == 2 and all('--runtime-file "$RUNTIME"' in r for r in runs)
+    check = text.index('verified "$RUNTIME" "$RUNTIME_SHA256" && '
+                       'verified "$TOOL" "$TOOL_SHA256"')
+    assert check < text.index('"./$TOOL"')
+    # the expected values are only read, never written by the script
+    assert text.count("TOOL_SHA256=") == 1 and text.count("RUNTIME_SHA256=") == 1
 
 
 def test_build_sh_text():

@@ -165,6 +165,12 @@ GitHub runs them on every push and pull request, and a release is only built whe
 
 To release a version, first add it with its changes (in English and German, see the comment there) to `<releases>` in `io.github.JamDaBam.Understeer.metainfo.xml`, then push a tag like `v1.9.0`. The app opens these notes as *What's New* after an update (also in the main menu), and the release build takes the GitHub release notes from there; without them it stops.
 
+### Build tools
+
+`build.sh` packs the AppImage with [appimagetool](https://github.com/AppImage/appimagetool) and the [type 2 runtime](https://github.com/AppImage/type2-runtime), both from their `continuous` releases. Those addresses are moving upstream references, so `build.sh` pins the exact files by their SHA-256 (`TOOL_SHA256`, `RUNTIME_SHA256`). It downloads a tool only when the file is missing, into a temporary file that takes the tool's name only once its checksum matches, checks both tools again right before appimagetool runs and hands it the runtime with `--runtime-file`, so it downloads none of its own. A file with another checksum stops the build: a changed download is left under a `.download.*` name and never used, and a wrong file already there is neither used nor replaced (move it away to download it again).
+
+So a new upstream build makes the build fail on purpose. To take it, review the new file, put its SHA-256 into `build.sh`, run the tests and build and check an AppImage before releasing with it. The checksum only shows that the file is the one that was reviewed, not who made it; it doesn't keep upstream from removing the file, and the builds are not bit-for-bit reproducible.
+
 ## Credits & License
 
 - Understeer started as a fork of [SimPower (FanatecLinux)](https://github.com/BenryBoi/FanatecLinux) by BenryBoi and has since been rewritten as its own project. Thanks for the starting point!
