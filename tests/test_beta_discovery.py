@@ -247,13 +247,38 @@ def test_fetch_beta_offline_or_refused(github, error):
 
 @pytest.mark.parametrize("body", [
     b"", b"not json", b"[", b"\xff\xfe\x00garbage", b"<html>rate limit</html>",
-    b"[" * 100000 + b"]" * 100000,                      # nested too deeply
     b"[" + b"9" * 5000 + b"]",                           # number too long
     b'{"message": "Not Found"}', b"null", b'"x"',
 ])
 def test_fetch_beta_broken_answers(github, body):
     github(body)
     with pytest.raises(updates.Error):
+        updates.fetch_beta("2.3.3")
+
+
+NESTED = b"[" * 100000 + b"]" * 100000       # within the size limit
+
+
+def test_deeply_nested_json_gives_no_beta(github):
+    """Whether json.loads gives up on this depth (RecursionError, turned
+    into updates.Error) or reads it as lists in lists differs between
+    Python versions; either way there is no beta and no other exception."""
+    github(NESTED)
+    try:
+        found = updates.fetch_beta("2.3.3")
+    except updates.Error:
+        return
+    assert found is None
+
+
+def test_json_nested_too_deeply_is_an_error(github, monkeypatch):
+    """Where json.loads gives up with RecursionError, fetch_beta raises
+    updates.Error, on any Python version."""
+    def too_deep(*args, **kwargs):
+        raise RecursionError("maximum recursion depth exceeded")
+    github(b"[]")
+    monkeypatch.setattr(updates.json, "loads", too_deep)
+    with pytest.raises(updates.Error, match="no JSON"):
         updates.fetch_beta("2.3.3")
 
 
