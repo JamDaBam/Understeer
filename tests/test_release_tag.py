@@ -188,13 +188,14 @@ def test_script_refuses_an_unready_release(metainfo):
 
 
 def test_the_shipped_metainfo():
-    """2.3.3 is ready; 2.4.0-beta.1 is prepared without its date, so it
-    can't be released yet."""
+    """2.3.3 and 2.4.0-beta.1 are both dated and ready; the beta is
+    published as a prerelease that doesn't become the latest release."""
     release_tag.check_metainfo("v2.3.3")
-    with pytest.raises(ValueError, match="no date yet"):
-        release_tag.check_metainfo("v2.4.0-beta.1")
+    release_tag.check_metainfo("v2.4.0-beta.1")
     done = run("v2.4.0-beta.1")
-    assert done.returncode == 1 and done.stdout == ""
+    assert done.returncode == 0
+    assert done.stdout == (
+        "version=2.4.0-beta.1\nkind=beta\nflags=--prerelease --latest=false\n")
     assert run("v2.3.3").stdout == "version=2.3.3\nkind=stable\nflags=\n"
 
 

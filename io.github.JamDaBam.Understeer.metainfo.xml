@@ -49,10 +49,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <!-- PENDING: no date yet. Before tagging v2.4.0-beta.1, add
-             date="YYYY-MM-DD" of the real release day and make sure
-             appstreamcli validate passes. -->
-        <release version="2.4.0-beta.1" type="development">
+        <release version="2.4.0-beta.1" date="2026-11-17" type="development">
             <description>
                 <p>A test version (beta) for trying out the new Community Library. It is still experimental: please try it and tell what works, what doesn't and what you miss. Whether the library stays in Understeer for good is still open; a community discussion or poll about it is planned.</p>
                 <p xml:lang="de">Eine Testversion (Beta) zum Ausprobieren der neuen Community-Bibliothek. Sie ist noch experimentell: Probiere sie bitte aus und erzähle, was funktioniert, was nicht und was dir fehlt. Ob die Bibliothek dauerhaft in Understeer bleibt, ist noch offen; eine Diskussion oder Umfrage in der Community dazu ist geplant.</p>
