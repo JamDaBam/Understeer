@@ -121,6 +121,8 @@ def fetch_latest(timeout=10):
     # an answer cut short; RecursionError: JSON nested too deeply
     except (OSError, ValueError, http.client.HTTPException,
             RecursionError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            fetch.release(e)                # it holds the answer, unread
         raise Error(str(e) or type(e).__name__) from e
     return parse_latest(data)
 
@@ -281,6 +283,8 @@ def download(asset, appimage, timeout=30, progress=None):
                 if progress and asset.get("size"):
                     progress(min(size / asset["size"], 1.0))
     except (OSError, ValueError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            fetch.release(e)                # it holds the answer, unread
         _remove(part)
         raise Error(str(e)) from e
     except Error:

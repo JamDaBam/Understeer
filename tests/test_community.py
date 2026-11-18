@@ -1,5 +1,6 @@
 """Downloading and caching the community catalog, against a local HTTP
 server on 127.0.0.1: nothing goes to the internet."""
+import http.client
 import http.server
 import json
 import os
@@ -120,6 +121,36 @@ def test_redirect_is_not_followed(server, status):
     server.answer = redirect
     assert kind(community.download) == "redirect"
     assert len(server.requests) == 1          # nothing else was asked
+
+
+@pytest.mark.parametrize("status, location, expected", [
+    (404, None, "http"), (500, None, "http"),
+    (302, "https://example.org/evil.json", "redirect"),
+    (308, "/other.json", "redirect"),
+])
+def test_refused_answers_are_closed(server, monkeypatch, status, location,
+                                    expected):
+    """Kept here, an answer counts as closed only if the code closed it."""
+    made = []
+    init = http.client.HTTPResponse.__init__
+
+    def keep(self, *args, **kwargs):
+        init(self, *args, **kwargs)
+        made.append(self)
+    monkeypatch.setattr(http.client.HTTPResponse, "__init__", keep)
+
+    def answer(h):
+        if location is None:
+            h.send_body(b"error", status)
+        else:
+            h.send_response(status)
+            h.send_header("Location", location)
+            h.send_header("Content-Length", "0")
+            h.end_headers()
+    server.answer = answer
+    assert kind(community.download) == expected
+    assert len(server.requests) == 1
+    assert len(made) == 1 and made[0].closed
 
 
 def test_timeout(server):

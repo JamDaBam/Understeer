@@ -1,3 +1,4 @@
+import io
 import json
 from unittest import mock
 
@@ -156,3 +157,61 @@ def test_find_cover_by_chosen_game():
         url = steamgriddb.find_cover("Renamed Tile", "k", game_id=5248)
     assert url == "https://cdn2.steamgriddb.com/a.png"
     assert len(asked) == 1 and "/grids/game/5248?" in asked[0].full_url
+
+
+class ErrorBody(io.BytesIO):
+    """The answer an HTTPError holds; fail: closing it raises that."""
+
+    def __init__(self, fail=None):
+        super().__init__(b"error")
+        self.fail = fail
+
+    def close(self):
+        super().close()
+        if self.fail:
+            raise self.fail
+
+
+RAISED = []          # kept, so only the code can close their answers
+
+
+def http_error_with(code, body):
+    def raise_(req):
+        error = steamgriddb.urllib.error.HTTPError(req.full_url, code, "", {}, body)
+        RAISED.append(error)
+        raise error
+    return raise_
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+@pytest.mark.parametrize("code, kind, message", [
+    (401, "key", "API key refused (401)"), (403, "key", "API key refused (403)"),
+    (500, "network", "HTTP 500"),
+])
+def test_an_http_error_is_closed(code, kind, message, fail):
+    body = ErrorBody(fail)
+    patch, _asked = serve(http_error_with(code, body))
+    with patch, pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.search("Diablo", "secret")
+    assert (e.value.kind, str(e.value)) == (kind, message)
+    assert isinstance(e.value.__cause__, steamgriddb.urllib.error.HTTPError)
+    assert body.closed
+
+
+def test_not_found_is_closed_too():
+    body = ErrorBody()
+    patch, _asked = serve(http_error_with(404, body))
+    with patch:
+        assert steamgriddb.covers(5248, "secret") == []
+    assert body.closed
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone")])
+def test_a_picture_http_error_is_closed(fail):
+    body = ErrorBody(fail)
+    patch, _asked = serve(http_error_with(404, body))
+    with patch, pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.fetch("https://cdn2.steamgriddb.com/a.png")
+    assert (e.value.kind, str(e.value)) == ("network", "HTTP Error 404: ")
+    assert body.closed

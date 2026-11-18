@@ -1,5 +1,6 @@
 """Getting one file from a fixed address, against a local HTTP server on
 127.0.0.1: nothing goes to the internet."""
+import http.client
 import http.server
 import json
 import socket
@@ -350,6 +351,110 @@ def test_the_stable_look_doesnt_use_it(monkeypatch):
                         lambda req, timeout: seen.append(req.full_url) or Answer())
     assert updates.fetch_latest()["version"] == "9.0.0"
     assert seen == [updates.LATEST_URL]
+
+
+@pytest.fixture
+def answers(monkeypatch):
+    """Every HTTP answer opened while the test runs. They are kept here, so
+    one counts as closed only if the code closed it, not the garbage
+    collector."""
+    made = []
+    init = http.client.HTTPResponse.__init__
+
+    def keep(self, *args, **kwargs):
+        init(self, *args, **kwargs)
+        made.append(self)
+    monkeypatch.setattr(http.client.HTTPResponse, "__init__", keep)
+    return made
+
+
+def redirect_to(status, location):
+    def answer(h):
+        h.send_response(status)
+        h.send_header("Location", location)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+    return answer
+
+
+def failure(url, **kwargs):
+    with pytest.raises(fetch.Error) as e:
+        get(url, **kwargs)
+    return e.value
+
+
+def test_a_good_answer_is_closed(server, answers):
+    assert get(server.url) == BODY
+    assert len(answers) == 1 and answers[0].closed
+
+
+@pytest.mark.parametrize("status", [403, 404, 500, 503])
+def test_an_http_error_is_closed(server, answers, status):
+    server.answer = lambda h: h.send_body(b"error", status)
+    e = failure(server.url)
+    assert (e.kind, e.code, str(e)) == ("http", status, f"HTTP {status}")
+    assert e.__cause__ is None and e.__suppress_context__
+    assert len(answers) == 1 and answers[0].closed
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize("location", ["https://example.org/evil.json",
+                                      "/other.json"],
+                         ids=["other origin", "same origin"])
+def test_a_refused_redirect_is_closed(server, answers, status, location):
+    server.answer = redirect_to(status, location)
+    e = failure(server.url)
+    assert e.kind == "redirect" and e.code is None
+    assert str(e).startswith("redirected to ") and str(e).endswith(location)
+    assert [p for p, _h in server.requests] == ["/file.json"]   # not followed
+    assert len(answers) == 1 and answers[0].closed
+
+
+def test_an_answer_refused_while_reading_is_closed(server, answers):
+    server.answer = lambda h: h.send_body(b"x" * 2000)
+    assert failure(server.url).kind == "too_big"
+    assert len(answers) == 1 and answers[0].closed
+
+
+@pytest.mark.parametrize("answer, expected", [
+    (lambda h: h.send_body(b"error", 404), ("http", "HTTP 404")),
+    (redirect_to(302, "/other.json"), ("redirect", "redirected to http://")),
+])
+def test_a_failing_close_doesnt_hide_the_error(server, monkeypatch, answers,
+                                               answer, expected):
+    """As in the warning from CI: closing the answer raises "I/O
+    operation on closed file"; the error is still the one about the
+    answer."""
+    close = http.client.HTTPResponse.close
+
+    def failing_close(self):
+        close(self)
+        raise ValueError("I/O operation on closed file")
+    monkeypatch.setattr(http.client.HTTPResponse, "close", failing_close)
+    server.answer = answer
+    e = failure(server.url)
+    assert e.kind == expected[0] and str(e).startswith(expected[1])
+    assert answers[0].closed
+
+
+@pytest.mark.parametrize("error", [OSError("gone"), ValueError("closed")])
+def test_release_drops_only_what_closing_can_raise(error):
+    class Answer:
+        def close(self):
+            raise error
+    fetch.release(Answer())                 # nothing raised
+
+
+def test_release_of_no_answer():
+    fetch.release(None)
+
+
+def test_release_doesnt_hide_other_errors():
+    class Answer:
+        def close(self):
+            raise RuntimeError("a bug")
+    with pytest.raises(RuntimeError):
+        fetch.release(Answer())
 
 
 def test_no_hardware_here():

@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 
 from . import USER_AGENT, config
+from .fetch import release as _release   # fetch() below is this module's own
 
 API = "https://www.steamgriddb.com/api/v2"
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
@@ -45,6 +46,7 @@ def _get(path, key, params=None, timeout=15):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
+        _release(e)                         # it holds the answer, unread
         if e.code in (401, 403):
             raise Error("key", f"API key refused ({e.code})") from e
         if e.code == 404:
@@ -138,6 +140,8 @@ def fetch(url, timeout=20, limit=20 * 1024 * 1024):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(limit + 1)
     except (OSError, ValueError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            _release(e)                     # it holds the answer, unread
         raise Error("network", str(e)) from e
     if len(data) > limit:
         raise Error("network", "picture too large")

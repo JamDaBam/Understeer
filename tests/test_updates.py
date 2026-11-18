@@ -1,4 +1,5 @@
 import http.client
+import io
 import json
 import os
 import socket
@@ -427,3 +428,70 @@ def test_assets_that_are_no_list_of_files(assets):
     found = updates.parse_latest({"tag_name": "v2.3.3", **STABLE,
                                   "assets": assets}, "x86_64")
     assert found["version"] == "2.3.3" and found["asset"] is None
+
+
+class _ErrorBody(io.BytesIO):
+    """The answer an HTTPError holds; fail: closing it raises that."""
+
+    def __init__(self, fail=None):
+        super().__init__(b"error")
+        self.fail = fail
+
+    def close(self):
+        super().close()
+        if self.fail:
+            raise self.fail
+
+
+def _http_error(url, code, body):
+    return updates.urllib.error.HTTPError(url, code, "Not Found", {}, body)
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+def test_fetch_latest_closes_an_http_error(monkeypatch, fail):
+    body = _ErrorBody(fail)
+    error = _http_error(updates.LATEST_URL, 404, body)
+    _github(monkeypatch, error=error)
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert str(e.value) == "HTTP Error 404: Not Found"
+    assert e.value.__cause__ is error
+    assert body.closed
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+def test_download_closes_an_http_error(tmp_path, monkeypatch, fail):
+    old = tmp_path / "Understeer.AppImage"
+    old.write_bytes(b"old")
+    body = _ErrorBody(fail)
+    asset = asset_for(b"x")
+
+    def urlopen(req, timeout):
+        raise _http_error(req.full_url, 404, body)
+    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset, str(old))
+    assert str(e.value) == "HTTP Error 404: Not Found"
+    assert isinstance(e.value.__cause__, updates.urllib.error.HTTPError)
+    assert body.closed
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_download_closes_an_answer_refused_while_reading(tmp_path, monkeypatch):
+    old = tmp_path / "Understeer.AppImage"
+    old.write_bytes(b"old")
+    closed = []
+    monkeypatch.setattr(updates, "MAX_DOWNLOAD", 0)
+
+    class Answer(Download):
+        def __exit__(self, *exc):
+            closed.append(exc[0])
+            return False
+    monkeypatch.setattr(updates.urllib.request, "urlopen",
+                        lambda req, timeout: Answer(b"too big"))
+    with pytest.raises(updates.Error, match="far too big"):
+        updates.download(asset_for(b"too big"), str(old))
+    assert closed == [updates.Error]
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]

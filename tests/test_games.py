@@ -1,3 +1,4 @@
+import io
 import struct
 from unittest import mock
 
@@ -194,6 +195,86 @@ def test_download_without_cover(tmp_path):
                            lambda req, timeout: FakeResponse(200, "text/html", b"<html>")):
         assert games.download_cover("1", tmp_path) is None
     assert not list(tmp_path.iterdir())
+
+
+class ErrorBody(io.BytesIO):
+    """The answer an HTTPError holds; fail: closing it raises that."""
+
+    def __init__(self, fail=None):
+        super().__init__(b"not found")
+        self.fail = fail
+
+    def close(self):
+        super().close()
+        if self.fail:
+            raise self.fail
+
+
+class ClosedResponse(FakeResponse):
+    """Notes when the code is done with it."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.closed = False
+
+    def __exit__(self, *exc):
+        self.closed = True
+        return False
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+def test_a_missing_portrait_is_closed_before_the_header(tmp_path, fail):
+    raised, answered = [], []      # kept: only the code may close them
+
+    def urlopen(req, timeout):
+        if "library_600x900" in req.full_url:
+            raised.append(games.urllib.error.HTTPError(
+                req.full_url, 404, "Not Found", {}, ErrorBody(fail)))
+            raise raised[-1]
+        answered.append(ClosedResponse(200, "image/jpeg", jpeg(460, 215)))
+        return answered[-1]
+    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+        path = games.download_cover("1161040", tmp_path)
+    assert path == tmp_path / "steam_1161040.jpg"
+    assert games.image_size(path) == (460, 215)
+    assert len(raised) == 2 and all(e.fp.closed for e in raised)
+    assert len(answered) == 1 and answered[0].closed
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+def test_no_cover_anywhere_closes_every_answer(tmp_path, fail):
+    raised = []
+
+    def urlopen(req, timeout):
+        raised.append(games.urllib.error.HTTPError(
+            req.full_url, 404, "Not Found", {}, ErrorBody(fail)))
+        raise raised[-1]
+    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+        assert games.download_cover("1", tmp_path) is None
+    assert len(raised) == 4 and all(e.fp.closed for e in raised)
+    assert not list(tmp_path.iterdir())
+
+
+def test_answers_that_are_no_picture_are_closed(tmp_path):
+    answered = []
+
+    def urlopen(req, timeout):
+        answered.append(ClosedResponse(200, "text/html", b"<html>"))
+        return answered[-1]
+    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+        assert games.download_cover("1", tmp_path) is None
+    assert len(answered) == 4 and all(r.closed for r in answered)
+
+
+def test_another_error_while_closing_isnt_hidden(tmp_path):
+    def urlopen(req, timeout):
+        raise games.urllib.error.HTTPError(
+            req.full_url, 404, "Not Found", {}, ErrorBody(RuntimeError("bug")))
+    with mock.patch.object(games.urllib.request, "urlopen", urlopen), \
+            pytest.raises(RuntimeError, match="bug"):
+        games.download_cover("1", tmp_path)
 
 
 # -- running games --------------------------------------------------------
