@@ -10,9 +10,11 @@ import pathlib
 import re
 import struct
 import time
+import urllib.error
 import urllib.request
 
 from . import USER_AGENT, config
+from .fetch import release
 
 HOME = pathlib.Path.home()
 STEAM_ROOTS = [
@@ -217,6 +219,8 @@ def download_cover(appid, cache_dir, timeout=10):
                         continue
                     data = resp.read()
             except (OSError, ValueError) as e:
+                if isinstance(e, urllib.error.HTTPError):
+                    release(e)              # it holds the answer, unread
                 log.debug("Cover %s for app %s: %s", file, appid, e)
                 continue
             try:

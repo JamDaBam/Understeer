@@ -34,10 +34,26 @@ class Error(Exception):
         self.code = code
 
 
+def release(answer):
+    """Close an answer that nobody else closes: the one an HTTPError holds,
+    or a redirect that isn't followed. A failure while closing it is
+    dropped, so it never hides the error the caller is raising; only
+    what closing a file can raise is dropped. None: nothing to close."""
+    if answer is None:
+        return
+    try:
+        answer.close()
+    except (OSError, ValueError):
+        pass
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """A redirect is not followed anywhere."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # urllib closes fp itself only on its way to follow the redirect;
+        # stopped here, the answer is never read and is ours to close
+        release(fp)
         raise Error("redirect", f"redirected to {newurl}")
 
 
@@ -82,6 +98,7 @@ def get(url, accept, limit, timeout, deadline):
     except Error:
         raise
     except urllib.error.HTTPError as e:
+        release(e)                          # it holds the answer, unread
         raise Error("http", f"HTTP {e.code}", e.code) from None
     except TimeoutError as e:
         raise Error("timeout", str(e) or "timed out") from None
