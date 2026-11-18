@@ -7,8 +7,8 @@ is updated with git. Nothing here runs unless the user agreed to it
 only and sends nothing about the user.
 
 Test versions (betas) are never offered by that look: fetch_beta() finds
-the newest one apart from it, only tells its version and page, and is
-not called by the app yet.
+the newest one apart from it and only tells its version and page; the
+window asks about it if the user switched that on (should_offer_beta()).
 
 Updating downloads the new AppImage next to the running one, checks it
 against the SHA-256 that GitHub gives for it, and only then puts it in
@@ -230,23 +230,63 @@ def beta_series(version):
     return releases.plain_version(version).split("-", 1)[0]
 
 
-def should_offer_beta(beta, current, stable, handled):
-    """Whether to ask about beta ({"version", "url"}) once: it is a test
-    version of a newer release than the running version current (so
-    2.4.0-beta.1 running hears nothing of 2.4.0-beta.2, but of
-    2.5.0-beta.1), no stable release is known that is newer than current
-    or than the beta (stable: the newest stable version known, or None),
-    and its release is newer than the release whose beta was asked about
-    already (handled, e.g. "2.4.0", or None). So beta.2 of a release asked
-    about is not asked about again."""
+def notified_beta(version):
+    """version if it is a beta version, e.g. "2.4.0-beta.2" as kept in the
+    settings; None for anything else (missing, another type, a stable
+    version, garbage)."""
+    if isinstance(version, str) and BETA_TAG.fullmatch("v" + version):
+        return version
+    return None
+
+
+def handled_series(series):
+    """series if it is the version of a release, e.g. "2.4.0" as kept in
+    the settings; None for anything else, a beta among them."""
+    if (isinstance(series, str) and releases.number(series) is not None
+            and not releases.is_prerelease(series)):
+        return series
+    return None
+
+
+def newest(versions, check):
+    """The newest of versions that check() lets through, by number (so
+    beta.10 is newer than beta.9), or None. Keeps what was asked about
+    from going back to an older version."""
+    found = [v for v in map(check, versions) if v is not None]
+    return max(found, key=releases.number, default=None)
+
+
+def should_offer_beta(beta, current, stable, handled, notified=None):
+    """Whether to ask about beta ({"version", "url"}) now.
+
+    current: the running version; stable: the newest stable version known,
+    or None. No stable release may be known that is newer than current or
+    than the beta: a stable update comes first, and a stable release ends
+    its betas.
+
+    Running a stable version, the question is an invitation, once per
+    release: the beta is a test version of a newer release than current,
+    and of a newer release than the one whose beta was asked about already
+    (handled, e.g. "2.4.0"). So beta.2 of a release asked about isn't
+    asked about again.
+
+    Running a beta, every newer test version is told about once: the beta
+    is newer than current, by its whole number (2.4.0-beta.10 after
+    2.4.0-beta.9, or 2.5.0-beta.1), and newer than the beta told about
+    last (notified, e.g. "2.4.0-beta.2"). handled doesn't count here."""
     beta = checked_beta(beta)
     key, now = releases.number(beta and beta["version"]), releases.number(current)
-    if beta is None or key is None or now is None or not key[0] > now[0]:
-        return False                # not of a newer release than running
+    if beta is None or key is None or now is None:
+        return False
     stable_key = releases.number(stable) if isinstance(stable, str) else None
     if stable_key is not None and not releases.is_prerelease(stable) and (
             stable_key > now or stable_key > key):
         return False
+    if releases.is_prerelease(current):
+        seen = releases.number(notified_beta(notified))
+        return key > now and (seen is None or key > seen)
+    if not key[0] > now[0]:
+        return False                # not of a newer release than running
     done = releases.number(handled) if isinstance(handled, str) else None
     return done is None or key[0] > done[0]
 
