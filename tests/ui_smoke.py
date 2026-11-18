@@ -2497,8 +2497,11 @@ def steps(win):
     yield "update installed", update_installed
 
     # -- test versions: only when asked for, once per release ----------------
+    # A stable version is invited once per release; the metainfo's newest
+    # version may be a beta, so the version is set here, not taken from it.
     beta_fetched, beta_pages = [], []
-    beta_answer = {"result": None}
+    beta_answer = {"result": None, "version": session_log.version}
+    STABLE, BETA = "2.3.3", "2.4.0-beta.2"      # both with release notes
 
     def fake_fetch_beta(current):
         beta_fetched.append(current)
@@ -2522,6 +2525,9 @@ def steps(win):
         return d
 
     def beta_off_by_default():
+        check(releases.has_notes(STABLE) and releases.has_notes(BETA),
+              "versions that look for updates")
+        session_log.version = lambda: f"v{STABLE}"
         beta_answer["fetch"], updates.fetch_beta = updates.fetch_beta, fake_fetch_beta
         beta_answer["launch"] = Gtk.UriLauncher.launch
         Gtk.UriLauncher.launch = lambda launcher, *a, **k: \
@@ -2565,10 +2571,12 @@ def steps(win):
               "not asked in the background, and not counted as asked")
         win._offer_beta()
         d = beta_dialog()
-        check(d is not None and "99.1.0-beta.1" in d.get_body(),
-              "asked about the beta")
+        check(d is not None and "99.1.0-beta.1" in d.get_body()
+              and "test version of the next release" in d.get_body(),
+              "invited to the beta of the next release")
         check(answer_beta("later") is not None
-              and config.get_setting("beta_handled") == "99.1.0",
+              and config.get_setting("beta_handled") == "99.1.0"
+              and config.get_setting("beta_notified") == "99.1.0-beta.1",
               "Not Now counts as asked")
         check(not beta_pages, "no page opened")
     yield "beta asked about once", beta_waits
@@ -2717,6 +2725,171 @@ def steps(win):
         check(beta_dialog() is None, "nothing to ask"),
         close_dialogs(win),
         config.set_setting("beta_checked", None))
+
+    # -- running a test version: told once about each newer one --------------
+    def offer(version):
+        config.set_setting("beta_latest", beta(version))
+        win._offer_beta()
+        return beta_dialog()
+
+    def beta_user_same_release():
+        session_log.version = lambda: f"v{BETA}"
+        # a tester's own history: only what they were told as a beta user
+        config.set_setting("beta_notified", None)
+        win._beta_notified = None
+        check(config.get_setting("beta_handled") == "99.6.0",
+              "the stable invitations stay as they were")
+        check(offer("2.4.0-beta.2") is None, "not told about the running beta")
+        check(offer("2.4.0-beta.1") is None, "not told about an older beta")
+        d = offer("2.4.0-beta.3")
+        check(d is not None and "2.4.0-beta.3" in d.get_body()
+              and "newer test version" in d.get_body(),
+              "told about a newer beta of the same release")
+        answer_beta("later")
+        check(config.get_setting("beta_notified") == "2.4.0-beta.3",
+              "Not Now keeps the beta told about")
+        check(config.get_setting("beta_handled") == "99.6.0",
+              "the newest release asked about doesn't go back")
+        check(offer("2.4.0-beta.3") is None, "not told twice")
+        win._beta_notified = win._beta_handled = None       # as after a restart
+        check(offer("2.4.0-beta.3") is None, "not told again after a restart")
+        before = list(beta_pages)
+        d = offer("2.4.0-beta.10")
+        check(d is not None and "2.4.0-beta.10" in d.get_body(),
+              "beta.10 is newer than beta.3")
+        answer_beta("view")
+        check(beta_pages[len(before):]
+              == [updates.RELEASES_URL + "/tag/v2.4.0-beta.10"],
+              f"only the beta's own page opened: {beta_pages[len(before):]}")
+        check(offer("2.4.0-beta.9") is None, "beta.9 is older than beta.10")
+        check(image.read_bytes() == b"new AppImage", "nothing downloaded")
+    yield "beta user: newer beta of the same release", beta_user_same_release
+
+    def beta_user_saving_fails():
+        save = config.set_setting
+        config.set_setting = lambda key, value: None if key in (
+            "beta_handled", "beta_notified") else save(key, value)
+        try:
+            d = offer("2.4.0-beta.11")
+            check(d is not None, "told about beta.11")
+            if d is not None:
+                d.close()                   # like Escape
+            check(config.get_setting("beta_notified") == "2.4.0-beta.10",
+                  "not saved")
+            check(win._beta_notified == "2.4.0-beta.11", "kept in this session")
+            check(offer("2.4.0-beta.11") is None,
+                  "not told twice although saving failed")
+        finally:
+            config.set_setting = save
+    yield "beta user: saving fails", beta_user_saving_fails
+
+    def beta_user_stable_first():
+        config.set_setting("update_latest", {
+            "version": "2.4.0", "url": updates.RELEASES_URL + "/tag/v2.4.0"})
+        win._show_update_banner()
+        check(offer("2.5.0-beta.1") is None and win.update_banner.get_revealed(),
+              "the stable 2.4.0 comes first")
+        config.set_setting("update_latest", None)
+        win._show_update_banner()
+        win._in_background = True
+        check(offer("2.5.0-beta.1") is None, "not told in the background")
+        win._in_background = False
+        check(config.get_setting("beta_notified") == "2.4.0-beta.10"
+              and win._beta_notified == "2.4.0-beta.11",
+              "nothing counted as told meanwhile")
+        d = offer("2.5.0-beta.1")
+        check(d is not None, "told about a newer release")
+        if d is not None:
+            d.close()
+        check(config.get_setting("beta_notified") == "2.5.0-beta.1"
+              and config.get_setting("beta_handled") == "99.6.0",
+              "closing counts as told")
+    yield "beta user: stable first, then a newer release", beta_user_stable_first
+
+    def beta_user_late_answers():
+        old = offer("2.5.0-beta.2")
+        check(old is not None, "told about beta.2")
+        win._withdraw_beta()                # e.g. switched off
+        check(beta_dialog() is None, "question withdrawn")
+        old.emit("response", "view")        # a late answer of it
+        check(config.get_setting("beta_notified") == "2.5.0-beta.1",
+              "a withdrawn question counts nothing")
+        new = offer("2.5.0-beta.2")
+        check(new is not None and new is not old, "asked again")
+        old.emit("response", "later")       # the replaced one answers late
+        check(beta_dialog() is new
+              and config.get_setting("beta_notified") == "2.5.0-beta.1",
+              "a replaced question counts nothing")
+        pages = len(beta_pages)
+        config.set_setting("beta_notify", False)    # off, without withdrawing
+        new.emit("response", "view")
+        new.force_close()
+        check(len(beta_pages) == pages
+              and config.get_setting("beta_notified") == "2.5.0-beta.1",
+              "an answer after switching off counts nothing")
+        config.set_setting("beta_notify", True)
+        answer_beta("later")
+        check(offer("2.5.0-beta.2") is not None, "still to be told")
+        answer_beta("later")
+        check(config.get_setting("beta_notified") == "2.5.0-beta.2", "told")
+    yield "beta user: late answers", beta_user_late_answers
+
+    def stable(version):
+        return {"version": version, "url": updates.RELEASES_URL + "/tag/v" + version}
+
+    def told():
+        return (config.get_setting("beta_handled"),
+                config.get_setting("beta_notified"),
+                win._beta_handled, win._beta_notified)
+
+    def beta_user_stable_while_asking():
+        before, pages = told(), len(beta_pages)
+        d = offer("2.5.0-beta.3")
+        check(d is not None, "told about beta.3")
+        win._update_found(stable("2.4.0"), None)    # found while it is open
+        check(beta_dialog() is None, "the stable update withdraws the question")
+        check(win.update_banner.get_revealed()
+              and "2.4.0" in win.update_banner.get_title(),
+              "the stable update is shown")
+        if d is not None:
+            d.emit("response", "view")              # late answers of it
+            d.emit("response", "later")
+        check(len(beta_pages) == pages, "a late View on GitHub opens nothing")
+        check(told() == before, "late answers count nothing")
+        win._offer_beta()
+        check(beta_dialog() is None, "not asked while the stable update is there")
+        config.set_setting("update_latest", None)
+        win._show_update_banner()
+
+        d = offer("2.5.0-beta.3")
+        check(d is not None, "asked again without a stable update")
+        config.set_setting("update_latest", stable("2.4.0"))   # banner not yet
+        if d is not None:
+            d.emit("response", "view")
+            d.force_close()
+        check(len(beta_pages) == pages and told() == before,
+              "an answer doesn't get past a stable update")
+        config.set_setting("update_latest", None)
+        win._show_update_banner()
+
+        d = offer("2.5.0-beta.3")
+        win._update_found(stable("2.3.3"), None)    # older than the running beta
+        check(d is not None and beta_dialog() is d
+              and not win.update_banner.get_revealed(),
+              "an older stable release withdraws nothing")
+        win._update_found(stable("2.4.0-beta.9"), None)     # no stable version
+        check(beta_dialog() is d, "a beta as stable update withdraws nothing")
+        answer_beta("later")
+        check(config.get_setting("beta_notified") == "2.5.0-beta.3"
+              and config.get_setting("beta_handled") == before[0],
+              "answered as usual")
+        check(offer("2.5.0-beta.3") is None, "not asked twice")
+        config.set_setting("update_latest", None)
+        config.set_setting("beta_latest", None)
+        win._show_update_banner()
+        close_dialogs(win)
+        session_log.version = beta_answer["version"]
+    yield "beta user: stable update while asking", beta_user_stable_while_asking
 
     def update_check_off():
         win._show_preferences("general")

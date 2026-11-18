@@ -339,7 +339,8 @@ class PreferencesMixin:
             beta.set_subtitle(_(
                 "Once a day, Understeer looks for a test version of the next "
                 "release and asks once per release whether to show it on "
-                "GitHub. Nothing is installed."))
+                "GitHub. While you use a test version, it tells you once "
+                "about each newer one. Nothing is installed."))
         elif possible:
             beta.set_subtitle(_("Needs “Look for New Versions”."))
         else:

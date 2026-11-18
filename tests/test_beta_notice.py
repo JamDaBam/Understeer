@@ -87,9 +87,9 @@ def test_checked_beta_refuses(stored):
     (beta("2.4.0-beta.1"), "2.4.0-beta.1", None, None, False),
     (beta("2.4.0-beta.1"), "2.4.0-beta.2", None, None, False),
     (beta("2.4.0-beta.1"), "2.4.0", None, None, False),
-    # a beta user isn't asked about another beta of the same release
-    (beta("2.4.0-beta.2"), "2.4.0-beta.1", None, None, False),
-    (beta("2.4.0-beta.10"), "2.4.0-beta.9", "2.3.3", None, False),
+    # a beta user is told about a newer beta of the same release too
+    (beta("2.4.0-beta.2"), "2.4.0-beta.1", None, None, True),
+    (beta("2.4.0-beta.10"), "2.4.0-beta.9", "2.3.3", None, True),
     (beta("2.5.0-beta.1"), "2.4.0-beta.1", None, None, True),
     (beta("2.5.0-beta.1"), "2.4.0-beta.1", None, "2.4.0", True),
     (beta("2.4.0-beta.1"), "2.3.3-4-gabc", None, None, False),  # from git
@@ -117,7 +117,7 @@ def test_no_hardware_here():
 
 
 @pytest.mark.parametrize("found, current, expected", [
-    ("2.4.0-beta.2", "2.4.0-beta.1", False),    # same release: no invitation
+    ("2.4.0-beta.2", "2.4.0-beta.1", True),     # same release: newer beta
     ("2.5.0-beta.1", "2.4.0-beta.1", True),     # a newer release: one
     ("2.4.0-beta.1", "2.3.3", True),            # a stable user who opted in
     ("2.4.0-beta.10", "2.4.0", False),          # the release is out already
@@ -127,16 +127,137 @@ def test_policy_for_beta_testers(found, current, expected):
         is expected
 
 
-def test_a_running_beta_marks_nothing_as_asked():
-    """Not asking about 2.4.0-beta.2 while running 2.4.0-beta.1 is decided
-    from the running version alone, so the next release still counts."""
-    assert not updates.should_offer_beta(beta("2.4.0-beta.2"), "2.4.0-beta.1",
-                                         None, None)
+def test_a_running_beta_isnt_held_back_by_the_release_asked_about():
+    """A beta user is told about newer betas also of a release whose
+    invitation was answered (handled); only notified counts."""
+    assert updates.should_offer_beta(beta("2.4.0-beta.2"), "2.4.0-beta.1",
+                                     None, "2.4.0")
     assert updates.should_offer_beta(beta("2.5.0-beta.1"), "2.4.0-beta.1",
-                                     None, None)
+                                     None, "2.5.0")
 
 
 @pytest.mark.parametrize("build", [1, 2, 9, 10, 99])
 def test_a_handled_release_stays_handled_for_every_build(build):
     assert not updates.should_offer_beta(beta(f"2.4.0-beta.{build}"), "2.3.3",
                                          None, "2.4.0")
+
+
+# -- a beta user: each newer test version once (beta_notified) --------------
+@pytest.mark.parametrize("found, current, stable, notified, expected", [
+    # newer in the same release, by number: beta.10 after beta.9
+    ("2.4.0-beta.2", "2.4.0-beta.1", None, None, True),
+    ("2.4.0-beta.10", "2.4.0-beta.9", None, None, True),
+    ("2.4.0-beta.9", "2.4.0-beta.10", None, None, False),
+    ("2.4.0-beta.10", "2.4.0-beta.2", None, "2.4.0-beta.9", True),
+    # a newer release
+    ("2.5.0-beta.1", "2.4.0-beta.2", None, None, True),
+    ("2.5.0-beta.1", "2.4.0-beta.2", None, "2.4.0-beta.3", True),
+    # never the running one or an older one
+    ("2.4.0-beta.2", "2.4.0-beta.2", None, None, False),
+    ("2.4.0-beta.1", "2.4.0-beta.2", None, None, False),
+    ("2.3.0-beta.5", "2.4.0-beta.1", None, None, False),
+    # told about already: the same or a newer one
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "2.4.0-beta.3", False),
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "2.4.0-beta.4", False),
+    ("2.4.0-beta.3", "2.4.0-beta.1", None, "2.5.0-beta.1", False),
+    # told about an older one: the newer one counts
+    ("2.4.0-beta.3", "2.4.0-beta.1", None, "2.4.0-beta.2", True),
+    # after going back to an older beta, nothing told about is repeated
+    ("2.4.0-beta.3", "2.4.0-beta.1", None, "2.4.0-beta.3", False),
+    # what was told about is unreadable: as if nothing was (ask once)
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "garbage", True),
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, 5, True),
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, ["2.4.0-beta.3"], True),
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "v2.4.0-beta.3", True),
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "2.4.0", True),   # no beta
+    ("2.4.0-beta.3", "2.4.0-beta.2", None, "9.0.0", True),   # no beta
+    # a stable update comes first, and a stable release ends its betas
+    ("2.4.0-beta.3", "2.4.0-beta.2", "2.4.0", None, False),
+    ("2.5.0-beta.1", "2.4.0-beta.2", "2.4.0", None, False),
+    ("2.5.0-beta.1", "2.4.0-beta.2", "2.5.0", None, False),
+    ("2.4.0-beta.3", "2.4.0-beta.2", "2.3.3", None, True),   # older: no matter
+    ("2.4.0-beta.3", "2.4.0-beta.2", "2.4.0-beta.9", None, True),  # no stable
+])
+def test_a_beta_user_hears_of_each_newer_beta_once(found, current, stable,
+                                                   notified, expected):
+    assert updates.should_offer_beta(beta(found), current, stable, None,
+                                     notified) is expected
+
+
+@pytest.mark.parametrize("handled", [None, "2.4.0", "2.5.0", "garbage"])
+def test_a_beta_user_ignores_the_release_asked_about(handled):
+    assert updates.should_offer_beta(beta("2.4.0-beta.3"), "2.4.0-beta.2",
+                                     None, handled, None)
+
+
+@pytest.mark.parametrize("notified", [None, "2.4.0-beta.1", "2.9.0-beta.9"])
+def test_a_stable_user_keeps_the_invitation_once_per_release(notified):
+    """beta_notified changes nothing for a stable version: handled does."""
+    offer = updates.should_offer_beta
+    assert offer(beta("2.4.0-beta.1"), "2.3.3", None, None, notified)
+    assert not offer(beta("2.4.0-beta.2"), "2.3.3", None, "2.4.0", notified)
+    assert not offer(beta("2.4.0-beta.10"), "2.3.3", None, "2.4.0", notified)
+    assert offer(beta("2.5.0-beta.1"), "2.3.3", None, "2.4.0", notified)
+
+
+@pytest.mark.parametrize("stored, expected", [
+    ("2.4.0-beta.2", "2.4.0-beta.2"), ("10.0.0-beta.10", "10.0.0-beta.10"),
+    (None, None), (5, None), (["2.4.0-beta.2"], None), ("", None),
+    ("2.4.0", None), ("v2.4.0-beta.2", None), ("2.4.0-beta.2 ", None),
+    ("2.4.0-rc1", None), ("2.4.0-beta.x", None), ("٢.4.0-beta.1", None),
+])
+def test_notified_beta(stored, expected):
+    assert updates.notified_beta(stored) == expected
+
+
+@pytest.mark.parametrize("stored, expected", [
+    ("2.4.0", "2.4.0"), ("10.0", "10.0"), (None, None), (5, None),
+    ("2.4.0-beta.1", None), ("garbage", None), ("", None),
+])
+def test_handled_series(stored, expected):
+    assert updates.handled_series(stored) == expected
+
+
+@pytest.mark.parametrize("versions, expected", [
+    (("2.4.0-beta.9", "2.4.0-beta.10"), "2.4.0-beta.10"),     # by number
+    (("2.4.0-beta.10", "2.4.0-beta.9"), "2.4.0-beta.10"),
+    (("2.5.0-beta.1", "2.4.0-beta.10"), "2.5.0-beta.1"),
+    (("2.4.0-beta.2", None, "garbage", 5), "2.4.0-beta.2"),
+    (("2.4.0", "2.4.0-beta.1"), "2.4.0-beta.1"),              # no beta: left out
+    ((None, "garbage"), None),
+    ((), None),
+])
+def test_newest_beta_kept(versions, expected):
+    """What was told about never goes back to an older beta."""
+    assert updates.newest(versions, updates.notified_beta) == expected
+
+
+@pytest.mark.parametrize("versions, expected", [
+    (("2.4.0", "2.10.0"), "2.10.0"), (("2.10.0", "2.4.0"), "2.10.0"),
+    (("2.4.0", "garbage", None, "2.5.0-beta.1"), "2.4.0"),
+    ((None,), None),
+])
+def test_newest_release_kept(versions, expected):
+    assert updates.newest(versions, updates.handled_series) == expected
+
+
+def test_a_beta_user_through_the_releases():
+    """Running 2.4.0-beta.1 and answering each question: every newer beta
+    is told about once, then 2.4.0 itself comes as a stable update."""
+    offer, notified = updates.should_offer_beta, None
+    told = []
+    for running, found in [("2.4.0-beta.1", "2.4.0-beta.2"),
+                           ("2.4.0-beta.1", "2.4.0-beta.2"),     # again
+                           ("2.4.0-beta.2", "2.4.0-beta.2"),     # installed
+                           ("2.4.0-beta.2", "2.4.0-beta.3"),
+                           ("2.4.0-beta.2", "2.4.0-beta.10"),
+                           ("2.4.0-beta.2", "2.4.0-beta.9"),     # older
+                           ("2.4.0-beta.10", "2.5.0-beta.1")]:
+        if offer(beta(found), running, None, None, notified):
+            told.append(found)
+            notified = updates.newest((found, notified), updates.notified_beta)
+    assert told == ["2.4.0-beta.2", "2.4.0-beta.3", "2.4.0-beta.10",
+                    "2.5.0-beta.1"]
+    assert not offer(beta("2.5.0-beta.2"), "2.4.0-beta.10", "2.4.0", None,
+                     notified)              # the stable update first
+    assert updates.is_newer("2.4.0", "2.4.0-beta.10")

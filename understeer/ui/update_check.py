@@ -5,9 +5,11 @@ Only the AppImage looks, at start and then every hour (at most once an
 hour, also when started often), and only after the user agreed once.
 
 Test versions (betas) only if the user also switched that on: at most one
-look a day, and at most one question for each release (2.4.0-beta.2
-isn't asked about again after 2.4.0-beta.1). The question only shows the
-beta's page on GitHub; nothing is downloaded or installed.
+look a day. A stable version is asked at most once for each release
+(2.4.0-beta.2 isn't asked about again after 2.4.0-beta.1); a beta is
+told once about each newer test version (2.4.0-beta.2 while running
+2.4.0-beta.1). The question only shows the beta's page on GitHub;
+nothing is downloaded or installed.
 """
 import logging
 import os
@@ -18,7 +20,7 @@ from gi.repository import Adw, GLib, Gtk
 from .. import config, updates
 from .. import log as session_log
 from ..i18n import _
-from ..releases import plain_version
+from ..releases import is_prerelease, plain_version
 from . import tasks
 
 log = logging.getLogger("understeer.window")
@@ -32,7 +34,8 @@ class UpdateCheckMixin:
     answered then, so the banner shows right away at the next start).
     Betas: "beta_notify" (only True asks), "beta_checked" (time of the
     last look), "beta_latest" (the beta found then), "beta_handled" (the
-    release whose beta was asked about, e.g. "2.4.0")."""
+    newest release whose beta was asked about, e.g. "2.4.0"),
+    "beta_notified" (the newest beta asked about, e.g. "2.4.0-beta.2")."""
 
     def _build_update_banner(self, content_view):
         self.update_banner = Adw.Banner()
@@ -189,11 +192,29 @@ class UpdateCheckMixin:
         # asked about: as saved, and in this session in case saving failed
         handled = (config.get_text("beta_handled"),
                    getattr(self, "_beta_handled", None))
+        notified = updates.newest(
+            (config.get_setting("beta_notified"),
+             getattr(self, "_beta_notified", None)), updates.notified_beta)
         if beta is None or not all(updates.should_offer_beta(
-                beta, self._current_version(), stable, done)
+                beta, self._current_version(), stable, done, notified)
                 for done in handled):
             return None
         return beta
+
+    def _remember_beta(self, beta):
+        """Count beta as asked about: its release for the invitation of a
+        stable version, the beta itself for a beta; kept in this session
+        too, in case saving fails. Never back to an older one, e.g. from a
+        question that was open while a newer one was answered."""
+        self._beta_handled = updates.newest(
+            (updates.beta_series(beta["version"]),
+             config.get_text("beta_handled"),
+             getattr(self, "_beta_handled", None)), updates.handled_series)
+        config.set_setting("beta_handled", self._beta_handled)
+        self._beta_notified = updates.newest(
+            (beta["version"], config.get_setting("beta_notified"),
+             getattr(self, "_beta_notified", None)), updates.notified_beta)
+        config.set_setting("beta_notified", self._beta_notified)
 
     def _offer_beta(self):
         """Ask once about a new beta, only with the window open in front
@@ -205,14 +226,18 @@ class UpdateCheckMixin:
                 or not self.get_visible() or self._in_background
                 or self.get_visible_dialog() is not None):
             return
-        series = updates.beta_series(beta["version"])
-        dialog = Adw.AlertDialog(
-            heading=_("Test Version Available"),
-            body=_("Understeer {version} is a test version of the next "
-                   "release. You can try it and tell what works and what "
-                   "doesn't. Understeer asks only once for each release; "
-                   "nothing is downloaded or installed.").format(
-                       version=beta["version"]))
+        heading = _("Test Version Available")
+        if is_prerelease(self._current_version()):
+            body = _("Understeer {version} is a newer test version than the "
+                     "one you use. Understeer tells you once about each newer "
+                     "test version; nothing is downloaded or installed.")
+        else:
+            body = _("Understeer {version} is a test version of the next "
+                     "release. You can try it and tell what works and what "
+                     "doesn't. Understeer asks only once for each release; "
+                     "nothing is downloaded or installed.")
+        dialog = Adw.AlertDialog(heading=heading,
+                                 body=body.format(version=beta["version"]))
         dialog.add_response("later", _("Not Now"))
         dialog.add_response("view", _("View on GitHub"))
         dialog.set_default_response("view")
@@ -221,10 +246,15 @@ class UpdateCheckMixin:
 
         def handled(d, response):
             if self._beta_dialog is not d:
-                return                      # answered already
+                return                      # answered, withdrawn or replaced
             self._beta_dialog = None
-            self._beta_handled = series
-            config.set_setting("beta_handled", series)
+            if not self._beta_wanted():
+                log.info("Test versions were switched off meanwhile")
+                return                      # not counted as asked
+            if self._available_update():
+                log.info("A stable update came meanwhile")
+                return                      # it comes first: not counted
+            self._remember_beta(beta)
             log.info("Asked about test version %s: %s", beta["version"],
                      response)
             if response == "view":
@@ -236,12 +266,12 @@ class UpdateCheckMixin:
         log.info("Asking about test version %s", beta["version"])
         dialog.present(self)
 
-    def _withdraw_beta(self):
-        """Close a question about a beta when it was switched off, without
-        counting it as answered."""
+    def _withdraw_beta(self, reason="Test versions switched off"):
+        """Close a question about a beta when it was switched off or a
+        stable update came, without counting it as answered."""
         dialog, self._beta_dialog = getattr(self, "_beta_dialog", None), None
         if dialog is not None:
-            log.info("Test versions switched off: question closed")
+            log.info("%s: question closed", reason)
             dialog.force_close()
 
     def _open_beta_page(self, beta):
@@ -274,7 +304,8 @@ class UpdateCheckMixin:
     def _show_update_banner(self):
         """The banner for the state of updating: available, being updated
         (self._update_state "updating"), or installed and waiting for a
-        restart ("installed")."""
+        restart ("installed"). A stable update available withdraws a
+        question about a beta: it comes first."""
         if not hasattr(self, "update_banner"):
             return
         state = getattr(self, "_update_state", None)
@@ -295,6 +326,8 @@ class UpdateCheckMixin:
                                     if self._can_update_itself(latest)
                                     else _("Download"))
         banner.set_revealed(bool(state or latest))
+        if latest:                          # a stable update comes first
+            self._withdraw_beta("Stable update available")
 
     def _on_update_button(self):
         state = getattr(self, "_update_state", None)
