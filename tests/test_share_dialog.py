@@ -12,7 +12,7 @@ try:
 except (ImportError, ValueError) as e:      # no GTK 4 / Libadwaita
     pytest.skip(str(e), allow_module_level=True)
 
-from understeer import i18n, submission  # noqa: E402
+from understeer import i18n, library, submission  # noqa: E402
 from understeer.submission import Problem  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -103,6 +103,24 @@ def test_texts_in_german():
          "das Preset zuerst mit 900°.")
     assert i18n._("Share with Community") == "In Community teilen"
     assert i18n._("Continue on GitHub") == "Auf GitHub fortfahren"
+
+
+def test_every_drive_has_a_name():
+    """The review page shows each drive a catalog entry can have."""
+    assert set(share_dialog.DRIVE_NAMES) == set(library.DRIVES)
+    assert set(submission.WHEELBASE_DRIVES.values()) <= set(library.DRIVES)
+
+
+@pytest.mark.parametrize("language, field, names", [
+    ("en", "Drive", {"belt": "Belt", "direct_drive": "Direct drive"}),
+    ("de", "Antrieb", {"belt": "Riemenantrieb", "direct_drive": "Direct Drive"}),
+])
+def test_drive_names(language, field, names):
+    """The same words as the library uses for the drive of a preset."""
+    i18n.set_language(language)
+    assert i18n._(share_dialog.FIELDS["drive"]) == field
+    assert {drive: i18n._(name) for drive, name
+            in share_dialog.DRIVE_NAMES.items()} == names
 
 
 @pytest.mark.parametrize("text, tags", [

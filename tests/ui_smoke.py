@@ -3909,7 +3909,8 @@ def steps(win):
         for part in ("meant to be shared publicly", "Nothing has been published",
                      "looks like a serial number",
                      "Description|<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
-                     "Wheelbase|CSL DD", "Author|Tester", "Tags|gt3, endurance",
+                     "Wheelbase|CSL DD", "Drive|Direct drive", "Author|Tester",
+                     "Tags|gt3, endurance",
                      "Preset Name|Share Me", "test-game-share-me|Only a proposal",
                      "The catalog is checked again", "3 settings",
                      "Steering Angle|", "Force Feedback Strength|", "Force Effects|"):
@@ -3918,7 +3919,61 @@ def steps(win):
                   and w.has_css_class("numeric")]
         check(values == ["540°", "75 %", "100 %"], f"saved values, not live ones: {values}")
         check(not share_button("Confirm").get_sensitive(), "confirm needs the tick")
+        titles = [w.get_title() for w in walk(page) if isinstance(w, Adw.ActionRow)]
+        check("Wheelbase" in titles and titles[titles.index("Wheelbase") + 1:][:1]
+              == ["Drive"], f"the drive right below the wheelbase: {titles[:8]}")
     yield "share preview", share_preview
+
+    def share_preview_rows():
+        return {w.get_title(): w.get_subtitle() for w in walk(share_page())
+                if isinstance(w, Adw.ActionRow)}
+
+    def share_back_to_form():
+        share_nav().pop()                   # back to the form
+        check(share_page().get_tag() == "form", "back on the form")
+        # The review page leaves the navigation once its animation is over
+        check(settle(lambda: share_nav().find_page("preview") is None),
+              "the earlier review page is gone")
+    yield "share back to the form", share_back_to_form
+
+    def share_preview_other_wheelbase():
+        share_fill(base="ClubSport Wheel Base V2.5",
+                   description="<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                   tags="GT3, endurance")
+        share_button("Review").emit("clicked")
+        check(share_page().get_tag() == "preview",
+              f"preview of the new choice: {share_page().get_tag()} {share_errors()}")
+        rows = share_preview_rows()
+        check(rows.get("Wheelbase") == "ClubSport Wheel Base V2.5"
+              and rows.get("Drive") == "Belt",
+              f"the drive of the wheelbase chosen now: {rows.get('Wheelbase')!r} "
+              f"{rows.get('Drive')!r}")
+        shown = [w.get_label() for w in walk(share_page())
+                 if isinstance(w, Gtk.Label) and w.get_visible()]
+        check("Direct drive" not in shown and "CSL DD" not in shown,
+              "nothing left of the earlier review")
+        pages = []
+        page = share_page()
+        while page is not None:
+            pages.append(page.get_tag())
+            page = share_nav().get_previous_page(page)
+        check(pages == ["preview", "form"], f"one review page only: {pages}")
+    yield "share preview after another wheelbase", share_preview_other_wheelbase
+    yield "share back to the form again", share_back_to_form
+
+    def share_preview_first_wheelbase_again():
+        share_fill(description="<b>Not bold</b> & co\nBase 0123ABCD4567EF89",
+                   tags="GT3, endurance")              # CSL DD, as at first
+        share_button("Review").emit("clicked")
+        rows = share_preview_rows()
+        check(share_page().get_tag() == "preview" and rows.get("Wheelbase")
+              == "CSL DD" and rows.get("Drive") == "Direct drive",
+              f"direct drive again: {rows.get('Wheelbase')!r} {rows.get('Drive')!r}")
+        check("Belt" not in [w.get_label() for w in walk(share_page())
+                             if isinstance(w, Gtk.Label) and w.get_visible()],
+              "no belt left from the review before")
+    yield "share preview of the first wheelbase again", \
+        share_preview_first_wheelbase_again
 
     def share_labels():
         return [w.get_label() for w in walk(share_page())
@@ -4003,7 +4058,8 @@ def steps(win):
         check(share["clip"] == [share["opened"][-1]], "link copied on request")
         share_button("Close").emit("clicked")
         share_open(share["path"])
-        share_fill(description=("Fahrgefühl für Übungsrunden " * 40)[:1000].strip())
+        share_fill(base="ClubSport Wheel Base V2.5",        # a belt-driven one
+                   description=("Fahrgefühl für Übungsrunden " * 40)[:1000].strip())
         share_button("Review").emit("clicked")
         next(w for w in walk(share_page()) if isinstance(w, Gtk.CheckButton)).set_active(True)
         share_button("Confirm").emit("clicked")
@@ -4022,6 +4078,11 @@ def steps(win):
         check(share["clip"] == [github_form.entry_text(entry)]
               and json.loads(share["clip"][0]) == entry,
               f"complete catalog entry copied: {share['clip'][:1]}")
+        copied = json.loads(share["clip"][0]) if share["clip"] else {}
+        check(entry["meta"]["drive"] == "belt"
+              and copied.get("meta", {}).get("drive") == "belt"
+              and "Belt" not in share["clip"][0],
+              f"the drive as its identifier: {entry['meta'].get('drive')!r}")
         check("Copied: Catalog Entry (JSON)" in share_labels(), "copy told")
         share_button("Continue on GitHub…").emit("clicked")
         url = share["opened"][-1]

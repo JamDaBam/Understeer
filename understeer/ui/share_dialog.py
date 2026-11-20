@@ -23,8 +23,12 @@ from .names import label_factory
 log = logging.getLogger("understeer.window")
 
 FIELDS = {"name": N_("Preset Name"), "game": N_("Game"),
-          "wheelbase": N_("Wheelbase"), "author": N_("Author"),
-          "description": N_("Description"), "tags": N_("Tags")}
+          "wheelbase": N_("Wheelbase"), "drive": N_("Drive"),
+          "author": N_("Author"), "description": N_("Description"),
+          "tags": N_("Tags")}
+# The drive of a catalog entry (library.DRIVES) in words, as the library
+# shows it; the entry itself keeps the identifier
+DRIVE_NAMES = {"belt": N_("Belt"), "direct_drive": N_("Direct drive")}
 
 
 # The fields' labels as the form on GitHub shows them, in English like the
@@ -322,6 +326,7 @@ class ShareMixin:
                 (_(FIELDS["name"]), preset["name"]),
                 (_(FIELDS["game"]), meta["game"]),
                 (_(FIELDS["wheelbase"]), meta["wheelbase"]),
+                (_(FIELDS["drive"]), _(DRIVE_NAMES[meta["drive"]])),
                 (_(FIELDS["author"]), meta["author"]),
                 (_(FIELDS["description"]), meta["description"]),
                 (_(FIELDS["tags"]), ", ".join(meta.get("tags", ()))
