@@ -4,6 +4,7 @@ Works without GTK. Steam can be installed in several ways (distribution
 package, Flatpak, Snap) and keep games in several libraries, so all of
 them are searched.
 """
+import http.client
 import logging
 import os
 import pathlib
@@ -217,8 +218,11 @@ def download_cover(appid, cache_dir, timeout=10):
                     if resp.status != 200 or not resp.headers.get(
                             "Content-Type", "").startswith("image/"):
                         continue
+                    # read() of the whole answer raises IncompleteRead when
+                    # fewer bytes come than announced
                     data = resp.read()
-            except (OSError, ValueError) as e:
+            # HTTPException: e.g. a broken status line or an answer cut short
+            except (OSError, ValueError, http.client.HTTPException) as e:
                 if isinstance(e, urllib.error.HTTPError):
                     release(e)              # it holds the answer, unread
                 log.debug("Cover %s for app %s: %s", file, appid, e)

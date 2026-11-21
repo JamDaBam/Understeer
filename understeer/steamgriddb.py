@@ -6,6 +6,7 @@ https://www.steamgriddb.com/profile/preferences/api
 
 Nothing here runs unless the user searches for a cover.
 """
+import http.client
 import json
 import logging
 import pathlib
@@ -52,8 +53,9 @@ def _get(path, key, params=None, timeout=15):
         if e.code == 404:
             return []                       # e.g. a game without grids
         raise Error("network", f"HTTP {e.code}") from e
-    except (OSError, ValueError) as e:
-        raise Error("network", str(e)) from e
+    # HTTPException: e.g. a broken status line or an answer cut short
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise Error("network", str(e) or type(e).__name__) from e
     if not isinstance(data, dict) or not data.get("success"):
         errors = data.get("errors") if isinstance(data, dict) else None
         raise Error("network", "; ".join(map(str, errors or ["bad answer"])))
@@ -139,12 +141,20 @@ def fetch(url, timeout=20, limit=20 * 1024 * 1024):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(limit + 1)
-    except (OSError, ValueError) as e:
+            length = resp.headers.get("Content-Length", "")
+            chunked = "chunked" in resp.headers.get("Transfer-Encoding", "").lower()
+    # HTTPException: e.g. a broken status line or an answer cut short
+    except (OSError, ValueError, http.client.HTTPException) as e:
         if isinstance(e, urllib.error.HTTPError):
             _release(e)                     # it holds the answer, unread
-        raise Error("network", str(e)) from e
+        raise Error("network", str(e) or type(e).__name__) from e
     if len(data) > limit:
         raise Error("network", "picture too large")
+    # A read of a given size just ends when the connection closes early, so
+    # a picture cut short would pass for a whole one. Without a length (or
+    # sent in chunks, where a cut raises above) there is nothing to compare.
+    if length.isdigit() and not chunked and len(data) != int(length):
+        raise Error("network", f"{len(data)} of {length} bytes came")
     return data
 
 

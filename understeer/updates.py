@@ -322,11 +322,13 @@ def download(asset, appimage, timeout=30, progress=None):
                 out.write(chunk)
                 if progress and asset.get("size"):
                     progress(min(size / asset["size"], 1.0))
-    except (OSError, ValueError) as e:
+    # HTTPException: e.g. a broken status line or a chunk cut short; an
+    # answer cut short otherwise just ends, and the checksum tells
+    except (OSError, ValueError, http.client.HTTPException) as e:
         if isinstance(e, urllib.error.HTTPError):
             fetch.release(e)                # it holds the answer, unread
         _remove(part)
-        raise Error(str(e)) from e
+        raise Error(str(e) or type(e).__name__) from e
     except Error:
         _remove(part)
         raise

@@ -257,6 +257,57 @@ def test_no_cover_anywhere_closes_every_answer(tmp_path, fail):
     assert not list(tmp_path.iterdir())
 
 
+
+# -- broken answers, from a real server on 127.0.0.1 --------------------------
+from test_fetch import Server  # noqa: E402
+
+CUT_SHORT = (b"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n"
+             b"Content-Length: 1000\r\n\r\n" + b"j" * 100)
+CHUNK_CUT_SHORT = (b"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n"
+                   b"Transfer-Encoding: chunked\r\n\r\n3e8\r\n" + b"j" * 100)
+BAD_STATUS_LINE = b"NONSENSE\r\n\r\n"
+
+
+@pytest.fixture
+def local(monkeypatch):
+    """A local server in place of Steam's two; its answers: server.answer."""
+    s = Server()
+    monkeypatch.setattr(games, "CDN_URLS",
+                        [f"http://{s.address}/a/{{appid}}/{{file}}",
+                         f"http://{s.address}/b/{{appid}}/{{file}}"])
+    yield s
+    s.close()
+
+
+@pytest.mark.parametrize("broken", [CUT_SHORT, CHUNK_CUT_SHORT, BAD_STATUS_LINE],
+                         ids=["cut-short", "chunk-cut-short", "bad-status-line"])
+def test_a_broken_answer_is_no_cover(local, tmp_path, broken):
+    """Each of the four tries gets a broken answer: no cover, nothing kept,
+    and no http.client error escapes into the background task."""
+    local.answer = lambda h: h.wfile.write(broken)
+    assert games.download_cover("805550", tmp_path) is None
+    assert len(local.requests) == 4
+    assert not list(tmp_path.iterdir())
+    assert local.answered.wait(5)
+
+
+def test_a_broken_answer_is_followed_by_the_next_server(local, tmp_path):
+    def answer(h):
+        if h.path.startswith("/a/"):
+            h.wfile.write(CUT_SHORT)            # the first server breaks off
+        else:
+            h.send_response(200)
+            h.send_header("Content-Type", "image/jpeg")
+            h.end_headers()                     # no length: read to the end
+            h.wfile.write(jpeg(600, 900))
+    local.answer = answer
+    path = games.download_cover("805550", tmp_path)
+    assert path == tmp_path / "steam_805550.jpg"
+    assert games.image_size(path) == (600, 900)
+    assert [p for p, _h in local.requests] == ["/a/805550/library_600x900.jpg",
+                                              "/b/805550/library_600x900.jpg"]
+
+
 def test_answers_that_are_no_picture_are_closed(tmp_path):
     answered = []
 
