@@ -157,17 +157,27 @@ def test_restart_waits_for_the_old_process(tmp_path):
     script = tmp_path / "fake.AppImage"
     script.write_text(f"#!/bin/sh\ntouch {mark}\n")
     script.chmod(0o755)
-    old = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.6)"])
-    argv, env = updates.restart_command(str(script), old.pid, {"PATH": os.environ["PATH"]})
-    subprocess.Popen(argv, env=env)
-    time.sleep(0.3)
-    assert not mark.exists()                        # still waiting
-    old.wait()
-    for _i in range(50):
-        if mark.exists():
-            break
-        time.sleep(0.1)
-    assert mark.exists()
+    old = waiter = None
+    try:
+        old = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.6)"])
+        argv, env = updates.restart_command(str(script), old.pid,
+                                            {"PATH": os.environ["PATH"]})
+        waiter = subprocess.Popen(argv, env=env)
+        time.sleep(0.3)
+        assert not mark.exists()                    # still waiting
+        old.wait(timeout=5)
+        # The waiter becomes the fake AppImage, which ends once it has
+        # left its mark
+        waiter.wait(timeout=5)
+        assert mark.exists()
+    finally:
+        # Only the processes started here; each is reaped, also when the
+        # test failed half-way
+        for process in (waiter, old):
+            if process is not None:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5)
 
 
 @pytest.mark.parametrize("url", [None, "https://evil.example/x",
