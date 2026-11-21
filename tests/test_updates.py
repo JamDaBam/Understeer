@@ -2,6 +2,7 @@ import http.client
 import io
 import json
 import os
+import pathlib
 import socket
 
 import pytest
@@ -505,3 +506,72 @@ def test_download_closes_an_answer_refused_while_reading(tmp_path, monkeypatch):
         updates.download(asset_for(b"too big"), str(old))
     assert closed == [updates.Error]
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+# -- broken answers, from a real server on 127.0.0.1 --------------------------
+from test_fetch import Server  # noqa: E402
+
+NEW_APPIMAGE = b"new AppImage" * 1000
+
+
+@pytest.fixture
+def local():
+    s = Server()
+    yield s
+    s.close()
+
+
+def download_from(server, tmp_path, body=NEW_APPIMAGE):
+    old = tmp_path / "Understeer.AppImage"
+    old.write_bytes(b"old")
+    asset = dict(asset_for(body), url=f"http://{server.address}/Understeer.AppImage")
+    return updates.download(asset, str(old)), old
+
+
+@pytest.mark.parametrize("broken", [
+    b"NONSENSE\r\n\r\n",                                        # no status line
+    b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3e8\r\n" + b"n" * 100,
+], ids=["bad-status-line", "chunk-cut-short"])
+def test_a_broken_download_is_an_update_error(local, tmp_path, broken):
+    local.answer = lambda h: h.wfile.write(broken)
+    with pytest.raises(updates.Error) as e:
+        download_from(local, tmp_path)
+    assert str(e.value)                                 # shown in the dialog
+    assert isinstance(e.value.__cause__, http.client.HTTPException)
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]   # no .part
+    assert (tmp_path / "Understeer.AppImage").read_bytes() == b"old"
+    assert local.answered.wait(5)
+
+
+def test_a_download_cut_short_fails_its_checksum(local, tmp_path):
+    local.answer = lambda h: h.wfile.write(
+        b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(NEW_APPIMAGE)
+        + NEW_APPIMAGE[:100])
+    with pytest.raises(updates.Error, match="checksum"):
+        download_from(local, tmp_path)
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+@pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
+def test_a_whole_download_is_taken(local, tmp_path, length):
+    local.answer = lambda h: h.send_body(NEW_APPIMAGE, length=length)
+    new, old = download_from(local, tmp_path)
+    assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
+    assert old.read_bytes() == b"old"               # untouched until installed
+
+
+def test_a_redirect_is_still_followed(local, tmp_path):
+    """GitHub sends release files from another address."""
+    def answer(h):
+        if h.path == "/Understeer.AppImage":
+            h.send_response(302)
+            h.send_header("Location", "/stored/Understeer.AppImage")
+            h.send_header("Content-Length", "0")
+            h.end_headers()
+        else:
+            h.send_body(NEW_APPIMAGE)
+    local.answer = answer
+    new, _old = download_from(local, tmp_path)
+    assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
+    assert [p for p, _h in local.requests] == ["/Understeer.AppImage",
+                                              "/stored/Understeer.AppImage"]

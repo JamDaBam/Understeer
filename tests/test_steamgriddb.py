@@ -10,6 +10,7 @@ from understeer import steamgriddb
 class Response:
     def __init__(self, body):
         self.body = body if isinstance(body, bytes) else json.dumps(body).encode()
+        self.headers = {}           # as a real answer, here without a length
 
     def read(self, limit=None):
         return self.body if limit is None else self.body[:limit]
@@ -215,3 +216,100 @@ def test_a_picture_http_error_is_closed(fail):
         steamgriddb.fetch("https://cdn2.steamgriddb.com/a.png")
     assert (e.value.kind, str(e.value)) == ("network", "HTTP Error 404: ")
     assert body.closed
+
+
+# -- broken answers, from a real server on 127.0.0.1 --------------------------
+# urllib and http.client read them as they do from SteamGridDB; only the
+# address is the local one.
+from test_fetch import Server  # noqa: E402
+
+PICTURE = b"\x89PNG picture"
+
+
+@pytest.fixture
+def local():
+    s = Server()
+    yield s
+    s.close()
+
+
+def raw(data):
+    """An answer written as it is, status line and headers included."""
+    def answer(handler):
+        handler.wfile.write(data)
+    return answer
+
+
+def picture_from(server, monkeypatch, **kwargs):
+    """steamgriddb.fetch() of a SteamGridDB address, served by server."""
+    real = steamgriddb.urllib.request.urlopen
+
+    def urlopen(req, timeout):
+        assert req.full_url == "https://cdn2.steamgriddb.com/grid/a.png"
+        return real(f"http://{server.address}/a.png", timeout=timeout)
+    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", urlopen)
+    return steamgriddb.fetch("https://cdn2.steamgriddb.com/grid/a.png", **kwargs)
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(PICTURE),                     # with Content-Length
+    lambda h: h.send_body(PICTURE, length=False),       # until the end
+    raw(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+        b"4\r\n\x89PNG\r\n8\r\n picture\r\n0\r\n\r\n"),
+], ids=["length", "no-length", "chunked"])
+def test_a_whole_picture_is_taken(local, monkeypatch, answer):
+    local.answer = answer
+    assert picture_from(local, monkeypatch) == PICTURE
+    assert local.answered.wait(5)
+
+
+@pytest.mark.parametrize("answer, message", [
+    # The connection closes after 100 of 1000 bytes: read() of a size
+    # doesn't notice, so this must not pass for a picture
+    (raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b"p" * 100),
+     "100 of 1000 bytes came"),
+    (raw(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+         b"3e8\r\n" + b"p" * 100), "IncompleteRead"),
+    (raw(b"NONSENSE\r\n\r\n"), "NONSENSE"),             # no status line
+], ids=["cut-short", "chunk-cut-short", "bad-status-line"])
+def test_a_broken_picture_is_refused(local, monkeypatch, tmp_path, answer, message):
+    local.answer = answer
+    with pytest.raises(steamgriddb.Error) as e:
+        picture_from(local, monkeypatch)
+    assert e.value.kind == "network" and message in str(e.value)
+    assert local.answered.wait(5)
+    # download() keeps nothing of it
+    with pytest.raises(steamgriddb.Error):
+        steamgriddb.download("https://cdn2.steamgriddb.com/grid/a.png", tmp_path / "x.png")
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_picture_too_large_stays_refused(local, monkeypatch):
+    local.answer = lambda h: h.send_body(b"x" * 50)
+    with pytest.raises(steamgriddb.Error, match="picture too large"):
+        picture_from(local, monkeypatch, limit=10)
+
+
+@pytest.mark.parametrize("answer", [
+    raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b'{"success": true'),
+    raw(b"NONSENSE\r\n\r\n"),
+], ids=["cut-short", "bad-status-line"])
+def test_a_broken_api_answer_is_a_network_error(local, monkeypatch, answer):
+    local.answer = answer
+    monkeypatch.setattr(steamgriddb, "API", f"http://{local.address}/api")
+    with pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.search("Diablo", "secret-key")
+    assert e.value.kind == "network" and str(e.value)
+    assert "secret-key" not in str(e.value)
+    assert isinstance(e.value.__cause__, steamgriddb.http.client.HTTPException)
+    (path, headers), = local.requests
+    assert headers["Authorization"] == "Bearer secret-key"     # sent as before
+    assert local.answered.wait(5)
+
+
+def test_a_whole_api_answer_is_read(local, monkeypatch):
+    local.answer = lambda h: h.send_body(json.dumps(
+        {"success": True, "data": [{"id": 1, "name": "Diablo"}]}).encode())
+    monkeypatch.setattr(steamgriddb, "API", f"http://{local.address}/api")
+    assert steamgriddb.search("Diablo", "secret-key") == \
+        [{"id": 1, "name": "Diablo", "year": None}]
