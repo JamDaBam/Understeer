@@ -53,7 +53,10 @@ def bus():
     daemon = subprocess.Popen(
         ["dbus-daemon", "--session", "--nofork", "--nopidfile", "--print-address=1"],
         stdout=subprocess.PIPE, text=True)
-    address = daemon.stdout.readline().strip()
+    # Only the address is read from it; closed right after, also if reading
+    # fails, so the pipe isn't left for the garbage collector
+    with daemon.stdout:
+        address = daemon.stdout.readline().strip()
     yield address
     daemon.terminate()
     daemon.wait(timeout=10)
