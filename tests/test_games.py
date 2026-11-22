@@ -1,5 +1,8 @@
+import inspect
 import io
+import logging
 import struct
+import time
 from unittest import mock
 
 import pytest
@@ -159,6 +162,10 @@ class FakeResponse:
 
     def read(self):
         return self.body
+
+    def read1(self, limit):                    # as covers are read
+        piece, self.body = self.body[:limit], self.body[limit:]
+        return piece
 
     def __enter__(self):
         return self
@@ -559,3 +566,199 @@ def test_games_tracked_separately():
     watch.update({"steam:2"})
     clock.now += 10
     assert watch.update({"steam:2"}) == (set(), {"steam:1"})
+
+
+# -- size and time of covers from Steam's servers ------------------------------
+import test_fetch  # noqa: E402
+
+answers = test_fetch.answers       # every HTTP answer opened, see there
+COVER_MAX = 20 * 1024 * 1024
+TRIES = ["/a/805550/library_600x900.jpg", "/b/805550/library_600x900.jpg",
+         "/a/805550/header.jpg", "/b/805550/header.jpg"]
+
+
+def cover(size):
+    return b"\xff\xd8" + b"c" * (size - 2)
+
+
+def send(data, length=True, content_type="image/jpeg", status=200):
+    def answer(h):
+        h.send_response(status)
+        h.send_header("Content-Type", content_type)
+        if length:
+            h.send_header("Content-Length", str(len(data)))
+        h.end_headers()
+        h.wfile.write(data)
+    return answer
+
+
+def send_chunked(*pieces):
+    def answer(h):
+        h.wfile.write(b"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n"
+                      b"Transfer-Encoding: chunked\r\n\r\n")
+        for piece in pieces:
+            h.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
+        h.wfile.write(b"0\r\n\r\n")
+    return answer
+
+
+def trickle(data, every):
+    def answer(h):
+        h.send_response(200)
+        h.send_header("Content-Type", "image/jpeg")
+        h.send_header("Content-Length", str(len(data)))
+        h.end_headers()
+        for i in range(len(data)):
+            h.wfile.write(data[i:i + 1])
+            h.wfile.flush()
+            time.sleep(every)
+    return answer
+
+
+def first_server_then(first, rest):
+    """first answers the first server's requests, rest the others."""
+    return lambda h: (first if h.path.startswith("/a/") else rest)(h)
+
+
+def no_cover(local, tmp_path):
+    """All four tries fail: None, nothing written, the tries in order."""
+    assert games.download_cover("805550", tmp_path) is None
+    assert [p for p, _h in local.requests] == TRIES
+    assert not list(tmp_path.iterdir())
+
+
+def all_closed(answers):
+    return bool(answers) and all(a.closed for a in answers)
+
+
+def test_the_limits_of_covers():
+    assert games.MAX_COVER == COVER_MAX == 20971520
+    assert games.COVER_DEADLINE == 30
+    assert inspect.signature(games.download_cover).parameters["timeout"].default == 10
+
+
+@pytest.mark.parametrize("answer", [
+    send(jpeg(600, 900)),
+    send(jpeg(600, 900), length=False),
+    send_chunked(jpeg(600, 900)[:10], jpeg(600, 900)[10:]),
+], ids=["length", "no-length", "chunked"])
+def test_a_cover_is_read_saved_and_closed(local, tmp_path, answers, answer):
+    local.answer = answer
+    path = games.download_cover("805550", tmp_path)
+    assert path == tmp_path / "steam_805550.jpg"
+    assert path.read_bytes() == jpeg(600, 900)
+    assert [p.name for p in tmp_path.iterdir()] == ["steam_805550.jpg"]   # no .part
+    (path_asked, headers), = local.requests
+    assert path_asked == TRIES[0] and "Authorization" not in headers
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
+def test_a_cover_of_exactly_the_limit_is_saved(local, tmp_path, length):
+    local.answer = send(cover(COVER_MAX), length=length)
+    path = games.download_cover("805550", tmp_path)
+    assert path.read_bytes() == cover(COVER_MAX)
+
+
+@pytest.mark.parametrize("answer", [
+    send(cover(COVER_MAX + 1)),
+    send(cover(COVER_MAX + 1), length=False),
+    send_chunked(*[b"c" * 65536] * 320 + [b"c"]),
+], ids=["announced", "unannounced", "chunked"])
+def test_a_cover_too_large_is_no_cover(local, tmp_path, answers, answer):
+    local.answer = answer
+    no_cover(local, tmp_path)
+    assert len(answers) == 4 and all_closed(answers)
+
+
+class Counted(FakeResponse):
+    """An answer that counts the bytes read from it, however read."""
+
+    def __init__(self, body, length=None):
+        super().__init__(200, "image/jpeg", body)
+        if length is not None:
+            self.headers["Content-Length"] = length
+        self.read_bytes = 0
+
+    def read(self, *limit):
+        piece = super().read()
+        self.body, self.read_bytes = b"", self.read_bytes + len(piece)
+        return piece
+
+    def read1(self, limit):
+        piece = super().read1(limit)
+        self.read_bytes += len(piece)
+        return piece
+
+
+@pytest.mark.parametrize("length, read", [
+    (str(COVER_MAX + 1), 0),        # announced: refused before reading
+    (None, COVER_MAX + 1),          # one byte past the limit tells it
+], ids=["announced", "unannounced"])
+def test_a_cover_too_large_is_not_read_to_its_end(tmp_path, length, read):
+    made = []
+
+    def urlopen(req, timeout):
+        made.append(Counted(b"c" * (COVER_MAX + 5 * 1024 * 1024), length))
+        return made[-1]
+    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+        assert games.download_cover("805550", tmp_path) is None
+    assert [a.read_bytes for a in made] == [read] * 4
+
+
+def test_a_cover_too_large_on_the_first_server_comes_from_the_second(local, tmp_path):
+    local.answer = first_server_then(send(cover(COVER_MAX + 1)), send(jpeg(600, 900)))
+    path = games.download_cover("805550", tmp_path)
+    assert path.read_bytes() == jpeg(600, 900)
+    assert [p for p, _h in local.requests] == TRIES[:2]
+
+
+def test_a_slow_cover_within_the_deadline_is_saved(local, tmp_path, monkeypatch):
+    monkeypatch.setattr(games, "COVER_DEADLINE", 30)
+    local.answer = trickle(cover(20), 0.01)
+    assert games.download_cover("805550", tmp_path).read_bytes() == cover(20)
+
+
+def test_a_trickling_cover_on_the_first_server_comes_from_the_second(
+        local, tmp_path, monkeypatch, answers):
+    """A byte each 0.2 s would take more than 7 s; the deadline of that try
+    stops it after about 0.5 s (plus up to one read), then the next server
+    is asked: the deadline counts for each try on its own."""
+    monkeypatch.setattr(games, "COVER_DEADLINE", 0.5)
+    local.answer = first_server_then(trickle(cover(40), 0.2), send(jpeg(600, 900)))
+    start = time.monotonic()
+    path = games.download_cover("805550", tmp_path)
+    assert time.monotonic() - start < 4
+    assert path.read_bytes() == jpeg(600, 900)
+    assert [p for p, _h in local.requests] == TRIES[:2]
+    assert all_closed(answers)
+
+
+def test_trickling_covers_everywhere_are_no_cover(local, tmp_path, monkeypatch, answers):
+    monkeypatch.setattr(games, "COVER_DEADLINE", 0.5)
+    local.answer = trickle(cover(40), 0.2)
+    start = time.monotonic()
+    no_cover(local, tmp_path)
+    assert time.monotonic() - start < 4 * 0.5 + 4       # not 4 x 8 s
+    assert len(answers) == 4 and all_closed(answers)
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.wfile.write(CUT_SHORT), lambda h: h.wfile.write(CHUNK_CUT_SHORT),
+    lambda h: h.wfile.write(BAD_STATUS_LINE), send(b"gone", status=404),
+    send(b"error", status=500), send(b"<html>", content_type="text/html"),
+], ids=["cut-short", "chunk-cut-short", "bad-status-line", "404", "500", "no-picture"])
+def test_a_broken_cover_is_closed(local, tmp_path, answers, answer):
+    local.answer = answer
+    no_cover(local, tmp_path)
+    assert all(a.closed for a in answers)
+
+
+def test_failed_tries_log_no_credentials(local, tmp_path, caplog):
+    local.answer = send(cover(COVER_MAX + 1))
+    caplog.set_level(logging.DEBUG, logger="understeer.games")
+    no_cover(local, tmp_path)
+    assert caplog.records                              # the tries were logged
+    assert all(r.levelno == logging.DEBUG for r in caplog.records)
+    assert "Authorization" not in caplog.text and "Bearer" not in caplog.text
+    assert all("Authorization" not in headers for _p, headers in local.requests)

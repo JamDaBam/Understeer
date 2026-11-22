@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import USER_AGENT, config
+from . import USER_AGENT, config, fetch
 from .fetch import release
 
 HOME = pathlib.Path.home()
@@ -34,6 +34,12 @@ CDN_URLS = [
     "https://shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{file}",
     "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/{file}",
 ]
+# Most bytes of a cover from Steam's servers: a limit for safety with much
+# room, not a measured size
+MAX_COVER = 20 * 1024 * 1024
+# Seconds from the start of each try after which reading its cover stops;
+# the timeout of each step on the network still comes on top, see fetch
+COVER_DEADLINE = 30
 
 # Steam installs these like games, but they aren't any.
 TOOL_APPIDS = {"228980"}                            # Steamworks Common Redistributables
@@ -206,11 +212,21 @@ def find_cover(appid, cache_dir=None):
 def download_cover(appid, cache_dir, timeout=10):
     """Fetch the cover from Steam's servers into cache_dir; returns the path.
 
-    Only called when the user turned on cover downloads.
+    Only called when the user turned on cover downloads. Tries each file on
+    each server in turn; a try that fails just leads to the next one.
+
+    timeout: seconds for connecting and for each read. Each try reads up
+    to MAX_COVER bytes (a larger announced size is refused before reading)
+    and until COVER_DEADLINE seconds after it started, checked around each
+    read of the body: best effort, no total limit. Looking up the name,
+    connecting, TLS and the headers are bound only by the timeout of each
+    step, one read that blocks can end up to the timeout after the
+    deadline, and the four tries can take about four deadlines in all.
     """
     dest = pathlib.Path(cache_dir) / f"steam_{appid}.jpg"
     for file in ("library_600x900.jpg", "header.jpg"):
         for url in CDN_URLS:
+            start = time.monotonic()
             try:
                 req = urllib.request.Request(url.format(appid=appid, file=file),
                                              headers={"User-Agent": USER_AGENT})
@@ -218,11 +234,13 @@ def download_cover(appid, cache_dir, timeout=10):
                     if resp.status != 200 or not resp.headers.get(
                             "Content-Type", "").startswith("image/"):
                         continue
-                    # read() of the whole answer raises IncompleteRead when
-                    # fewer bytes come than announced
-                    data = resp.read()
-            # HTTPException: e.g. a broken status line or an answer cut short
-            except (OSError, ValueError, http.client.HTTPException) as e:
+                    # also tells a cover cut short: fewer bytes than announced
+                    data = fetch.read_body(resp, MAX_COVER,
+                                           start + COVER_DEADLINE)
+            # HTTPException: e.g. a broken status line or an answer cut short;
+            # fetch.Error: too big, too slow, or fewer bytes than announced
+            except (OSError, ValueError, http.client.HTTPException,
+                    fetch.Error) as e:
                 if isinstance(e, urllib.error.HTTPError):
                     release(e)              # it holds the answer, unread
                 log.debug("Cover %s for app %s: %s", file, appid, e)
