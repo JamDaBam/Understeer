@@ -17,10 +17,15 @@ timeout after the deadline.
 
 read_body() is that reading of the body, also for callers that open the
 answer themselves (e.g. following redirects).
+
+open_https() opens such an answer for pictures: it follows redirects, but
+only to https:// addresses (on any host), so a picture asked over TLS
+never comes without it.
 """
 import http.client
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import USER_AGENT
@@ -63,6 +68,30 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def _opener():
     return urllib.request.build_opener(_NoRedirect)
+
+
+class _HttpsRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect is followed only to an https:// address, on any host;
+    one to http://, ftp:// or anything else is refused before its address
+    is even looked up. urllib's own checks and limits (schemes, loops, at
+    most 10 redirects) stay."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # newurl is absolute here (urllib joins a relative one first), and
+        # urlsplit() gives its scheme in lower case
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            # Stopped here, the answer is never read and is ours to close.
+            # Where it points is left out of the message: the server chose it.
+            release(fp)
+            raise Error("redirect", f"a redirect away from HTTPS (HTTP {code})")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def open_https(request, timeout):
+    """urlopen() that follows redirects to https:// only (_HttpsRedirect);
+    TLS, proxies and the handling of HTTP errors are urllib's as before.
+    Raises Error("redirect") for a refused redirect."""
+    return urllib.request.build_opener(_HttpsRedirect).open(request, timeout=timeout)
 
 
 def get(url, accept, limit, timeout, deadline):

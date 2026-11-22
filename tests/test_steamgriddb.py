@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import types
+import urllib.error
 import urllib.parse
 import urllib.request
 from unittest import mock
@@ -34,7 +35,7 @@ class Response:
 
 
 def serve(answer):
-    """Patch the opening of API requests and urlopen (pictures);
+    """Patch the opening of API requests and of pictures (open_https);
     answer(request) returns a body or raises."""
     asked = []
 
@@ -44,7 +45,7 @@ def serve(answer):
     @contextlib.contextmanager
     def patch():
         with mock.patch.object(steamgriddb, "_open_api", urlopen), \
-                mock.patch.object(steamgriddb.urllib.request, "urlopen", urlopen):
+                mock.patch.object(steamgriddb, "_open_https", urlopen):
             yield
     return patch(), asked
 
@@ -259,12 +260,12 @@ def raw(data):
 
 def picture_from(server, monkeypatch, **kwargs):
     """steamgriddb.fetch() of a SteamGridDB address, served by server."""
-    real = steamgriddb.urllib.request.urlopen
+    real = steamgriddb._open_https
 
     def urlopen(req, timeout):
         assert req.full_url == "https://cdn2.steamgriddb.com/grid/a.png"
         return real(f"http://{server.address}/a.png", timeout=timeout)
-    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(steamgriddb, "_open_https", urlopen)
     return steamgriddb.fetch("https://cdn2.steamgriddb.com/grid/a.png", **kwargs)
 
 
@@ -441,15 +442,23 @@ def test_api_errors_from_a_real_answer(local, monkeypatch, code, kind):
     assert headers["Authorization"] == f"Bearer {KEY}"
 
 
-def test_a_picture_still_follows_a_redirect(local, monkeypatch):
+def test_a_picture_redirected_to_http_is_refused(local, monkeypatch, answers):
+    """Pictures follow redirects to https:// only (fetch.open_https): this
+    one, relative to the local http:// server, leads to http://. That an
+    https:// redirect is followed: test_a_picture_follows_https_redirects."""
     def answer(handler):
         if handler.path == "/a.png":
             redirect("/b.png")(handler)
         else:
             handler.send_body(PICTURE)
     local.answer = answer
-    assert picture_from(local, monkeypatch) == PICTURE
-    assert [path for path, _headers in local.requests] == ["/a.png", "/b.png"]
+    with pytest.raises(steamgriddb.Error) as e:
+        picture_from(local, monkeypatch)
+    assert (e.value.kind, str(e.value)) == (
+        "network", "a redirect away from HTTPS (HTTP 302)")
+    assert isinstance(e.value.__cause__, fetch.Error)
+    assert [path for path, _headers in local.requests] == ["/a.png"]
+    assert all(a.closed for a in answers)
 
 
 # -- size and time of API answers ----------------------------------------------
@@ -750,7 +759,7 @@ class Counted(Response):
 ], ids=["announced", "unannounced"])
 def test_a_picture_too_large_is_not_read_to_its_end(monkeypatch, length, read):
     answer = Counted(b"p" * (PIC_MAX + 5 * 1024 * 1024), length)
-    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen",
+    monkeypatch.setattr(steamgriddb, "_open_https",
                         lambda req, timeout: answer)
     with pytest.raises(steamgriddb.Error, match="picture too large"):
         steamgriddb.fetch(PIC_URL)
@@ -800,19 +809,24 @@ def test_a_broken_picture_is_closed(local, monkeypatch, answers, answer, message
 def test_a_picture_only_from_steamgriddb_over_https(monkeypatch, url):
     def refuse(*a, **k):
         raise AssertionError("asked the network")
-    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", refuse)
+    monkeypatch.setattr(steamgriddb, "_open_https", refuse)
     with pytest.raises(steamgriddb.Error, match="unexpected address") as e:
         steamgriddb.fetch(url)
     assert e.value.kind == "network"
 
 
-def test_a_redirected_picture_is_read_with_the_limits(local, other, monkeypatch, answers):
-    """Redirects stay followed, also to another host; the picture there is
-    read with the same limit, and no key goes along."""
+def test_a_picture_redirected_to_another_http_host_is_refused(
+        local, other, monkeypatch, answers):
+    """Refused before the other host is asked; its address is not in the
+    message. After an https:// redirect the limits hold:
+    test_a_picture_after_an_https_redirect_keeps_its_limits."""
     other.answer = lambda h: h.send_body(picture(PIC_MAX + 1), length=False)
     local.answer = redirect(f"http://{other.address}/b.png")
-    assert str(picture_error(local, monkeypatch)) == "picture too large"
-    (_path, headers), = other.requests
+    e = picture_error(local, monkeypatch)
+    assert str(e) == "a redirect away from HTTPS (HTTP 302)"
+    assert other.address not in str(e) + repr(e)
+    assert other.requests == []
+    (_path, headers), = local.requests
     assert "Authorization" not in headers
     assert all_closed(answers)
 
@@ -823,8 +837,8 @@ def test_a_redirected_picture_is_read_with_the_limits(local, other, monkeypatch,
 ], ids=["too-large", "cut-short"])
 def test_a_chosen_picture_that_fails_leaves_no_file(local, monkeypatch, tmp_path, answer):
     local.answer = answer
-    real = steamgriddb.urllib.request.urlopen
-    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", lambda req, timeout: real(
+    real = steamgriddb._open_https
+    monkeypatch.setattr(steamgriddb, "_open_https", lambda req, timeout: real(
         f"http://{local.address}/a.png", timeout=timeout))
     with pytest.raises(steamgriddb.Error) as e:
         steamgriddb.download(PIC_URL, tmp_path / "cover.png")
@@ -834,9 +848,113 @@ def test_a_chosen_picture_that_fails_leaves_no_file(local, monkeypatch, tmp_path
 
 def test_a_chosen_picture_is_saved(local, monkeypatch, tmp_path):
     local.answer = lambda h: h.send_body(picture(1000))
-    real = steamgriddb.urllib.request.urlopen
-    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", lambda req, timeout: real(
+    real = steamgriddb._open_https
+    monkeypatch.setattr(steamgriddb, "_open_https", lambda req, timeout: real(
         f"http://{local.address}/a.png", timeout=timeout))
     dest = steamgriddb.download(PIC_URL, tmp_path / "cover.png")
     assert dest == tmp_path / "cover.png" and dest.read_bytes() == picture(1000)
     assert [p.name for p in tmp_path.iterdir()] == ["cover.png"]   # no .part left
+
+
+# -- pictures follow redirects to https:// only ----------------------------------
+https_servers = test_fetch.https_servers   # https:// names on local servers
+lookups = test_fetch.lookups               # host names looked up
+SGDB_HOST = "cdn2.steamgriddb.com"
+
+
+def from_https(server, path="/a.png", **kwargs):
+    """steamgriddb.fetch() of a SteamGridDB https:// address; server is
+    the local one serving SGDB_HOST (see test_fetch.LoopbackHttps)."""
+    return steamgriddb.fetch(f"https://{SGDB_HOST}{path}", **kwargs)
+
+
+@pytest.mark.parametrize("location", [
+    "https://images.example/b.png", "/b.png", "HTTPS://images.example/b.png"],
+    ids=["other-host", "relative", "upper-case"])
+def test_a_picture_follows_https_redirects(https_servers, answers, location):
+    start, images = https_servers(SGDB_HOST), https_servers("images.example")
+    start.answer = lambda h: (redirect(location) if h.path == "/a.png"
+                              else lambda h: h.send_body(PICTURE))(h)
+    images.answer = lambda h: h.send_body(PICTURE)
+    assert from_https(start) == PICTURE
+    asked = start.requests + images.requests
+    assert [p for p, _h in asked] == ["/a.png", "/b.png"]
+    assert all("Authorization" not in h for _p, h in asked)
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("location", [
+    "http://never-looked-up.invalid/b.png", "ftp://never-looked-up.invalid/b.png"])
+def test_a_picture_redirected_away_from_https_is_refused(
+        https_servers, answers, lookups, location):
+    start = https_servers(SGDB_HOST)
+    start.answer = redirect(location)
+    with pytest.raises(steamgriddb.Error) as e:
+        from_https(start)
+    assert (e.value.kind, str(e.value)) == (
+        "network", "a redirect away from HTTPS (HTTP 302)")
+    assert "never-looked-up" not in str(e.value) and "never-looked-up.invalid" not in lookups
+    assert len(start.requests) == 1
+    assert all_closed(answers)
+
+
+def test_a_picture_chain_with_an_http_step_is_refused(https_servers, local, answers):
+    start, images = https_servers(SGDB_HOST), https_servers("images.example")
+    start.answer = redirect("https://images.example/b.png")
+    images.answer = redirect(f"http://{local.address}/c.png")
+    with pytest.raises(steamgriddb.Error, match="away from HTTPS"):
+        from_https(start)
+    assert len(start.requests) == len(images.requests) == 1 and local.requests == []
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("path, cause", [
+    ("/loop", lambda e: e.code == 302 and "infinite loop" in str(e)),
+    ("/404", lambda e: e.code == 404),
+    # by type: the system's text for it may be in the user's language
+    ("/away", lambda e: isinstance(e.reason, ConnectionRefusedError)),
+], ids=["loop", "404", "refused"])
+def test_a_picture_after_an_https_redirect_fails_as_before(https_servers, answers, path, cause):
+    start, images = https_servers(SGDB_HOST), https_servers("images.example")
+    start.answer = lambda h: redirect({"/loop": "/loop", "/404": "https://images.example/x",
+                                       "/away": "https://nowhere.example/x"}[h.path])(h)
+    images.answer = lambda h: h.send_body(b"gone", status=404)
+    with pytest.raises(steamgriddb.Error) as e:
+        from_https(start, path)
+    assert e.value.kind == "network" and str(e.value)
+    assert isinstance(e.value.__cause__, urllib.error.URLError) and cause(e.value.__cause__)
+    assert all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("answer, kwargs, message", [
+    (lambda h: h.send_body(picture(PIC_MAX + 1), length=False), {}, "picture too large"),
+    (trickle(picture(40), 0.2), {"deadline": 0.5}, "the download took too long"),
+], ids=["too-large", "too-slow"])
+def test_a_picture_after_an_https_redirect_keeps_its_limits(
+        https_servers, answers, answer, kwargs, message):
+    start, images = https_servers(SGDB_HOST), https_servers("images.example")
+    start.answer = redirect("https://images.example/b.png")
+    images.answer = answer
+    with pytest.raises(steamgriddb.Error) as e:
+        from_https(start, **kwargs)
+    assert (e.value.kind, str(e.value)) == ("network", message)
+    assert all_closed(answers)
+    assert images.answered.wait(10)
+
+
+def test_a_chosen_picture_redirected_to_http_leaves_no_file(https_servers, local, tmp_path):
+    start = https_servers(SGDB_HOST)
+    start.answer = redirect(f"http://{local.address}/b.png")
+    local.answer = lambda h: h.send_body(PICTURE)
+    with pytest.raises(steamgriddb.Error, match="away from HTTPS"):
+        steamgriddb.download(f"https://{SGDB_HOST}/a.png", tmp_path / "cover.png")
+    assert list(tmp_path.iterdir()) == [] and local.requests == []
+
+
+def test_a_chosen_picture_after_an_https_redirect_is_saved(https_servers, tmp_path):
+    start, images = https_servers(SGDB_HOST), https_servers("images.example")
+    start.answer = redirect("https://images.example/b.png")
+    images.answer = lambda h: h.send_body(PICTURE)
+    dest = steamgriddb.download(f"https://{SGDB_HOST}/a.png", tmp_path / "cover.png")
+    assert dest.read_bytes() == PICTURE
+    assert [p.name for p in tmp_path.iterdir()] == ["cover.png"]

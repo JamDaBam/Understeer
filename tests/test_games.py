@@ -178,7 +178,7 @@ def test_download_cover(tmp_path):
     def urlopen(req, timeout):
         assert "/805550/library_600x900.jpg" in req.full_url
         return FakeResponse(200, "image/jpeg", jpeg(600, 900))
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         path = games.download_cover("805550", tmp_path / "covers")
     assert path == tmp_path / "covers" / "steam_805550.jpg"
     assert games.image_size(path) == (600, 900)
@@ -192,13 +192,13 @@ def test_download_falls_back_to_header(tmp_path):
         if "library_600x900" in req.full_url:
             raise games.urllib.error.HTTPError(req.full_url, 404, "", {}, None)
         return FakeResponse(200, "image/jpeg", jpeg(460, 215))
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         assert games.download_cover("1161040", tmp_path) is not None
     assert len(asked) == 3          # both servers for the portrait, then header
 
 
 def test_download_without_cover(tmp_path):
-    with mock.patch.object(games.urllib.request, "urlopen",
+    with mock.patch.object(games.fetch, "open_https",
                            lambda req, timeout: FakeResponse(200, "text/html", b"<html>")):
         assert games.download_cover("1", tmp_path) is None
     assert not list(tmp_path.iterdir())
@@ -241,7 +241,7 @@ def test_a_missing_portrait_is_closed_before_the_header(tmp_path, fail):
             raise raised[-1]
         answered.append(ClosedResponse(200, "image/jpeg", jpeg(460, 215)))
         return answered[-1]
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         path = games.download_cover("1161040", tmp_path)
     assert path == tmp_path / "steam_1161040.jpg"
     assert games.image_size(path) == (460, 215)
@@ -258,7 +258,7 @@ def test_no_cover_anywhere_closes_every_answer(tmp_path, fail):
         raised.append(games.urllib.error.HTTPError(
             req.full_url, 404, "Not Found", {}, ErrorBody(fail)))
         raise raised[-1]
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         assert games.download_cover("1", tmp_path) is None
     assert len(raised) == 4 and all(e.fp.closed for e in raised)
     assert not list(tmp_path.iterdir())
@@ -321,7 +321,7 @@ def test_answers_that_are_no_picture_are_closed(tmp_path):
     def urlopen(req, timeout):
         answered.append(ClosedResponse(200, "text/html", b"<html>"))
         return answered[-1]
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         assert games.download_cover("1", tmp_path) is None
     assert len(answered) == 4 and all(r.closed for r in answered)
 
@@ -330,7 +330,7 @@ def test_another_error_while_closing_isnt_hidden(tmp_path):
     def urlopen(req, timeout):
         raise games.urllib.error.HTTPError(
             req.full_url, 404, "Not Found", {}, ErrorBody(RuntimeError("bug")))
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen), \
+    with mock.patch.object(games.fetch, "open_https", urlopen), \
             pytest.raises(RuntimeError, match="bug"):
         games.download_cover("1", tmp_path)
 
@@ -701,7 +701,7 @@ def test_a_cover_too_large_is_not_read_to_its_end(tmp_path, length, read):
     def urlopen(req, timeout):
         made.append(Counted(b"c" * (COVER_MAX + 5 * 1024 * 1024), length))
         return made[-1]
-    with mock.patch.object(games.urllib.request, "urlopen", urlopen):
+    with mock.patch.object(games.fetch, "open_https", urlopen):
         assert games.download_cover("805550", tmp_path) is None
     assert [a.read_bytes for a in made] == [read] * 4
 
@@ -762,3 +762,114 @@ def test_failed_tries_log_no_credentials(local, tmp_path, caplog):
     assert all(r.levelno == logging.DEBUG for r in caplog.records)
     assert "Authorization" not in caplog.text and "Bearer" not in caplog.text
     assert all("Authorization" not in headers for _p, headers in local.requests)
+
+
+# -- covers follow redirects to https:// only ----------------------------------
+https_servers = test_fetch.https_servers   # https:// names on local servers
+lookups = test_fetch.lookups               # host names looked up
+SHARED, CLOUDFLARE = "shared.steamstatic.com", "cdn.cloudflare.steamstatic.com"
+CDN_TRIES = [(SHARED, "/store_item_assets/steam/apps/805550/library_600x900.jpg"),
+             (CLOUDFLARE, "/steam/apps/805550/library_600x900.jpg"),
+             (SHARED, "/store_item_assets/steam/apps/805550/header.jpg"),
+             (CLOUDFLARE, "/steam/apps/805550/header.jpg")]
+
+
+def redirect(location):
+    def answer(h):
+        h.send_response(302)
+        h.send_header("Location", location)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+    return answer
+
+
+def steam_servers(https_servers):
+    """Local servers in place of Steam's two (the real CDN_URLS)."""
+    return https_servers(SHARED), https_servers(CLOUDFLARE)
+
+
+def asked(*servers):
+    return sorted(((name, p) for name, s in servers for p, _h in s.requests),
+                  key=lambda t: CDN_TRIES.index(t))
+
+
+@pytest.fixture
+def plain():
+    """A local http:// server, without touching CDN_URLS (unlike local)."""
+    s = Server()
+    yield s
+    s.close()
+
+
+def test_a_cover_redirected_to_http_comes_from_the_next_server(
+        https_servers, plain, tmp_path, answers, caplog):
+    shared, cloudflare = steam_servers(https_servers)
+    shared.answer = redirect(f"http://{plain.address}/x.jpg")
+    cloudflare.answer = send(jpeg(600, 900))
+    plain.answer = send(cover(100))
+    caplog.set_level(logging.DEBUG, logger="understeer.games")
+    path = games.download_cover("805550", tmp_path)
+    assert path.read_bytes() == jpeg(600, 900)
+    assert asked((SHARED, shared), (CLOUDFLARE, cloudflare)) == CDN_TRIES[:2]
+    assert plain.requests == []                         # never asked over http
+    assert "a redirect away from HTTPS" in caplog.text
+    assert plain.address not in caplog.text
+    assert all(r.levelno == logging.DEBUG for r in caplog.records)
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("location", [
+    "http://never-looked-up.invalid/x.jpg", "ftp://never-looked-up.invalid/x.jpg"])
+def test_covers_redirected_away_from_https_everywhere_are_no_cover(
+        https_servers, tmp_path, answers, lookups, location):
+    shared, cloudflare = steam_servers(https_servers)
+    shared.answer = cloudflare.answer = redirect(location)
+    assert games.download_cover("805550", tmp_path) is None
+    assert asked((SHARED, shared), (CLOUDFLARE, cloudflare)) == CDN_TRIES
+    assert not list(tmp_path.iterdir())
+    assert "never-looked-up.invalid" not in lookups
+    assert len(answers) == 4 and all_closed(answers)
+    assert all("Authorization" not in h
+               for s in (shared, cloudflare) for _p, h in s.requests)
+
+
+@pytest.mark.parametrize("location", ["https://images.example/x.jpg", "/elsewhere/x.jpg"],
+                         ids=["other-host", "relative"])
+def test_a_cover_follows_https_redirects(https_servers, tmp_path, answers, location):
+    shared, cloudflare = steam_servers(https_servers)
+    images = https_servers("images.example")
+    shared.answer = lambda h: (send(jpeg(600, 900)) if h.path.startswith("/elsewhere")
+                               else redirect(location))(h)
+    images.answer = send(jpeg(600, 900))
+    path = games.download_cover("805550", tmp_path)
+    assert path.read_bytes() == jpeg(600, 900)
+    assert cloudflare.requests == []
+    assert all_closed(answers)
+
+
+def test_a_cover_after_an_https_redirect_keeps_its_limit(https_servers, tmp_path, answers):
+    shared, cloudflare = steam_servers(https_servers)
+    images = https_servers("images.example")
+    shared.answer = redirect("https://images.example/x.jpg")
+    images.answer = send(cover(COVER_MAX + 1), length=False)
+    cloudflare.answer = send(jpeg(600, 900))
+    path = games.download_cover("805550", tmp_path)
+    assert path.read_bytes() == jpeg(600, 900)          # from the next try
+    assert asked((SHARED, shared), (CLOUDFLARE, cloudflare)) == CDN_TRIES[:2]
+    assert all_closed(answers)
+
+
+def test_a_cover_after_an_https_redirect_keeps_its_deadline(
+        https_servers, tmp_path, monkeypatch, answers):
+    monkeypatch.setattr(games, "COVER_DEADLINE", 0.5)
+    shared, cloudflare = steam_servers(https_servers)
+    images = https_servers("images.example")
+    shared.answer = redirect("https://images.example/x.jpg")
+    images.answer = trickle(cover(40), 0.2)
+    cloudflare.answer = send(jpeg(600, 900))
+    start = time.monotonic()
+    path = games.download_cover("805550", tmp_path)
+    assert time.monotonic() - start < 4
+    assert path.read_bytes() == jpeg(600, 900)
+    assert all_closed(answers)
+    assert images.answered.wait(10)
