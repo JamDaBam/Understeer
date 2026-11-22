@@ -208,10 +208,10 @@ def test_script_refuses_an_unready_release(metainfo):
 
 
 def test_the_shipped_metainfo():
-    """2.3.3, 2.4.0-beta.1 and 2.4.0-beta.2 are dated and ready; each beta
-    is published as a prerelease that doesn't become the latest release."""
+    """2.3.3 and 2.4.0-beta.1 to beta.3 are dated and ready; each beta is
+    published as a prerelease that doesn't become the latest release."""
     release_tag.check_metainfo("v2.3.3")
-    for beta in ("2.4.0-beta.1", "2.4.0-beta.2"):
+    for beta in ("2.4.0-beta.1", "2.4.0-beta.2", "2.4.0-beta.3"):
         release_tag.check_metainfo(f"v{beta}")
         done = run(f"v{beta}")
         assert done.returncode == 0, done.stderr
@@ -223,11 +223,10 @@ def test_the_shipped_metainfo():
 LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
-def test_the_shipped_beta_3_is_prepared_but_waits_for_its_date():
+def test_the_shipped_beta_3_is_dated_and_ready():
     """2.4.0-beta.3 is in the metainfo file as the newest release, a test
-    version with notes in English and German, but without its date: it
-    can't be released until the real day is added. The releases below it
-    stay as they are."""
+    version with notes in English and German and the day it is released.
+    The releases below it stay as they are."""
     import xml.etree.ElementTree as ET
     root = ET.parse(ROOT / "io.github.JamDaBam.Understeer.metainfo.xml").getroot()
     entries = root.findall("releases/release")
@@ -235,18 +234,19 @@ def test_the_shipped_beta_3_is_prepared_but_waits_for_its_date():
     assert versions[:4] == ["2.4.0-beta.3", "2.4.0-beta.2", "2.4.0-beta.1", "2.3.3"]
     assert len(versions) == len(set(versions))          # each exactly once
     beta3 = entries[0]
-    assert beta3.get("type") == "development" and beta3.get("date") is None
+    assert beta3.get("type") == "development"
+    assert beta3.get("date") == "2026-11-23"
     description = beta3.find("description")
     for tag in ("p", "ul/li"):
         english = [e.text for e in description.findall(tag) if e.get(LANG) is None]
         german = [e.text for e in description.findall(tag) if e.get(LANG) == "de"]
         assert english and len(english) == len(german)
         assert all(text and text.strip() for text in english + german)
-    with pytest.raises(ValueError, match="no date yet"):
-        release_tag.check_metainfo("v2.4.0-beta.3")
+    release_tag.check_metainfo("v2.4.0-beta.3")
     done = run("v2.4.0-beta.3")
-    assert done.returncode == 1 and done.stdout == ""   # nothing to publish
-    assert "has no date yet" in done.stderr
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == (
+        "version=2.4.0-beta.3\nkind=beta\nflags=--prerelease --latest=false\n")
 
 
 @pytest.fixture(scope="module")
