@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import time
+import types
 import urllib.parse
 import urllib.request
 from unittest import mock
@@ -622,16 +623,43 @@ def test_a_refused_api_redirect_is_closed(local, other, monkeypatch, answers):
     assert all_closed(answers)
 
 
+def test_json_nested_too_deeply_is_a_network_error(local, monkeypatch, answers):
+    """Whether the parser gives up on deep JSON depends on the stack it
+    has (see below), so here it is made to: the answer itself is real."""
+    parsed = []
+
+    def too_deep(text):
+        parsed.append(text)
+        raise RecursionError("maximum recursion depth exceeded")
+    # only the reference this module uses, not json.loads for everyone
+    monkeypatch.setattr(steamgriddb, "json", types.SimpleNamespace(loads=too_deep))
+    local.answer = lambda h: h.send_body(json.dumps(OK).encode())
+    e = api_error(local, monkeypatch)
+    assert (e.kind, str(e)) == ("network", "maximum recursion depth exceeded")
+    assert isinstance(e.__cause__, RecursionError)
+    assert parsed == [json.dumps(OK)]           # the whole answer came
+    (path, headers), = local.requests
+    assert path.startswith("/api/search/autocomplete/")
+    assert headers["Authorization"] == f"Bearer {KEY}"
+    assert all_closed(answers)
+
+
 @pytest.mark.parametrize("data", [
     b"[" * 100000 + b"]" * 100000,
     b'{"a":' * 100000 + b"1" + b"}" * 100000,
 ], ids=["lists", "objects"])
-def test_too_deeply_nested_api_json_is_a_network_error(local, monkeypatch, answers, data):
+def test_deeply_nested_api_json_is_a_network_error(local, monkeypatch, answers, data):
+    """Python 3.14 parses this deep JSON or gives up with RecursionError,
+    depending on the stack size of the system (e.g. ulimit -s). Either
+    way it ends as a network error: it is no answer of the API."""
     assert len(data) < MAX                     # not stopped by the limit
     local.answer = lambda h: h.send_body(data)
     e = api_error(local, monkeypatch)
     assert e.kind == "network" and str(e)
-    assert isinstance(e.__cause__, RecursionError)
+    if isinstance(e.__cause__, RecursionError):
+        pass                                   # gave up while parsing
+    else:
+        assert e.__cause__ is None and str(e) == "bad answer"   # parsed
     assert all_closed(answers)
 
 
