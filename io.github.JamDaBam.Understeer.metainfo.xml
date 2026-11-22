@@ -49,7 +49,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <release version="2.4.0-beta.3" date="2026-11-23" type="development">
+        <release version="2.4.0-beta.3" date="2026-11-22" type="development">
             <description>
                 <p>The third test version (beta) of 2.4.0. It tells beta users about newer test versions, shows the drive of a shared preset before it is sent and makes downloads from the internet more reliable and safer.</p>
                 <p xml:lang="de">Die dritte Testversion (Beta) von 2.4.0. Sie informiert Beta-Nutzer über neuere Testversionen, zeigt vor dem Senden den Antrieb eines geteilten Presets und macht Downloads aus dem Internet zuverlässiger und sicherer.</p>

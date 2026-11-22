@@ -235,7 +235,7 @@ def test_the_shipped_beta_3_is_dated_and_ready():
     assert len(versions) == len(set(versions))          # each exactly once
     beta3 = entries[0]
     assert beta3.get("type") == "development"
-    assert beta3.get("date") == "2026-11-23"
+    assert beta3.get("date") == "2026-11-22"
     description = beta3.find("description")
     for tag in ("p", "ul/li"):
         english = [e.text for e in description.findall(tag) if e.get(LANG) is None]
