@@ -35,16 +35,35 @@ class Error(Exception):
         self.kind = kind
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """An API answer that redirects is refused, not followed: urllib would
+    send the API key along to wherever it points, another host or plain
+    http:// too. Pictures (fetch()) still follow redirects; they carry
+    no key."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Stopped here, the answer is never read and is ours to close.
+        # Where it points is left out of the message: the server chose it.
+        _release(fp)
+        raise Error("network", f"the API answered with a redirect (HTTP {code})")
+
+
+def _open_api(req, timeout):
+    """urlopen() for API requests, without following redirects."""
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout)
+
+
 def _get(path, key, params=None, timeout=15):
     if not key:
         raise Error("key", "no API key")
     url = API + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {key}", "User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    # Also never copied to a redirect, should one be followed after all
+    req.add_unredirected_header("Authorization", f"Bearer {key}")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _open_api(req, timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         _release(e)                         # it holds the answer, unread
