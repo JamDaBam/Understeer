@@ -30,6 +30,8 @@ import urllib.request
 from . import USER_AGENT, fetch, releases
 
 LATEST_URL = "https://api.github.com/repos/JamDaBam/Understeer/releases/latest"
+MAX_LATEST_ANSWER = 256 * 1024       # one release is a few KB
+LATEST_DEADLINE = 20                 # seconds for reading it, see fetch
 RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
 DOWNLOAD_URL = RELEASES_URL + "/download/"
 MAX_DOWNLOAD = 200 * 1024 * 1024        # far more than an AppImage needs
@@ -111,16 +113,25 @@ def parse_latest(data, machine=None):
 
 
 def fetch_latest(timeout=10):
-    """The newest release on GitHub; raises Error."""
+    """The newest release on GitHub; raises Error.
+
+    timeout: seconds for connecting and for each read. Reading the answer
+    stops after LATEST_DEADLINE seconds from the start and at
+    MAX_LATEST_ANSWER bytes (see fetch.read_body() for what the deadline
+    doesn't cover). Redirects are followed, as urlopen does."""
     req = urllib.request.Request(LATEST_URL, headers={
         "User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
+    start = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read(256 * 1024))
+            body = fetch.read_body(resp, MAX_LATEST_ANSWER,
+                                   start + LATEST_DEADLINE)
+        data = json.loads(body)
     # URLError is an OSError; HTTPException: e.g. a broken status line or
-    # an answer cut short; RecursionError: JSON nested too deeply
+    # an answer cut short; RecursionError: JSON nested too deeply;
+    # fetch.Error: too big, too slow or cut short
     except (OSError, ValueError, http.client.HTTPException,
-            RecursionError) as e:
+            RecursionError, fetch.Error) as e:
         if isinstance(e, urllib.error.HTTPError):
             fetch.release(e)                # it holds the answer, unread
         raise Error(str(e) or type(e).__name__) from e
