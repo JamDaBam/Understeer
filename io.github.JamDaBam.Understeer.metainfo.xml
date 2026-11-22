@@ -49,6 +49,31 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <!-- PENDING: no date yet. Before tagging v2.4.0-beta.3, add
+             date="YYYY-MM-DD" of the real release day and make sure
+             appstreamcli validate passes. -->
+        <release version="2.4.0-beta.3" type="development">
+            <description>
+                <p>The third test version (beta) of 2.4.0. It tells beta users about newer test versions, shows the drive of a shared preset before it is sent and makes downloads from the internet more reliable and safer.</p>
+                <p xml:lang="de">Die dritte Testversion (Beta) von 2.4.0. Sie informiert Beta-Nutzer über neuere Testversionen, zeigt vor dem Senden den Antrieb eines geteilten Presets und macht Downloads aus dem Internet zuverlässiger und sicherer.</p>
+                <ul>
+                    <li>With Notify About Test Versions on, a test version now tells you once about each newer test version; a newer stable version still comes first</li>
+                    <li xml:lang="de">Mit „Über Testversionen informieren“ sagt dir eine Testversion jetzt einmal zu jeder neueren Testversion Bescheid; eine neuere stabile Version hat weiterhin Vorrang</li>
+                    <li>After Review in Share with Community…, the overview also shows the drive of the preset (Belt or Direct drive)</li>
+                    <li xml:lang="de">Nach „Überprüfen“ in „In Community teilen…“ zeigt die Übersicht auch den Antrieb des Presets (Riemenantrieb oder Direct Drive)</li>
+                    <li>Broken or cut-short answers from the internet are handled as network errors, so they leave no half covers behind</li>
+                    <li xml:lang="de">Kaputte oder abgebrochene Antworten aus dem Internet werden als Netzwerkfehler behandelt und hinterlassen keine halben Cover</li>
+                    <li>The update check, SteamGridDB answers and Steam covers now have a size limit, and together with SteamGridDB pictures they stop reading an answer that comes too slowly</li>
+                    <li xml:lang="de">Die Suche nach neuen Versionen, Antworten von SteamGridDB und Cover von Steam haben jetzt eine Größengrenze, und zusammen mit Bildern von SteamGridDB hören sie auf, eine Antwort zu lesen, die zu langsam kommt</li>
+                    <li>If a Steam cover is too large or too slow on one server, or is redirected away from HTTPS, Understeer now tries the next server instead</li>
+                    <li xml:lang="de">Ist ein Steam-Cover auf einem Server zu groß oder zu langsam oder wird es weg von HTTPS umgeleitet, versucht Understeer jetzt stattdessen den nächsten Server</li>
+                    <li>Your SteamGridDB API key is never sent along when SteamGridDB redirects a request; such a request is refused</li>
+                    <li xml:lang="de">Dein SteamGridDB-API-Schlüssel wird nie mitgeschickt, wenn SteamGridDB eine Anfrage umleitet; eine solche Anfrage wird abgelehnt</li>
+                    <li>Pictures and covers follow a redirect only to an HTTPS address, so a redirect never makes them load unencrypted</li>
+                    <li xml:lang="de">Bilder und Cover folgen einer Umleitung nur zu einer HTTPS-Adresse, sodass eine Umleitung sie nie unverschlüsselt laden lässt</li>
+                </ul>
+            </description>
+        </release>
         <release version="2.4.0-beta.2" date="2026-11-18" type="development">
             <description>
                 <p>The second test version (beta) of the Community Library. It makes a shared preset easier to add to the catalog.</p>
