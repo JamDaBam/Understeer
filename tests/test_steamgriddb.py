@@ -1,5 +1,9 @@
+import contextlib
 import io
 import json
+import logging
+import urllib.parse
+import urllib.request
 from unittest import mock
 
 import pytest
@@ -23,13 +27,19 @@ class Response:
 
 
 def serve(answer):
-    """Patch urlopen; answer(request) returns a body or raises."""
+    """Patch the opening of API requests and urlopen (pictures);
+    answer(request) returns a body or raises."""
     asked = []
 
     def urlopen(req, timeout):
         asked.append(req)
         return Response(answer(req))
-    return mock.patch.object(steamgriddb.urllib.request, "urlopen", urlopen), asked
+    @contextlib.contextmanager
+    def patch():
+        with mock.patch.object(steamgriddb, "_open_api", urlopen), \
+                mock.patch.object(steamgriddb.urllib.request, "urlopen", urlopen):
+            yield
+    return patch(), asked
 
 
 def http_error(code):
@@ -313,3 +323,121 @@ def test_a_whole_api_answer_is_read(local, monkeypatch):
     monkeypatch.setattr(steamgriddb, "API", f"http://{local.address}/api")
     assert steamgriddb.search("Diablo", "secret-key") == \
         [{"id": 1, "name": "Diablo", "year": None}]
+
+
+# -- the API key and redirects -------------------------------------------------
+# A second local server stands for another host: same 127.0.0.1, another
+# port, so another origin to urllib.
+KEY = "secret-key"
+
+
+@pytest.fixture
+def other():
+    s = Server()
+    yield s
+    s.close()
+
+
+def redirect(location, code=302):
+    def answer(handler):
+        handler.send_response(code)
+        handler.send_header("Location", location)
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+    return answer
+
+
+def api_at(server, monkeypatch):
+    monkeypatch.setattr(steamgriddb, "API", f"http://{server.address}/api")
+
+
+def test_the_key_goes_only_to_the_https_api():
+    assert steamgriddb.API.startswith("https://www.steamgriddb.com/")
+    patch, asked = serve(lambda req: {"success": True, "data": []})
+    with patch:
+        steamgriddb.search("Diablo", KEY)
+    req, = asked
+    assert urllib.parse.urlsplit(req.full_url)[:2] == ("https", "www.steamgriddb.com")
+    assert req.get_header("Authorization") == f"Bearer {KEY}"
+    # and not among the headers urllib copies to a redirect
+    assert "Authorization" not in req.headers
+
+
+@pytest.mark.parametrize("code", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize("where", ["other-host", "same-host"])
+def test_an_api_redirect_is_refused(local, other, monkeypatch, caplog, code, where):
+    target = (f"http://{other.address}/api/search/autocomplete/Diablo"
+              if where == "other-host" else "/api/v3/search/autocomplete/Diablo")
+    local.answer = redirect(target, code)
+    api_at(local, monkeypatch)
+    caplog.set_level(logging.DEBUG)
+    with pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.search("Diablo", KEY)
+    assert (e.value.kind, str(e.value)) == (
+        "network", f"the API answered with a redirect (HTTP {code})")
+    assert local.answered.wait(5)
+    assert len(local.requests) == 1             # not followed, also not here
+    assert other.requests == []                 # the other host got nothing
+    for text in (str(e.value), repr(e.value), caplog.text):
+        assert KEY not in text and other.address not in text
+
+
+def test_a_redirect_chain_stops_at_its_first_step(local, other, monkeypatch):
+    # /api/... -> /next -> the other host: nothing past the first answer
+    def answer(handler):
+        target = "/next" if handler.path.startswith("/api/") else \
+            f"http://{other.address}/api/x"
+        redirect(target)(handler)
+    local.answer = answer
+    api_at(local, monkeypatch)
+    with pytest.raises(steamgriddb.Error, match="redirect"):
+        steamgriddb.covers(5248, KEY)
+    (path, _headers), = local.requests          # only the first step
+    assert path.startswith("/api/grids/game/5248")
+    assert other.requests == []
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone")])
+@pytest.mark.parametrize("newurl", [
+    "http://www.steamgriddb.com/api/v2/search/autocomplete/Diablo",   # downgrade
+    "https://evil.example/api/v2/search/autocomplete/Diablo",
+])
+def test_a_redirect_from_https_is_refused_and_closed(newurl, fail):
+    # The step urllib takes for every 30x answer, without a TLS server:
+    # an https:// request redirected to plain http:// or another host
+    req = urllib.request.Request(steamgriddb.API + "/search/autocomplete/Diablo")
+    req.add_unredirected_header("Authorization", f"Bearer {KEY}")
+    body = ErrorBody(fail)
+    with pytest.raises(steamgriddb.Error) as e:
+        steamgriddb._NoRedirect().redirect_request(
+            req, body, 302, "Found", {"Location": newurl}, newurl)
+    assert e.value.kind == "network" and KEY not in str(e.value)
+    assert "evil" not in str(e.value) and "http://" not in str(e.value)
+    assert body.closed
+
+
+@pytest.mark.parametrize("code, kind", [
+    (401, "key"), (403, "key"), (404, None), (500, "network")])
+def test_api_errors_from_a_real_answer(local, monkeypatch, code, kind):
+    local.answer = lambda h: h.send_body(b'{"success": false}', status=code)
+    api_at(local, monkeypatch)
+    if kind is None:
+        assert steamgriddb.covers(5248, KEY) == []
+    else:
+        with pytest.raises(steamgriddb.Error) as e:
+            steamgriddb.search("Diablo", KEY)
+        assert e.value.kind == kind and KEY not in str(e.value)
+    assert local.answered.wait(5)
+    (_path, headers), = local.requests
+    assert headers["Authorization"] == f"Bearer {KEY}"
+
+
+def test_a_picture_still_follows_a_redirect(local, monkeypatch):
+    def answer(handler):
+        if handler.path == "/a.png":
+            redirect("/b.png")(handler)
+        else:
+            handler.send_body(PICTURE)
+    local.answer = answer
+    assert picture_from(local, monkeypatch) == PICTURE
+    assert [path for path, _headers in local.requests] == ["/a.png", "/b.png"]
