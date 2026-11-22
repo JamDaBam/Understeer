@@ -18,10 +18,17 @@ import urllib.parse
 import urllib.request
 
 from . import USER_AGENT, config
-from .fetch import release as _release   # fetch() below is this module's own
+# fetch() below is this module's own
+from .fetch import Error as _FetchError, read_body as _read_body, release as _release
 
 API = "https://www.steamgriddb.com/api/v2"
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
+# Most bytes of an answer of the API (lists of games or pictures): a limit
+# for safety with much room, not a measured size
+MAX_API_ANSWER = 4 * 1024 * 1024
+# Seconds from the start of a request after which reading its answer stops;
+# the timeout of each step on the network still comes on top, see fetch
+API_DEADLINE = 30
 
 log = logging.getLogger("understeer.steamgriddb")
 
@@ -54,6 +61,14 @@ def _open_api(req, timeout):
 
 
 def _get(path, key, params=None, timeout=15):
+    """The "data" of an API answer; raises Error.
+
+    timeout: seconds for connecting and for each read. The answer is read
+    up to MAX_API_ANSWER bytes and until API_DEADLINE seconds after the
+    request started, checked around each read of its body: best effort,
+    no total limit. Looking up the name, connecting, TLS and the headers
+    are bound only by the timeout of each step, and one read that blocks
+    can end up to the timeout after the deadline."""
     if not key:
         raise Error("key", "no API key")
     url = API + path
@@ -62,9 +77,10 @@ def _get(path, key, params=None, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     # Also never copied to a redirect, should one be followed after all
     req.add_unredirected_header("Authorization", f"Bearer {key}")
+    start = time.monotonic()
     try:
         with _open_api(req, timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            body = _read_body(resp, MAX_API_ANSWER, start + API_DEADLINE)
     except urllib.error.HTTPError as e:
         _release(e)                         # it holds the answer, unread
         if e.code in (401, 403):
@@ -72,8 +88,14 @@ def _get(path, key, params=None, timeout=15):
         if e.code == 404:
             return []                       # e.g. a game without grids
         raise Error("network", f"HTTP {e.code}") from e
-    # HTTPException: e.g. a broken status line or an answer cut short
-    except (OSError, ValueError, http.client.HTTPException) as e:
+    # HTTPException: e.g. a broken status line or an answer cut short;
+    # _FetchError: too big, too slow, or fewer bytes than announced
+    except (OSError, ValueError, http.client.HTTPException, _FetchError) as e:
+        raise Error("network", str(e) or type(e).__name__) from e
+    try:
+        data = json.loads(body.decode("utf-8"))
+    # RecursionError: JSON nested too deeply
+    except (ValueError, RecursionError) as e:
         raise Error("network", str(e) or type(e).__name__) from e
     if not isinstance(data, dict) or not data.get("success"):
         errors = data.get("errors") if isinstance(data, dict) else None
