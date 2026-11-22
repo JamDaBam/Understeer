@@ -1,14 +1,16 @@
 import contextlib
+import inspect
 import io
 import json
 import logging
+import time
 import urllib.parse
 import urllib.request
 from unittest import mock
 
 import pytest
 
-from understeer import steamgriddb
+from understeer import fetch, steamgriddb
 
 
 class Response:
@@ -18,6 +20,10 @@ class Response:
 
     def read(self, limit=None):
         return self.body if limit is None else self.body[:limit]
+
+    def read1(self, limit):                    # as API answers are read
+        piece, self.body = self.body[:limit], self.body[limit:]
+        return piece
 
     def __enter__(self):
         return self
@@ -300,18 +306,20 @@ def test_a_picture_too_large_stays_refused(local, monkeypatch):
         picture_from(local, monkeypatch, limit=10)
 
 
-@pytest.mark.parametrize("answer", [
-    raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b'{"success": true'),
-    raw(b"NONSENSE\r\n\r\n"),
+@pytest.mark.parametrize("answer, cause", [
+    # fewer bytes than announced: told by fetch.read_body(), see there
+    (raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b'{"success": true'),
+     fetch.Error),
+    (raw(b"NONSENSE\r\n\r\n"), steamgriddb.http.client.HTTPException),
 ], ids=["cut-short", "bad-status-line"])
-def test_a_broken_api_answer_is_a_network_error(local, monkeypatch, answer):
+def test_a_broken_api_answer_is_a_network_error(local, monkeypatch, answer, cause):
     local.answer = answer
     monkeypatch.setattr(steamgriddb, "API", f"http://{local.address}/api")
     with pytest.raises(steamgriddb.Error) as e:
         steamgriddb.search("Diablo", "secret-key")
     assert e.value.kind == "network" and str(e.value)
     assert "secret-key" not in str(e.value)
-    assert isinstance(e.value.__cause__, steamgriddb.http.client.HTTPException)
+    assert isinstance(e.value.__cause__, cause)
     (path, headers), = local.requests
     assert headers["Authorization"] == "Bearer secret-key"     # sent as before
     assert local.answered.wait(5)
@@ -441,3 +449,193 @@ def test_a_picture_still_follows_a_redirect(local, monkeypatch):
     local.answer = answer
     assert picture_from(local, monkeypatch) == PICTURE
     assert [path for path, _headers in local.requests] == ["/a.png", "/b.png"]
+
+
+# -- size and time of API answers ----------------------------------------------
+import test_fetch  # noqa: E402
+
+answers = test_fetch.answers       # every HTTP answer opened, see there
+MAX = 4 * 1024 * 1024
+OK = {"success": True, "data": [{"id": 1, "name": "Diablo"}]}
+
+
+def ok_json(size=None):
+    """A good answer of a search, padded with spaces to size bytes."""
+    data = json.dumps(OK).encode()
+    return data if size is None else data[:-1] + b" " * (size - len(data)) + b"}"
+
+
+def chunked(*pieces):
+    def answer(handler):
+        handler.wfile.write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+        for piece in pieces:
+            handler.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
+        handler.wfile.write(b"0\r\n\r\n")
+    return answer
+
+
+def trickle(data, every):
+    def answer(handler):
+        handler.send_response(200)
+        handler.send_header("Content-Length", str(len(data)))
+        handler.end_headers()
+        for i in range(len(data)):
+            handler.wfile.write(data[i:i + 1])
+            handler.wfile.flush()
+            time.sleep(every)
+    return answer
+
+
+def api_error(server, monkeypatch):
+    api_at(server, monkeypatch)
+    with pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.search("Diablo", KEY)
+    assert KEY not in str(e.value) and KEY not in repr(e.value)
+    return e.value
+
+
+def all_closed(answers):
+    return bool(answers) and all(a.closed for a in answers)
+
+
+def test_the_limits_of_api_answers():
+    assert steamgriddb.MAX_API_ANSWER == MAX == 4194304
+    assert steamgriddb.API_DEADLINE == 30
+    assert inspect.signature(steamgriddb._get).parameters["timeout"].default == 15
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(json.dumps(OK).encode()),
+    lambda h: h.send_body(json.dumps(OK).encode(), length=False),
+    chunked(json.dumps(OK).encode()[:10], json.dumps(OK).encode()[10:]),
+], ids=["length", "no-length", "chunked"])
+def test_a_good_api_answer_is_read_and_closed(local, monkeypatch, answers, answer):
+    local.answer = answer
+    api_at(local, monkeypatch)
+    assert steamgriddb.search("Diablo", KEY) == [{"id": 1, "name": "Diablo", "year": None}]
+    (_path, headers), = local.requests
+    assert headers["Authorization"] == f"Bearer {KEY}"
+    assert all_closed(answers)
+
+
+def test_a_cover_list_is_read(local, monkeypatch, answers):
+    local.answer = lambda h: h.send_body(json.dumps({"success": True, "data": [
+        {"url": "https://cdn2.steamgriddb.com/grid/a.png", "author": {"name": "Ann"}}]}).encode())
+    api_at(local, monkeypatch)
+    assert steamgriddb.covers(5248, KEY) == [{
+        "url": "https://cdn2.steamgriddb.com/grid/a.png",
+        "thumb": "https://cdn2.steamgriddb.com/grid/a.png", "author": "Ann"}]
+    assert local.requests[0][0].startswith("/api/grids/game/5248?")
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
+def test_an_api_answer_of_exactly_the_limit_is_read(local, monkeypatch, length):
+    local.answer = lambda h: h.send_body(ok_json(MAX), length=length)
+    api_at(local, monkeypatch)
+    assert steamgriddb.search("Diablo", KEY) == [{"id": 1, "name": "Diablo", "year": None}]
+
+
+@pytest.mark.parametrize("answer, message", [
+    (lambda h: h.send_body(ok_json(MAX + 1)), f"{MAX + 1} bytes announced"),
+    (lambda h: h.send_body(ok_json(MAX + 1), length=False), f"more than {MAX} bytes"),
+    (chunked(*[b" " * 65536] * 64 + [b"x"]), f"more than {MAX} bytes"),
+], ids=["announced", "unannounced", "chunked"])
+def test_an_api_answer_too_big_is_refused(local, monkeypatch, answers, answer, message):
+    local.answer = answer
+    e = api_error(local, monkeypatch)
+    assert (e.kind, str(e)) == ("network", message)
+    assert isinstance(e.__cause__, fetch.Error)
+    assert all_closed(answers)
+
+
+def test_too_big_an_api_answer_is_not_read_to_its_end():
+    """Of 5 MiB without a length, one byte past the limit is read."""
+    read = []
+    real = Response.read1
+
+    def counting(self, limit):
+        piece = real(self, limit)
+        read.append(len(piece))
+        return piece
+    patch, _asked = serve(lambda req: b" " * (5 * 1024 * 1024))
+    with mock.patch.object(Response, "read1", counting), patch, \
+            pytest.raises(steamgriddb.Error, match=f"more than {MAX} bytes"):
+        steamgriddb.search("Diablo", KEY)
+    assert sum(read) == MAX + 1
+
+
+def test_a_slow_api_answer_within_the_deadline_is_read(local, monkeypatch):
+    monkeypatch.setattr(steamgriddb, "API_DEADLINE", 30)
+    local.answer = trickle(json.dumps(OK, separators=(",", ":")).encode(), 0.01)
+    api_at(local, monkeypatch)
+    assert steamgriddb.search("Diablo", KEY) == [{"id": 1, "name": "Diablo", "year": None}]
+
+
+def test_a_trickling_api_answer_stops_at_the_deadline(local, monkeypatch, answers):
+    """A byte each 0.2 s would take more than 7 s in all; the deadline
+    stops it after about 0.5 s (plus up to one read)."""
+    monkeypatch.setattr(steamgriddb, "API_DEADLINE", 0.5)
+    local.answer = trickle(json.dumps(OK, separators=(",", ":")).encode(), 0.2)
+    start = time.monotonic()
+    e = api_error(local, monkeypatch)
+    assert (e.kind, str(e)) == ("network", "the download took too long")
+    assert time.monotonic() - start < 4
+    assert all_closed(answers)
+    assert local.answered.wait(10)
+
+
+@pytest.mark.parametrize("answer, cause", [
+    (raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + json.dumps(OK).encode()),
+     fetch.Error),
+    (raw(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n100\r\n{\"su"),
+     steamgriddb.http.client.IncompleteRead),
+    (raw(b"NONSENSE\r\n\r\n"), steamgriddb.http.client.BadStatusLine),
+], ids=["cut-short", "chunk-cut-short", "bad-status-line"])
+def test_a_broken_api_answer_is_closed(local, monkeypatch, answers, answer, cause):
+    """Cut short also when the JSON that came is whole: not taken."""
+    local.answer = answer
+    e = api_error(local, monkeypatch)
+    assert e.kind == "network" and str(e) and isinstance(e.__cause__, cause)
+    assert all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("code, kind", [
+    (401, "key"), (403, "key"), (404, None), (500, "network")])
+def test_an_api_http_error_is_closed(local, monkeypatch, answers, code, kind):
+    local.answer = lambda h: h.send_body(b'{"success": false}', status=code)
+    api_at(local, monkeypatch)
+    if kind is None:
+        assert steamgriddb.search("Diablo", KEY) == []
+    else:
+        with pytest.raises(steamgriddb.Error) as e:
+            steamgriddb.search("Diablo", KEY)
+        assert e.value.kind == kind and KEY not in str(e.value)
+    assert all_closed(answers)
+
+
+def test_a_refused_api_redirect_is_closed(local, other, monkeypatch, answers):
+    local.answer = redirect(f"http://{other.address}/api/x")
+    e = api_error(local, monkeypatch)
+    assert (e.kind, str(e)) == ("network", "the API answered with a redirect (HTTP 302)")
+    assert other.requests == []
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("data", [
+    b"[" * 100000 + b"]" * 100000,
+    b'{"a":' * 100000 + b"1" + b"}" * 100000,
+], ids=["lists", "objects"])
+def test_too_deeply_nested_api_json_is_a_network_error(local, monkeypatch, answers, data):
+    assert len(data) < MAX                     # not stopped by the limit
+    local.answer = lambda h: h.send_body(data)
+    e = api_error(local, monkeypatch)
+    assert e.kind == "network" and str(e)
+    assert isinstance(e.__cause__, RecursionError)
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("data", [b"", b"not json", b"\xff\xfe", b"[]", b"null"])
+def test_no_json_is_still_a_network_error(local, monkeypatch, data):
+    local.answer = lambda h: h.send_body(data)
+    assert api_error(local, monkeypatch).kind == "network"
