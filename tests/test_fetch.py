@@ -336,15 +336,19 @@ def test_the_stable_look_doesnt_use_it(monkeypatch):
     monkeypatch.setattr(fetch, "get", refuse)
 
     class Answer:
+        headers = {}
+        rest = json.dumps({"tag_name": "v9.0.0", "prerelease": False,
+                           "draft": False}).encode()
+
         def __enter__(self):
             return self
 
         def __exit__(self, *a):
             return False
 
-        def read(self, limit):
-            return json.dumps({"tag_name": "v9.0.0", "prerelease": False,
-                               "draft": False}).encode()
+        def read1(self, limit):
+            piece, self.rest = self.rest[:limit], self.rest[limit:]
+            return piece
 
     seen = []
     monkeypatch.setattr(updates.urllib.request, "urlopen",
@@ -460,3 +464,141 @@ def test_release_doesnt_hide_other_errors():
 def test_no_hardware_here():
     assert not {"device", "inputs", "leds", "display", "capabilities"} \
         & set(vars(fetch))
+
+
+# -- read_body(), on its own ---------------------------------------------------
+
+class Body:
+    """An open answer: hands out pieces, records what read1 was asked;
+    a piece that is an exception is raised."""
+
+    def __init__(self, pieces, length=None):
+        self.pieces = list(pieces)
+        self.headers = {} if length is None else {"Content-Length": length}
+        self.asked = []
+
+    def read1(self, size):
+        self.asked.append(size)
+        if not self.pieces:
+            return b""
+        piece = self.pieces.pop(0)
+        if isinstance(piece, BaseException):
+            raise piece
+        assert len(piece) <= size, "more than read1 was asked for"
+        return piece
+
+
+class Clock:
+    """A clock that moves on by step at each look."""
+
+    def __init__(self, step=0.0):
+        self.now, self.step = 0.0, step
+
+    def __call__(self):
+        self.now += self.step
+        return self.now
+
+
+def read(body, limit=10, deadline_at=100, clock=None):
+    return fetch.read_body(body, limit, deadline_at, clock or Clock())
+
+
+def read_error(body, **kwargs):
+    with pytest.raises(fetch.Error) as e:
+        read(body, **kwargs)
+    return e.value
+
+
+@pytest.mark.parametrize("length", [None, "9"], ids=["no-length", "length"])
+def test_read_body_below_the_limit(length):
+    assert read(Body([b"abc", b"def", b"ghi"], length)) == b"abcdefghi"
+
+
+@pytest.mark.parametrize("length", [None, "10"], ids=["no-length", "length"])
+def test_read_body_exactly_the_limit(length):
+    body = Body([b"x" * 10], length)
+    assert read(body) == b"x" * 10
+    assert body.asked == [11, 1]       # one byte more is asked, none comes
+
+
+@pytest.mark.parametrize("length", [None, "", "abc", "-5", "1e3", " 5"],
+                         ids=["none", "empty", "text", "negative", "float", "space"])
+def test_read_body_over_the_limit_without_a_usable_length(length):
+    body = Body([b"x" * 6, b"x" * 5, b"x" * 1000], length)
+    e = read_error(body)
+    assert (e.kind, str(e)) == ("too_big", "more than 10 bytes")
+    # 6 + 5 = 11 bytes read: never more than one past the limit is asked
+    assert body.asked == [11, 5]
+
+
+def test_read_body_refuses_an_announced_size_before_reading():
+    body = Body([b"x" * 5], "11")
+    e = read_error(body)
+    assert (e.kind, str(e)) == ("too_big", "11 bytes announced")
+    assert body.asked == []
+
+
+def test_read_body_cut_short():
+    e = read_error(Body([b"abc"], "8"))
+    assert (e.kind, str(e)) == ("offline", "3 of 8 bytes came")
+
+
+def test_read_body_of_nothing():
+    assert read(Body([], "0")) == b""
+    assert read(Body([])) == b""
+
+
+@pytest.mark.parametrize("error", [
+    http.client.IncompleteRead(b"ab", 5), ConnectionResetError("reset"),
+    TimeoutError("timed out"),
+])
+def test_read_body_passes_errors_of_the_connection_on(error):
+    with pytest.raises(type(error)):
+        read(Body([b"ab", error]))
+
+
+def test_read_body_stops_at_the_deadline():
+    # each look at the clock is 1 s later; reading may go until 3.5 s:
+    # 1 read 2, 3 read 4 -> past it, stopped with 8 pieces still to come
+    body = Body([b"a"] * 10)
+    e = read_error(body, deadline_at=3.5, clock=Clock(step=1))
+    assert (e.kind, str(e)) == ("timeout", "the download took too long")
+    assert len(body.asked) == 2 and len(body.pieces) == 8
+
+
+def test_read_body_past_the_deadline_reads_nothing():
+    body = Body([b"a"])
+    assert read_error(body, deadline_at=0.5, clock=Clock(step=1)).kind == "timeout"
+    assert body.asked == []
+
+
+def test_read_body_just_before_the_deadline():
+    # looks at 1, read "ab", 2; at 3 the end is read: 3 is not past 3
+    clock = Clock(step=1)
+    assert read(Body([b"ab"]), deadline_at=3, clock=clock) == b"ab"
+    assert clock.now == 3
+
+
+def test_read_body_of_a_real_chunked_answer(server):
+    def chunked(h):
+        h.send_response(200)
+        h.send_header("Transfer-Encoding", "chunked")
+        h.end_headers()
+        h.wfile.write(b"3\r\nabc\r\n4\r\ndefg\r\n0\r\n\r\n")
+    server.answer = chunked
+    import urllib.request
+    with urllib.request.urlopen(server.url, timeout=5) as response:
+        assert fetch.read_body(response, 7, time.monotonic() + 5) == b"abcdefg"
+
+
+def test_read_body_of_a_real_chunked_answer_cut_short(server):
+    def chunked(h):
+        h.send_response(200)
+        h.send_header("Transfer-Encoding", "chunked")
+        h.end_headers()
+        h.wfile.write(b"10\r\nabc")
+    server.answer = chunked
+    import urllib.request
+    with urllib.request.urlopen(server.url, timeout=5) as response, \
+            pytest.raises(http.client.IncompleteRead):
+        fetch.read_body(response, 100, time.monotonic() + 5)

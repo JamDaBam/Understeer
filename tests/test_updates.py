@@ -1,9 +1,11 @@
 import http.client
+import inspect
 import io
 import json
 import os
 import pathlib
 import socket
+import time
 
 import pytest
 
@@ -247,14 +249,18 @@ def test_a_beta_never_reaches_the_banner(monkeypatch):
                            "assets": release()["assets"]}).encode()
 
         class Answer:
+            headers = {}
+            rest = body
+
             def __enter__(self):
                 return self
 
             def __exit__(self, *a):
                 return False
 
-            def read(self, limit):
-                return body
+            def read1(self, limit):
+                piece, self.rest = self.rest[:limit], self.rest[limit:]
+                return piece
 
         monkeypatch.setattr(updates.urllib.request, "urlopen",
                             lambda req, timeout: Answer())
@@ -286,14 +292,18 @@ def test_is_newer(latest, current, expected):
 
 def test_fetch_latest(monkeypatch):
     class Answer:
+        headers = {}
+        rest = json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()
+
         def __enter__(self):
             return self
 
         def __exit__(self, *a):
             return False
 
-        def read(self, limit):
-            return json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()
+        def read1(self, limit):
+            piece, self.rest = self.rest[:limit], self.rest[limit:]
+            return piece
 
     seen = {}
 
@@ -337,6 +347,9 @@ def test_a_saved_beta_is_no_update(monkeypatch):
 # -- fetch_latest with broken answers: always updates.Error -----------------
 
 class _Answer:
+    """An answer without Content-Length; read1 hands out its body."""
+    headers = {}
+
     def __init__(self, body=b"", error=None):
         self.body, self.error = body, error
 
@@ -346,10 +359,11 @@ class _Answer:
     def __exit__(self, *a):
         return False
 
-    def read(self, limit):
+    def read1(self, limit):
         if self.error is not None:
             raise self.error
-        return self.body[:limit]
+        piece, self.body = self.body[:limit], self.body[limit:]
+        return piece
 
 
 def _github(monkeypatch, answer=None, error=None):
@@ -575,3 +589,139 @@ def test_a_redirect_is_still_followed(local, tmp_path):
     assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
     assert [p for p, _h in local.requests] == ["/Understeer.AppImage",
                                               "/stored/Understeer.AppImage"]
+
+
+# -- fetch_latest from a real server on 127.0.0.1: size and time -------------
+import test_fetch  # noqa: E402
+
+answers = test_fetch.answers       # every HTTP answer opened, see there
+
+
+def latest_json(size=None):
+    """The answer of a stable release, padded with spaces to size bytes."""
+    body = json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()
+    return body if size is None else body[:-1] + b" " * (size - len(body)) + b"}"
+
+
+def latest_from(server, monkeypatch):
+    monkeypatch.setattr(updates, "LATEST_URL", f"http://{server.address}/latest")
+    return updates.fetch_latest()
+
+
+def latest_error(server, monkeypatch):
+    with pytest.raises(updates.Error) as e:
+        latest_from(server, monkeypatch)
+    return e.value
+
+
+def test_the_limits_of_the_stable_look():
+    assert updates.MAX_LATEST_ANSWER == 262144
+    assert updates.LATEST_DEADLINE == 20
+    assert inspect.signature(updates.fetch_latest).parameters["timeout"].default == 10
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(latest_json()),
+    lambda h: h.send_body(latest_json(), length=False),
+    lambda h: (h.send_response(200), h.send_header("Transfer-Encoding", "chunked"),
+               h.end_headers(), h.wfile.write(b"%x\r\n%s\r\n0\r\n\r\n"
+                                              % (len(latest_json()), latest_json()))),
+], ids=["length", "no-length", "chunked"])
+def test_a_whole_latest_answer_is_read_and_closed(local, monkeypatch, answers, answer):
+    local.answer = answer
+    assert latest_from(local, monkeypatch)["version"] == "9.0.0"
+    assert len(answers) == 1 and answers[0].closed
+
+
+@pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
+def test_a_latest_answer_of_exactly_the_limit_is_read(local, monkeypatch, length):
+    local.answer = lambda h: h.send_body(latest_json(262144), length=length)
+    assert latest_from(local, monkeypatch)["version"] == "9.0.0"
+
+
+@pytest.mark.parametrize("length, message", [
+    (True, "262145 bytes announced"), (False, "more than 262144 bytes"),
+], ids=["length", "no-length"])
+def test_a_latest_answer_too_big_is_refused(local, monkeypatch, answers, length, message):
+    """Not cut at the limit and then taken for broken JSON."""
+    local.answer = lambda h: h.send_body(latest_json(262145), length=length)
+    e = latest_error(local, monkeypatch)
+    assert str(e) == message and isinstance(e.__cause__, updates.fetch.Error)
+    assert len(answers) == 1 and answers[0].closed
+
+
+def test_a_latest_answer_cut_short_is_refused(local, monkeypatch, answers):
+    def short(h):
+        h.send_response(200)
+        h.send_header("Content-Length", "1000")
+        h.end_headers()
+        h.wfile.write(latest_json())
+        h.close_connection = True
+    local.answer = short
+    e = latest_error(local, monkeypatch)
+    assert str(e) == f"{len(latest_json())} of 1000 bytes came"
+    assert len(answers) == 1 and answers[0].closed
+
+
+def trickle(body, every=0.2):
+    def answer(h):
+        h.send_response(200)
+        h.send_header("Content-Length", str(len(body)))
+        h.end_headers()
+        for i in range(len(body)):
+            h.wfile.write(body[i:i + 1])
+            h.wfile.flush()
+            time.sleep(every)
+    return answer
+
+
+def test_a_trickling_latest_answer_stops_at_the_deadline(local, monkeypatch, answers):
+    """Without it, the whole answer (a byte each 0.2 s) would be waited for."""
+    monkeypatch.setattr(updates, "LATEST_DEADLINE", 0.5)
+    local.answer = trickle(latest_json())
+    start = time.monotonic()
+    e = latest_error(local, monkeypatch)
+    # one read of the socket (here 0.2 s) can go past the deadline
+    assert str(e) == "the download took too long"
+    assert time.monotonic() - start < 0.5 + 0.6
+    assert len(answers) == 1 and answers[0].closed
+    assert local.answered.wait(5)
+
+
+def test_a_slow_latest_answer_within_the_deadline_is_read(local, monkeypatch):
+    monkeypatch.setattr(updates, "LATEST_DEADLINE", 10)
+    body = json.dumps({"tag_name": "v9.0.0", **STABLE}, separators=(",", ":")).encode()
+    local.answer = trickle(body, every=0.01)
+    assert latest_from(local, monkeypatch)["version"] == "9.0.0"
+
+
+def test_the_latest_answer_still_follows_a_redirect(local, monkeypatch, answers):
+    def answer(h):
+        if h.path == "/latest":
+            h.send_response(302)
+            h.send_header("Location", "/moved")
+            h.send_header("Content-Length", "0")
+            h.end_headers()
+        else:
+            h.send_body(latest_json())
+    local.answer = answer
+    assert latest_from(local, monkeypatch)["version"] == "9.0.0"
+    assert [path for path, _headers in local.requests] == ["/latest", "/moved"]
+    assert answers and all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("status", [403, 404, 500])
+def test_a_latest_http_error_is_closed(local, monkeypatch, answers, status):
+    local.answer = lambda h: h.send_body(b"error", status)
+    e = latest_error(local, monkeypatch)
+    assert str(e).startswith(f"HTTP Error {status}")
+    assert isinstance(e.__cause__, updates.urllib.error.HTTPError)
+    assert len(answers) == 1 and answers[0].closed
+
+
+def test_latest_reading_errors_stay_update_errors(local, monkeypatch, answers):
+    local.answer = lambda h: h.wfile.write(
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\nabc")
+    e = latest_error(local, monkeypatch)
+    assert isinstance(e.__cause__, http.client.IncompleteRead) and str(e)
+    assert len(answers) == 1 and answers[0].closed
