@@ -2,10 +2,13 @@
 127.0.0.1: nothing goes to the internet."""
 import http.client
 import http.server
+import io
 import json
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -602,3 +605,206 @@ def test_read_body_of_a_real_chunked_answer_cut_short(server):
     with urllib.request.urlopen(server.url, timeout=5) as response, \
             pytest.raises(http.client.IncompleteRead):
         fetch.read_body(response, 100, time.monotonic() + 5)
+
+
+# -- open_https(): redirects to https:// only (pictures) ----------------------
+
+class LoopbackHttps(urllib.request.HTTPHandler):
+    """Serves https:// addresses from local plain-HTTP servers, for tests.
+    Only the way to the server changes (no TLS here; that stays urllib's,
+    see test_open_https_checks_certificates); redirects, HTTP errors and
+    everything else run through urllib as with real servers."""
+    handler_order = 400                     # before urllib's HTTPSHandler
+
+    def __init__(self, hosts):
+        super().__init__()
+        self.hosts = hosts                  # host name -> local port
+
+    def https_open(self, req):
+        def connect(host, timeout=None, **kwargs):
+            # host names are the same in any case, as for DNS; one without
+            # a server gets a port nobody listens on: refused on connecting
+            port = self.hosts.get(host.lower()) or self.closed_port()
+            return http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+        return self.do_open(connect, req)
+
+    @staticmethod
+    def closed_port():
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+
+@pytest.fixture
+def https_servers(monkeypatch):
+    """serve(name): a local Server for https://name/ in open_https()."""
+    hosts, made = {}, []
+    real = urllib.request.build_opener
+    monkeypatch.setattr(fetch.urllib.request, "build_opener",
+                        lambda *handlers: real(*handlers, LoopbackHttps(hosts)))
+
+    def serve(name):
+        s = Server()
+        hosts[name] = s.httpd.server_port
+        made.append(s)
+        return s
+    yield serve
+    for s in made:
+        s.close()
+
+
+@pytest.fixture
+def lookups(monkeypatch):
+    """Every host name looked up while the test runs."""
+    asked = []
+    real_getaddrinfo, real_gethostbyname = socket.getaddrinfo, socket.gethostbyname
+
+    def getaddrinfo(host, *a, **k):
+        asked.append(host)
+        return real_getaddrinfo(host, *a, **k)
+
+    def gethostbyname(host):
+        asked.append(host)
+        return real_gethostbyname(host)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
+    return asked
+
+
+def open_https_body(url):
+    with fetch.open_https(urllib.request.Request(url), 5) as response:
+        return response.geturl(), response.read()
+
+
+@pytest.mark.parametrize("location, final", [
+    ("https://other.example/b.json", "https://other.example/b.json"),
+    ("/b.json", "https://start.example/b.json"),                    # relative
+    ("//other.example/b.json", "https://other.example/b.json"),     # same scheme
+    ("HTTPS://Other.Example/b.json", "https://Other.Example/b.json"),  # upper case
+])
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_open_https_follows_https_redirects(https_servers, answers, location, final, status):
+    start, other = https_servers("start.example"), https_servers("other.example")
+
+    def answer(h):
+        if h.path == "/a.json":
+            redirect_to(status, location)(h)
+        else:
+            h.send_body(BODY)
+    start.answer = other.answer = answer
+    assert open_https_body("https://start.example/a.json") == (final, BODY)
+    asked = start.requests + other.requests
+    assert [p for p, _h in asked] == ["/a.json", "/b.json"]
+    assert all("Authorization" not in h for _p, h in asked)
+    assert answers and all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("location", [
+    "http://never-looked-up.invalid/b.json", "HTTP://never-looked-up.invalid/b.json",
+    "ftp://never-looked-up.invalid/b.json",
+])
+def test_open_https_refuses_other_redirects_before_any_lookup(
+        https_servers, answers, lookups, location):
+    start = https_servers("start.example")
+    start.answer = redirect_to(302, location)
+    with pytest.raises(fetch.Error) as e:
+        open_https_body("https://start.example/a.json")
+    assert (e.value.kind, str(e.value)) == ("redirect", "a redirect away from HTTPS (HTTP 302)")
+    assert "never-looked-up" not in str(e.value) + repr(e.value)
+    assert "never-looked-up.invalid" not in lookups
+    assert len(start.requests) == 1
+    assert answers and all(a.closed for a in answers)
+
+
+def test_open_https_refuses_a_relative_redirect_from_http(server, answers):
+    """The rule is about where a redirect leads: from an http:// start, a
+    relative one leads to http:// as well."""
+    server.answer = redirect_to(302, "/other.json")
+    with pytest.raises(fetch.Error, match="away from HTTPS"):
+        open_https_body(server.url)
+    assert [p for p, _h in server.requests] == ["/file.json"]
+    assert answers and all(a.closed for a in answers)
+
+
+def test_open_https_stops_a_chain_at_its_insecure_step(https_servers, server, answers):
+    start, other = https_servers("start.example"), https_servers("other.example")
+    start.answer = redirect_to(302, "https://other.example/b.json")
+    other.answer = redirect_to(302, server.url)                 # to http://
+    with pytest.raises(fetch.Error, match="away from HTTPS"):
+        open_https_body("https://start.example/a.json")
+    assert len(start.requests) == len(other.requests) == 1
+    assert server.requests == []
+    assert answers and all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("path", ["/loop", "/chain/0"], ids=["loop", "too-many"])
+def test_open_https_keeps_urllibs_redirect_limits(https_servers, answers, path):
+    start = https_servers("start.example")
+
+    def answer(h):
+        if h.path == "/loop":
+            redirect_to(302, "/loop")(h)
+        else:
+            redirect_to(302, f"/chain/{int(h.path.rsplit('/', 1)[1]) + 1}")(h)
+    start.answer = answer
+    with pytest.raises(urllib.error.HTTPError) as e:
+        open_https_body(f"https://start.example{path}")
+    e.value.close()
+    assert "infinite loop" in str(e.value)
+    assert len(start.requests) <= 11
+    assert answers and all(a.closed for a in answers)
+
+
+def test_open_https_after_a_redirect_http_and_connection_errors_stay(https_servers, answers):
+    start, other = https_servers("start.example"), https_servers("other.example")
+    start.answer = lambda h: redirect_to(302, {
+        "/404": "https://other.example/gone", "/away": "https://nowhere.example/x"}[h.path])(h)
+    other.answer = lambda h: h.send_body(b"gone", 404)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        open_https_body("https://start.example/404")
+    e.value.close()
+    assert e.value.code == 404
+    with pytest.raises(urllib.error.URLError) as e:
+        open_https_body("https://start.example/away")
+    assert isinstance(e.value.reason, ConnectionRefusedError)
+    assert answers and all(a.closed for a in answers)
+
+
+class ClosingBody(io.BytesIO):
+    def __init__(self, fail=None):
+        super().__init__(b"")
+        self.fail = fail
+
+    def close(self):
+        super().close()
+        if self.fail:
+            raise self.fail
+
+
+@pytest.mark.parametrize("fail", [None, OSError("gone"),
+                                  ValueError("I/O operation on closed file")])
+def test_a_refused_redirect_is_closed_even_if_closing_fails(fail):
+    req = urllib.request.Request("https://start.example/a.json")
+    body = ClosingBody(fail)
+    with pytest.raises(fetch.Error, match="away from HTTPS"):
+        fetch._HttpsRedirect().redirect_request(
+            req, body, 302, "Found", {}, "http://other.example/b.json")
+    assert body.closed
+
+
+def test_open_https_checks_certificates():
+    """open_https() uses urllib's HTTPS as it is: certificates and host
+    names checked, as for fetch.get()."""
+    import ssl
+    opener = urllib.request.build_opener(fetch._HttpsRedirect)
+    assert any(isinstance(h, fetch._HttpsRedirect) for h in opener.handlers)
+    https = [h for h in opener.handlers if isinstance(h, urllib.request.HTTPSHandler)]
+    assert https
+    context = https[0]._context      # None, or Python's default context
+    if context is not None:
+        assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+
+
+def test_open_https_fails_on_a_server_without_tls(server):
+    with pytest.raises(urllib.error.URLError):
+        open_https_body(f"https://{server.address}/file.json")

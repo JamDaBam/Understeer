@@ -19,7 +19,8 @@ import urllib.request
 
 from . import USER_AGENT, config
 # fetch() below is this module's own
-from .fetch import Error as _FetchError, read_body as _read_body, release as _release
+from .fetch import Error as _FetchError, open_https as _open_https, \
+    read_body as _read_body, release as _release
 
 API = "https://www.steamgriddb.com/api/v2"
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
@@ -182,7 +183,8 @@ def fetch(url, timeout=20, limit=20 * 1024 * 1024, deadline=120):
     each read of its body: best effort, no total limit. Looking up the
     name, connecting, TLS and the headers are bound only by the timeout of
     each step, and one read that blocks can end up to the timeout after
-    the deadline. Redirects are followed, as urlopen does."""
+    the deadline. Redirects are followed to https:// only, on any host
+    (fetch.open_https); one away from https is a network error."""
     host = urllib.parse.urlparse(url).hostname or ""
     if urllib.parse.urlparse(url).scheme != "https" or not (
             host == "steamgriddb.com" or host.endswith(".steamgriddb.com")):
@@ -190,7 +192,7 @@ def fetch(url, timeout=20, limit=20 * 1024 * 1024, deadline=120):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     start = time.monotonic()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _open_https(req, timeout) as resp:
             # also tells a picture cut short: fewer bytes than announced
             return _read_body(resp, limit, start + deadline)
     except _FetchError as e:

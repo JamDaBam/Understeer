@@ -222,6 +222,8 @@ def download_cover(appid, cache_dir, timeout=10):
     connecting, TLS and the headers are bound only by the timeout of each
     step, one read that blocks can end up to the timeout after the
     deadline, and the four tries can take about four deadlines in all.
+    Redirects are followed to https:// only (fetch.open_https); a try
+    redirected elsewhere fails like any other.
     """
     dest = pathlib.Path(cache_dir) / f"steam_{appid}.jpg"
     for file in ("library_600x900.jpg", "header.jpg"):
@@ -230,7 +232,7 @@ def download_cover(appid, cache_dir, timeout=10):
             try:
                 req = urllib.request.Request(url.format(appid=appid, file=file),
                                              headers={"User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                with fetch.open_https(req, timeout) as resp:
                     if resp.status != 200 or not resp.headers.get(
                             "Content-Type", "").startswith("image/"):
                         continue
