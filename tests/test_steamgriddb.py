@@ -667,3 +667,176 @@ def test_deeply_nested_api_json_is_a_network_error(local, monkeypatch, answers, 
 def test_no_json_is_still_a_network_error(local, monkeypatch, data):
     local.answer = lambda h: h.send_body(data)
     assert api_error(local, monkeypatch).kind == "network"
+
+
+# -- size and time of pictures (previews and the one chosen) -----------------
+PIC_MAX = 20 * 1024 * 1024
+PIC_URL = "https://cdn2.steamgriddb.com/grid/a.png"
+
+
+def picture(size):
+    return PICTURE + b"p" * (size - len(PICTURE))
+
+
+def picture_error(server, monkeypatch, **kwargs):
+    with pytest.raises(steamgriddb.Error) as e:
+        picture_from(server, monkeypatch, **kwargs)
+    assert e.value.kind == "network"
+    return e.value
+
+
+def test_the_limits_of_pictures():
+    defaults = {name: p.default for name, p in
+                inspect.signature(steamgriddb.fetch).parameters.items()}
+    assert defaults == {"url": inspect.Parameter.empty, "timeout": 20,
+                        "limit": PIC_MAX, "deadline": 120}
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(PICTURE),
+    lambda h: h.send_body(PICTURE, length=False),
+    chunked(PICTURE[:4], PICTURE[4:]),
+], ids=["length", "no-length", "chunked"])
+def test_a_picture_is_read_and_closed(local, monkeypatch, answers, answer):
+    local.answer = answer
+    assert picture_from(local, monkeypatch) == PICTURE
+    (_path, headers), = local.requests
+    assert "Authorization" not in headers             # no key for pictures
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
+def test_a_picture_of_exactly_the_limit_is_read(local, monkeypatch, length):
+    local.answer = lambda h: h.send_body(picture(PIC_MAX), length=length)
+    assert picture_from(local, monkeypatch) == picture(PIC_MAX)
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(picture(PIC_MAX + 1)),
+    lambda h: h.send_body(picture(PIC_MAX + 1), length=False),
+    chunked(*[b"p" * 65536] * 320 + [b"p"]),
+], ids=["announced", "unannounced", "chunked"])
+def test_a_picture_too_large_is_refused_and_closed(local, monkeypatch, answers, answer):
+    local.answer = answer
+    e = picture_error(local, monkeypatch)
+    assert str(e) == "picture too large" and isinstance(e.__cause__, fetch.Error)
+    assert all_closed(answers)
+
+
+class Counted(Response):
+    """An answer that counts the bytes read from it, however read."""
+
+    def __init__(self, body, length=None):
+        super().__init__(body)
+        if length is not None:
+            self.headers = {"Content-Length": length}
+        self.read_bytes = 0
+
+    def read(self, limit=None):
+        piece = super().read(limit)
+        self.body = self.body[len(piece):]
+        self.read_bytes += len(piece)
+        return piece
+
+    def read1(self, limit):
+        piece = super().read1(limit)
+        self.read_bytes += len(piece)
+        return piece
+
+
+@pytest.mark.parametrize("length, read", [
+    (str(PIC_MAX + 1), 0),          # announced: refused before reading
+    (None, PIC_MAX + 1),            # one byte past the limit tells it
+], ids=["announced", "unannounced"])
+def test_a_picture_too_large_is_not_read_to_its_end(monkeypatch, length, read):
+    answer = Counted(b"p" * (PIC_MAX + 5 * 1024 * 1024), length)
+    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen",
+                        lambda req, timeout: answer)
+    with pytest.raises(steamgriddb.Error, match="picture too large"):
+        steamgriddb.fetch(PIC_URL)
+    assert answer.read_bytes == read
+
+
+def test_a_slow_picture_within_the_deadline_is_read(local, monkeypatch):
+    local.answer = trickle(PICTURE, 0.01)
+    assert picture_from(local, monkeypatch, deadline=30) == PICTURE
+
+
+def test_a_trickling_picture_stops_at_the_deadline(local, monkeypatch, answers):
+    """A byte each 0.2 s would take more than 7 s; the deadline stops it
+    after about 0.5 s (plus up to one read)."""
+    local.answer = trickle(picture(40), 0.2)
+    start = time.monotonic()
+    e = picture_error(local, monkeypatch, deadline=0.5)
+    assert str(e) == "the download took too long"
+    assert isinstance(e.__cause__, fetch.Error)
+    assert time.monotonic() - start < 4
+    assert all_closed(answers)
+    assert local.answered.wait(10)
+
+
+@pytest.mark.parametrize("answer, message, cause", [
+    (raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b"p" * 100),
+     "100 of 1000 bytes came", fetch.Error),
+    (raw(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3e8\r\n" + b"p" * 100),
+     "IncompleteRead", steamgriddb.http.client.IncompleteRead),
+    (raw(b"NONSENSE\r\n\r\n"), "NONSENSE", steamgriddb.http.client.BadStatusLine),
+    (lambda h: h.send_body(b"gone", status=404), "HTTP Error 404",
+     steamgriddb.urllib.error.HTTPError),
+    (lambda h: h.send_body(b"error", status=500), "HTTP Error 500",
+     steamgriddb.urllib.error.HTTPError),
+], ids=["cut-short", "chunk-cut-short", "bad-status-line", "404", "500"])
+def test_a_broken_picture_is_closed(local, monkeypatch, answers, answer, message, cause):
+    local.answer = answer
+    e = picture_error(local, monkeypatch)
+    assert message in str(e) and isinstance(e.__cause__, cause)
+    assert all(a.closed for a in answers)
+
+
+@pytest.mark.parametrize("url", [
+    "http://cdn2.steamgriddb.com/grid/a.png", "https://example.org/a.png",
+    "https://steamgriddb.com.example.org/a.png", "ftp://steamgriddb.com/a.png",
+])
+def test_a_picture_only_from_steamgriddb_over_https(monkeypatch, url):
+    def refuse(*a, **k):
+        raise AssertionError("asked the network")
+    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", refuse)
+    with pytest.raises(steamgriddb.Error, match="unexpected address") as e:
+        steamgriddb.fetch(url)
+    assert e.value.kind == "network"
+
+
+def test_a_redirected_picture_is_read_with_the_limits(local, other, monkeypatch, answers):
+    """Redirects stay followed, also to another host; the picture there is
+    read with the same limit, and no key goes along."""
+    other.answer = lambda h: h.send_body(picture(PIC_MAX + 1), length=False)
+    local.answer = redirect(f"http://{other.address}/b.png")
+    assert str(picture_error(local, monkeypatch)) == "picture too large"
+    (_path, headers), = other.requests
+    assert "Authorization" not in headers
+    assert all_closed(answers)
+
+
+@pytest.mark.parametrize("answer", [
+    lambda h: h.send_body(picture(PIC_MAX + 1), length=False),
+    raw(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + b"p" * 100),
+], ids=["too-large", "cut-short"])
+def test_a_chosen_picture_that_fails_leaves_no_file(local, monkeypatch, tmp_path, answer):
+    local.answer = answer
+    real = steamgriddb.urllib.request.urlopen
+    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", lambda req, timeout: real(
+        f"http://{local.address}/a.png", timeout=timeout))
+    with pytest.raises(steamgriddb.Error) as e:
+        steamgriddb.download(PIC_URL, tmp_path / "cover.png")
+    assert e.value.kind == "network"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_chosen_picture_is_saved(local, monkeypatch, tmp_path):
+    local.answer = lambda h: h.send_body(picture(1000))
+    real = steamgriddb.urllib.request.urlopen
+    monkeypatch.setattr(steamgriddb.urllib.request, "urlopen", lambda req, timeout: real(
+        f"http://{local.address}/a.png", timeout=timeout))
+    dest = steamgriddb.download(PIC_URL, tmp_path / "cover.png")
+    assert dest == tmp_path / "cover.png" and dest.read_bytes() == picture(1000)
+    assert [p.name for p in tmp_path.iterdir()] == ["cover.png"]   # no .part left

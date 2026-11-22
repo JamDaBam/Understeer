@@ -172,31 +172,36 @@ def find_cover(name, key, steam_appid=None, game_id=None):
     return found[0]["url"] if found else None
 
 
-def fetch(url, timeout=20, limit=20 * 1024 * 1024):
-    """Bytes of a picture on SteamGridDB's servers."""
+def fetch(url, timeout=20, limit=20 * 1024 * 1024, deadline=120):
+    """Bytes of a picture on SteamGridDB's servers, a preview or the one
+    chosen; raises Error.
+
+    timeout: seconds for connecting and for each read. The picture is read
+    up to limit bytes (a larger announced size is refused before reading)
+    and until deadline seconds after the request started, checked around
+    each read of its body: best effort, no total limit. Looking up the
+    name, connecting, TLS and the headers are bound only by the timeout of
+    each step, and one read that blocks can end up to the timeout after
+    the deadline. Redirects are followed, as urlopen does."""
     host = urllib.parse.urlparse(url).hostname or ""
     if urllib.parse.urlparse(url).scheme != "https" or not (
             host == "steamgriddb.com" or host.endswith(".steamgriddb.com")):
         raise Error("network", f"unexpected address {url}")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    start = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read(limit + 1)
-            length = resp.headers.get("Content-Length", "")
-            chunked = "chunked" in resp.headers.get("Transfer-Encoding", "").lower()
+            # also tells a picture cut short: fewer bytes than announced
+            return _read_body(resp, limit, start + deadline)
+    except _FetchError as e:
+        if e.kind == "too_big":
+            raise Error("network", "picture too large") from e
+        raise Error("network", str(e)) from e       # too slow, or cut short
     # HTTPException: e.g. a broken status line or an answer cut short
     except (OSError, ValueError, http.client.HTTPException) as e:
         if isinstance(e, urllib.error.HTTPError):
             _release(e)                     # it holds the answer, unread
         raise Error("network", str(e) or type(e).__name__) from e
-    if len(data) > limit:
-        raise Error("network", "picture too large")
-    # A read of a given size just ends when the connection closes early, so
-    # a picture cut short would pass for a whole one. Without a length (or
-    # sent in chunks, where a cut raises above) there is nothing to compare.
-    if length.isdigit() and not chunked and len(data) != int(length):
-        raise Error("network", f"{len(data)} of {length} bytes came")
-    return data
 
 
 def download(url, dest):
