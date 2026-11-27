@@ -2528,6 +2528,9 @@ def steps(win):
     fetched, restarted, downloads = [], [], []
     image = scratch / "Understeer.AppImage"
     on_github = {"version": "99.0.0"}      # what GitHub answers now
+    # What the format check of updates reads: ELF, "AI\x02" at byte 8
+    APPIMAGE_HEAD = b"\x7fELF\x02\x01\x01\x00AI\x02"
+    OLD_IMAGE, NEW_IMAGE = APPIMAGE_HEAD + b"old AppImage", APPIMAGE_HEAD + b"new AppImage"
 
     def release(version):
         """GitHub's answer for a stable release with its AppImage."""
@@ -2541,12 +2544,15 @@ def steps(win):
     def fake_download(asset, appimage, **_kw):
         downloads.append(asset)
         new = scratch / "downloaded.AppImage"
-        new.write_bytes(b"new AppImage")
-        return str(new)
+        new.write_bytes(NEW_IMAGE)
+        new.chmod(0o755)
+        st = new.stat()
+        return updates.Downloaded(str(new), st.st_dev, st.st_ino,
+                                  updates._target(appimage))
 
     def ask_update_check():
         check(not win.update_banner.get_revealed(), "no update banner from git")
-        image.write_bytes(b"old AppImage")
+        image.write_bytes(OLD_IMAGE)
         os.environ["APPIMAGE"] = str(image)
         updates.fetch_latest = lambda: fetched.append(1) or release(on_github["version"])
         updates.download = fake_download
@@ -2586,7 +2592,7 @@ def steps(win):
         d = win.get_visible_dialog()
         check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "Update Failed",
               f"told: {d.get_heading() if isinstance(d, Adw.AlertDialog) else d!r}")
-        check(downloads == [] and image.read_bytes() == b"old AppImage",
+        check(downloads == [] and image.read_bytes() == OLD_IMAGE,
               "nothing downloaded without a fresh answer")
         check(win._update_state is None
               and win.update_banner.get_button_label() == "Update Now",
@@ -2605,7 +2611,7 @@ def steps(win):
         check(isinstance(d, Adw.AlertDialog)
               and d.get_heading() == "Another Version Available",
               f"told: {d.get_heading() if isinstance(d, Adw.AlertDialog) else d!r}")
-        check(downloads == [] and image.read_bytes() == b"old AppImage",
+        check(downloads == [] and image.read_bytes() == OLD_IMAGE,
               "nothing downloaded for another version")
         check("99.1.0" in win.update_banner.get_title(),
               f"the new version shown: {win.update_banner.get_title()!r}")
@@ -2631,7 +2637,7 @@ def steps(win):
         win.set_update_check(False)
         go_on.set()
         check(settle(update_done), "the update ends")
-        check(downloads == [] and image.read_bytes() == b"old AppImage",
+        check(downloads == [] and image.read_bytes() == OLD_IMAGE,
               "nothing downloaded once switched off")
         check(win._update_state is None and not win.update_banner.get_revealed(),
               "no banner while switched off")
@@ -2642,6 +2648,64 @@ def steps(win):
         win.set_update_check(True)
         check(settle(lambda: win.update_banner.get_revealed()), "banner back")
     yield "update switched off meanwhile", update_switched_off_meanwhile
+
+    def update_timed_out():
+        """A download that took too long: told why, nothing installed, no
+        restart offered, and the update can be tried again."""
+        def too_slow(asset, appimage, **_kw):
+            downloads.append(asset)
+            raise updates.Error("the download took too long", updates.TIMEOUT)
+        updates.download = too_slow
+        try:
+            win.update_banner.emit("button-clicked")
+            check(settle(update_done), "the update ends")
+            d = win.get_visible_dialog()
+            body = d.get_body() if isinstance(d, Adw.AlertDialog) else ""
+            check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "Update Failed"
+                  and "the download took too long" in body,
+                  f"told: {d.get_heading() if isinstance(d, Adw.AlertDialog) else d!r}")
+            check(image.read_bytes() == OLD_IMAGE, "nothing installed")
+            check(win._update_state is None
+                  and win.update_banner.get_button_label() == "Update Now",
+                  f"no restart, can be tried again: "
+                  f"{win.update_banner.get_button_label()!r}")
+            close_dialogs(win)
+        finally:
+            updates.download = fake_download
+            downloads.clear()
+    yield "update timed out", update_timed_out
+
+    def update_in_an_unsafe_folder():
+        """In a folder others may write to, Understeer doesn't update
+        itself: Download is offered, it opens the release page, nothing
+        is downloaded or installed."""
+        shared = scratch / "shared"
+        shared.mkdir(exist_ok=True)
+        unsafe = shared / "Understeer.AppImage"
+        unsafe.write_bytes(OLD_IMAGE)
+        shared.chmod(0o777)
+        opened = []
+        launch, Gtk.UriLauncher.launch = Gtk.UriLauncher.launch, \
+            lambda launcher, *a, **k: opened.append(launcher.get_uri())
+        os.environ["APPIMAGE"] = str(unsafe)
+        try:
+            win._show_update_banner()
+            check(win.update_banner.get_button_label() == "Download",
+                  f"Download offered: {win.update_banner.get_button_label()!r}")
+            win.update_banner.emit("button-clicked")
+            check(opened == [updates.RELEASES_URL + "/tag/v" + on_github["version"]],
+                  f"the release page opened: {opened!r}")
+            check(getattr(win, "_update_state", None) is None and downloads == []
+                  and unsafe.read_bytes() == OLD_IMAGE,
+                  "no update of itself tried")
+        finally:
+            Gtk.UriLauncher.launch = launch
+            os.environ["APPIMAGE"] = str(image)
+            shared.chmod(0o700)
+            win._show_update_banner()
+        check(win.update_banner.get_button_label() == "Update Now",
+              f"back in the safe folder: {win.update_banner.get_button_label()!r}")
+    yield "update in an unsafe folder", update_in_an_unsafe_folder
 
     def update_itself():
         win.update_banner.emit("button-clicked")
@@ -2654,7 +2718,7 @@ def steps(win):
         check(settle(update_done), "the update ends")
         check(len(downloads) == 1 and downloads[0] == release("99.1.0")["asset"],
               f"one download, of the fresh answer: {downloads!r}")
-        check(image.read_bytes() == b"new AppImage", "AppImage replaced")
+        check(image.read_bytes() == NEW_IMAGE, "AppImage replaced")
         check(os.access(image, os.X_OK), "new AppImage can run")
         check(win.update_banner.get_button_label() == "Restart",
               f"restart offered: {win.update_banner.get_title()!r}")
@@ -2775,7 +2839,7 @@ def steps(win):
               f"only the beta's page opened: {beta_pages}")
         check(config.get_setting("beta_handled") == "99.3.0",
               "View on GitHub counts as asked")
-        check(image.read_bytes() == b"new AppImage", "nothing downloaded")
+        check(image.read_bytes() == NEW_IMAGE, "nothing downloaded")
     yield "beta once per release", beta_once_per_release
 
     # -- answers that come late, switching off meanwhile, no doubles --------
@@ -2933,7 +2997,7 @@ def steps(win):
               == [updates.RELEASES_URL + "/tag/v2.4.0-beta.10"],
               f"only the beta's own page opened: {beta_pages[len(before):]}")
         check(offer("2.4.0-beta.9") is None, "beta.9 is older than beta.10")
-        check(image.read_bytes() == b"new AppImage", "nothing downloaded")
+        check(image.read_bytes() == NEW_IMAGE, "nothing downloaded")
     yield "beta user: newer beta of the same release", beta_user_same_release
 
     def beta_user_saving_fails():

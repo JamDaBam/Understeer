@@ -2868,22 +2868,26 @@ msgid "the download broke off"
 msgstr "das Herunterladen ist abgebrochen"
 
 #: understeer/ui/update_check.py:431
+msgid "the download took too long"
+msgstr "das Herunterladen hat zu lange gedauert"
+
+#: understeer/ui/update_check.py:432
 msgid "the download doesn't have the size GitHub gave"
 msgstr "die heruntergeladene Datei hat nicht die Größe, die GitHub angegeben hat"
 
-#: understeer/ui/update_check.py:432
+#: understeer/ui/update_check.py:433
 msgid "the checksum of the download is wrong"
 msgstr "die Prüfsumme der heruntergeladenen Datei stimmt nicht"
 
-#: understeer/ui/update_check.py:433
+#: understeer/ui/update_check.py:434
 msgid "the new version could not be put in place of the old one"
 msgstr "die neue Version konnte die alte nicht ersetzen"
 
-#: understeer/ui/update_check.py:437
+#: understeer/ui/update_check.py:438
 msgid "Update Failed"
 msgstr "Aktualisieren fehlgeschlagen"
 
-#: understeer/ui/update_check.py:438
+#: understeer/ui/update_check.py:439
 msgid "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 msgstr "Understeer konnte sich nicht aktualisieren: {reason}. Deine Version bleibt, wie sie ist. Du kannst die neue stattdessen von GitHub herunterladen."
 

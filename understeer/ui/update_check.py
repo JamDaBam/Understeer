@@ -428,6 +428,7 @@ class UpdateCheckMixin:
             updates.NO_ASSET: _("GitHub has no checked file of this version "
                                 "for this computer"),
             updates.DOWNLOAD: _("the download broke off"),
+            updates.TIMEOUT: _("the download took too long"),
             updates.SIZE: _("the download doesn't have the size GitHub gave"),
             updates.CHECKSUM: _("the checksum of the download is wrong"),
             updates.INSTALL: _("the new version could not be put in place of "
