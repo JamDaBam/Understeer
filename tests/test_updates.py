@@ -1786,3 +1786,190 @@ def test_an_installation_done_is_no_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(updates.os, "replace", replace_then_late)
     updates.install(new, str(image))
     assert image.read_bytes() == NEW_APPIMAGE
+
+
+# -- 10.6 R6: a switch-off is noticed up to right before replacing -----------
+class Flag:
+    def __init__(self):
+        self.on = False
+
+    def __call__(self):
+        return self.on
+
+
+class Closing(Pieces):
+    """Pieces that note being closed."""
+    closed = False
+
+    def __exit__(self, *a):
+        self.closed = True
+        return False
+
+
+def test_switched_off_while_getting_ready_to_install(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    other = tmp_path / "other file"
+    other.write_bytes(b"not ours")
+    new = downloaded_into(tmp_path, monkeypatch, image)
+    off, real_still = Flag(), updates._still
+
+    def slow_still(target):
+        real_still(target)
+        off.on = True                       # switched off meanwhile
+    monkeypatch.setattr(updates, "_still", slow_still)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image), cancelled=off)
+    assert e.value.kind == updates.CANCELLED
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+    assert other.read_bytes() == b"not ours" and open_fds() == before
+
+
+def test_update_to_hands_the_switch_off_on_to_install(tmp_path, monkeypatch):
+    """update_to() asks after the download already; install() asks again
+    right before replacing, and is given the same question."""
+    image = old_image(tmp_path)
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(updates, "fetch_latest", lambda timeout=10: fresh())
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    off, real_still = Flag(), updates._still
+
+    def slow_still(target):
+        real_still(target)
+        off.on = True
+    monkeypatch.setattr(updates, "_still", slow_still)
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(image), cancelled=off)
+    assert e.value.kind == updates.CANCELLED
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+
+
+def test_switched_off_while_connecting(tmp_path, monkeypatch):
+    """Noticed before the first read, and the answer is closed."""
+    off, answer = Flag(), Closing([NEW_APPIMAGE])
+
+    def open_slowly(req, timeout):
+        off.on = True                       # while connecting
+        return answer
+    monkeypatch.setattr(updates.fetch, "open_https", open_slowly)
+    image = old_image(tmp_path)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), cancelled=off, clock=Clock())
+    assert e.value.kind == updates.CANCELLED
+    assert answer.asked == [] and answer.closed
+    assert image.read_bytes() == OLD and no_part_left(tmp_path) and open_fds() == before
+
+
+def test_switched_off_while_writing_a_piece(tmp_path, monkeypatch):
+    off, real_fdopen = Flag(), os.fdopen
+
+    class SlowWrite(Failing):
+        def write(self, data):
+            written = self.real.write(data)
+            off.on = True                   # while it was written
+            return written
+    monkeypatch.setattr(updates.os, "fdopen",
+                        lambda fd, mode: SlowWrite(real_fdopen(fd, mode), None))
+    answer = Pieces([NEW_APPIMAGE[:10], NEW_APPIMAGE[10:]])
+    answering(monkeypatch, answer)
+    image = old_image(tmp_path)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), cancelled=off, clock=Clock())
+    assert e.value.kind == updates.CANCELLED and len(answer.asked) == 1
+    assert image.read_bytes() == OLD and no_part_left(tmp_path) and open_fds() == before
+
+
+def test_switched_off_while_telling_the_progress(tmp_path, monkeypatch):
+    off = Flag()
+    answer = Pieces([NEW_APPIMAGE[:10], NEW_APPIMAGE[10:]])
+    answering(monkeypatch, answer)
+    image = old_image(tmp_path)
+
+    def progress(share):
+        off.on = True
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), progress=progress,
+                         cancelled=off, clock=Clock())
+    assert e.value.kind == updates.CANCELLED and len(answer.asked) == 1
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+
+
+def test_switched_off_after_replacing_is_still_an_update(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    new = downloaded_into(tmp_path, monkeypatch, image)
+    off, real_replace = Flag(), os.replace
+
+    def replace_then_off(src, dst):
+        real_replace(src, dst)
+        off.on = True                       # too late: it is done
+    monkeypatch.setattr(updates.os, "replace", replace_then_off)
+    updates.install(new, str(image), cancelled=off)
+    assert image.read_bytes() == NEW_APPIMAGE
+
+
+# -- 10.6 R7: no open() that could wait, e.g. on a FIFO --------------------
+def guarded_open(monkeypatch, fifo, calls):
+    """os.open that records its calls and never opens fifo in a way that
+    would wait for a writer: such a call fails the test at once."""
+    real_open = os.open
+
+    def opening(path, flags, *args, **kwargs):
+        calls.append((os.fspath(path), flags))
+        if os.fspath(path) == str(fifo) and not flags & os.O_NONBLOCK:
+            raise AssertionError("open() of a FIFO that would wait")
+        return real_open(path, flags, *args, **kwargs)
+    monkeypatch.setattr(updates.os, "open", opening)
+
+
+def test_a_fifo_in_place_of_the_appimage_is_not_opened(tmp_path, monkeypatch):
+    fifo = tmp_path / "Understeer.AppImage"
+    os.mkfifo(fifo)
+    calls = []
+    guarded_open(monkeypatch, fifo, calls)
+    assert not updates.can_install(str(fifo))
+    assert [p for p, _f in calls if p == str(fifo)] == []      # refused by lstat
+
+
+def test_a_fifo_put_there_after_the_look_is_refused(tmp_path, monkeypatch):
+    """Swapped between lstat() and open(): open() doesn't wait (O_NONBLOCK)
+    and fstat() refuses it; the descriptor is closed."""
+    fifo = tmp_path / "Understeer.AppImage"
+    os.mkfifo(fifo)
+    (tmp_path / "elsewhere").mkdir()
+    regular = old_image(tmp_path / "elsewhere")       # what lstat() is shown
+    real_lstat = os.lstat
+    monkeypatch.setattr(updates.os, "lstat",
+                        lambda p, *a, **k: real_lstat(regular) if os.fspath(p) == str(fifo)
+                        else real_lstat(p, *a, **k))
+    calls = []
+    guarded_open(monkeypatch, fifo, calls)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates._appimage_file(str(fifo))
+    assert e.value.kind == updates.INSTALL and "no file" in str(e.value)
+    assert [p for p, _f in calls] == [str(fifo)] and open_fds() == before
+
+
+def test_an_appimage_is_opened_without_waiting_or_following(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    calls = []
+    guarded_open(monkeypatch, tmp_path / "no fifo here", calls)
+    assert updates.can_install(str(image))
+    flags = [f for p, f in calls if p == str(image)]
+    want = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    assert flags and all(f & want == want for f in flags)
+
+
+@pytest.mark.parametrize("broken", ["fstat", "read"])
+def test_the_appimage_check_closes_what_it_opened(tmp_path, monkeypatch, broken):
+    image = old_image(tmp_path)
+
+    def fail(*a, **k):
+        raise OSError(5, "Input/output error")
+    monkeypatch.setattr(updates.os, broken, fail)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates._appimage_file(str(image))
+    assert e.value.kind == updates.INSTALL and open_fds() == before

@@ -439,9 +439,17 @@ def _appimage_file(path):
     """(device, inode) of the AppImage at path: opened without following a
     link, a regular file that begins as a type 2 AppImage does. Raises
     Error (INSTALL) otherwise. Only a check of the format, nothing that
-    says the file can be trusted."""
+    says the file can be trusted.
+
+    Anything but a regular file is refused before it is opened: opening a
+    FIFO would wait for a writer, here even in the window's thread
+    (can_install()). O_NONBLOCK keeps open() from waiting on one put there
+    after that look; fstat() then refuses it. That covers the FIFO, not
+    every way a file system can make a call wait."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        if not stat.S_ISREG(os.lstat(path).st_mode):
+            raise Error(f"{path} is no file", INSTALL)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
     except OSError as e:
         raise Error(f"{path} can't be opened: {e}", INSTALL) from e
     try:
@@ -576,7 +584,7 @@ def update_to(offered, current, appimage, cancelled=lambda: False,
     if cancelled():
         _discard(new)
         raise Error("the update was called off", CANCELLED, latest)
-    install(new, appimage)
+    install(new, appimage, cancelled=cancelled)
     return latest
 
 
@@ -648,7 +656,9 @@ def download(asset, appimage, timeout=30, progress=None, cancelled=None,
                 answer = fetch.open_https(req, timeout)
             except fetch.Error as e:            # a redirect away from HTTPS
                 raise Error(str(e), DOWNLOAD) from e
-            with answer as resp:
+            with answer as resp:            # closed also when called off
+                if stop():                      # e.g. while connecting
+                    raise Error("the update was called off", CANCELLED)
                 try:
                     for chunk in fetch.iter_body(resp, expected, deadline_at, clock,
                                                  reached=True):
@@ -659,6 +669,8 @@ def download(asset, appimage, timeout=30, progress=None, cancelled=None,
                         out.write(chunk)
                         if progress:
                             progress(size / expected)
+                        if stop():              # right before the next read
+                            raise Error("the update was called off", CANCELLED)
                 except fetch.Error as e:
                     if e.kind == "timeout":
                         raise Error(str(e), TIMEOUT) from e
@@ -696,7 +708,7 @@ def download(asset, appimage, timeout=30, progress=None, cancelled=None,
     return new
 
 
-def install(new, appimage):
+def install(new, appimage, cancelled=None):
     """Put the checked download (Downloaded) in place of the AppImage it
     was made for (new.target), in one step (os.replace in the same
     folder); appimage is not looked up again, only compared: if it leads
@@ -707,7 +719,9 @@ def install(new, appimage):
     Error (INSTALL).
 
     The deadline of the download (new.deadline_at) is looked at once more
-    right before the rename; a step that blocks can still outlast it.
+    right before the rename, and then cancelled() (switched off: CANCELLED);
+    a step that blocks can still outlast either. Once renamed, the update
+    is done: nothing is reported as called off afterwards.
 
     Between these looks and the rename another process could still swap a
     file: only in a folder of this user's, so only this user's own
@@ -734,6 +748,9 @@ def install(new, appimage):
     if new.deadline_at is not None and new.clock() >= new.deadline_at:
         _discard(new)
         raise Error("the download took too long", TIMEOUT)
+    if cancelled is not None and cancelled():
+        _discard(new)
+        raise Error("the update was called off", CANCELLED)
     try:
         os.replace(new.path, target.path)
     except OSError as e:
