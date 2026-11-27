@@ -1,10 +1,14 @@
 """Drive the whole app against a fake wheelbase; run by test_ui.py.
 
 Usage: ui_smoke.py <scratch dir>
-Expects an isolated HOME and a display (test_ui.py starts Xvfb). Nothing
-goes to the network: SteamGridDB is replaced. Every uncaught exception,
-every ERROR log line and every failed check counts as a failure; the
-exit code is the number of failures.
+Expects the isolated environment test_ui.py sets up (HOME, runtime folder
+and session bus below the scratch dir, Xvfb) and refuses to run without
+it. No real hardware is read, nothing goes to the network, no program is
+started: sysfs, input devices, processes and the driver are fakes,
+SteamGridDB, the community catalog, updates and launchers are replaced,
+and the guard of isolation.py refuses and counts anything else. Every
+uncaught exception, every ERROR log line, every failed check and every
+guard violation counts as a failure; the exit code is their number.
 """
 import json
 import logging
@@ -20,6 +24,25 @@ import zlib
 
 scratch = pathlib.Path(sys.argv[1])
 sys.argv = sys.argv[:1]
+
+# The guard comes first, before anything of Understeer is imported: it
+# refuses and counts what the test must never touch (real hardware, the
+# real home, the network, privileged programs), see isolation.py. Without
+# the isolated environment test_ui.py sets up, nothing runs at all.
+import isolation  # noqa: E402  (tests/ is the folder of this script)
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+_not_isolated = isolation.check_environment(scratch)
+if _not_isolated:
+    print("not isolated, nothing run:")
+    for _problem in _not_isolated:
+        print("  -", _problem)
+    sys.exit(100)
+# The home of whoever started the test and the user's own, also if HOME
+# was changed before (check_environment refused already if either is unknown)
+_homes = isolation.protected_homes()
+guard = isolation.Guard(writable=[scratch], readable=[ROOT],
+                        denied=_homes).install()
 
 # A fake wheelbase: one sysfs folder with every setting as a plain file.
 dev = scratch / "sysfs" / "ftec_tuning" / "0003:0EB7:0020.0005"
@@ -72,6 +95,52 @@ def library_offline(*_args, **_kwargs):
 
 community.download = library_offline         # the community catalog neither
 
+# No real hardware, processes or driver, also not just read: the live input
+# finds no devices (steps set their axes themselves), games are looked for
+# in an empty process folder, and the driver is a fake module folder.
+from understeer import device_info, games  # noqa: E402
+from understeer import inputs as _inputs  # noqa: E402
+from understeer import log as _session_log  # noqa: E402
+from understeer import updates as _updates  # noqa: E402
+
+_inputs.find_input_devices = lambda: []
+games.PROC = scratch / "proc"
+games.PROC.mkdir(exist_ok=True)
+FAKE_MODULE = scratch / "sysfs" / "module" / "hid_fanatec"
+FAKE_MODULE.mkdir(parents=True, exist_ok=True)
+(FAKE_MODULE / "version").write_text("0.2.3\n")
+(FAKE_MODULE / "srcversion").write_text("0123456789ABCDEF0123456\n")
+_real_collect, _real_driver = device_info.collect, _session_log._driver
+# Both take the module folder as a default argument: wrapped, not patched
+device_info.collect = lambda device_path, module_dir=str(FAKE_MODULE): \
+    _real_collect(device_path, module_dir)
+_session_log._driver = lambda module=str(FAKE_MODULE): _real_driver(module)
+# The version as git tells it in CI (a shallow clone, no tags), without
+# running git: it would refresh the index of the real repository.
+_session_log.version = lambda: "0000000"
+
+
+# What the steps replace with stand-ins of their own where they need it;
+# reached otherwise, it counts as a violation and does nothing.
+def _privileged(script):
+    guard.violations.append(f"privileged call: {script}")
+    return False                    # as if the password was refused
+
+
+def _refused(what, error):
+    def stub(*_args, **_kwargs):
+        guard.violations.append(f"not replaced by the step: {what}")
+        raise error("refused by the isolation guard (test)")
+    return stub
+
+
+device.run_privileged = _privileged
+_updates.fetch_latest = _refused("updates.fetch_latest", _updates.Error)
+_updates.fetch_beta = _refused("updates.fetch_beta", _updates.Error)
+_updates.download = _refused("updates.download", _updates.Error)
+_updates.restart = _refused("updates.restart", RuntimeError)
+games.download_cover = _refused("games.download_cover", OSError)
+
 from understeer import app, background, backup, config, inputs, releases, sharing, trash, updates, log as session_log  # noqa: E402
 from understeer import i18n  # noqa: E402
 from understeer.ui import cover_search, files, theme  # noqa: E402
@@ -80,6 +149,21 @@ from understeer.ui import window as window_module  # noqa: E402
 from understeer.ui.report_dialog import ReportDialog  # noqa: E402
 from understeer import report as report_module  # noqa: E402
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
+
+
+# Without portals GIO would start a real browser or file manager, out of
+# the guard's sight (it happens in C). Steps that open something put their
+# own recorder in place, as before; these stand for any other call.
+def _launch_refused(what):
+    def launch(*_args, **_kwargs):
+        guard.violations.append(f"not replaced by the step: {what}")
+    return launch
+
+
+Gtk.UriLauncher.launch = _launch_refused("Gtk.UriLauncher.launch")
+Gtk.FileLauncher.launch = _launch_refused("Gtk.FileLauncher.launch")
+Gtk.FileLauncher.open_containing_folder = _launch_refused(
+    "Gtk.FileLauncher.open_containing_folder")
 
 failures, steps_done = [], []
 started = []            # set once the steps began
@@ -4224,7 +4308,13 @@ def main():
     print(f"failures: {len(failures)}")
     for f in failures:
         print("  -", f)
-    return min(len(failures), 100)
+    # Counted apart from the failures: the code that got the refusal may
+    # have caught it and gone on as if nothing happened.
+    violations = list(guard.violations)
+    print(f"guard violations: {len(violations)}")
+    for v in violations:
+        print("  !", v)
+    return min(len(failures) + len(violations), 100)
 
 
 sys.exit(main())
