@@ -12,6 +12,13 @@ Inside the file:
 
 Importing adds to what is there: presets and games with the same name
 are replaced, everything else is kept. Works without GTK.
+
+What belongs to this installation only (LOCAL_ONLY_SETTINGS in app.json:
+whether to look for new versions and test versions, what GitHub answered
+and when, which test versions were told about, the version last run) is
+left out of an export and ignored in an import, also in older exports
+that have it: a backup from elsewhere can't switch looking for updates
+on, nor bring update data that would name a file to install.
 """
 import json
 import logging
@@ -25,6 +32,18 @@ FORMAT = 1
 MANIFEST = "understeer-backup.json"
 SETTINGS = ("app.json", "axes.json", "games.json", "slot_counts.json",
             "slot_names.json")
+# Settings in app.json that stay on this computer, see above
+LOCAL_ONLY_SETTINGS = frozenset({
+    "update_check",
+    "update_latest",
+    "update_checked",
+    "beta_notify",
+    "beta_latest",
+    "beta_checked",
+    "beta_handled",
+    "beta_notified",
+    "last_version",
+})
 MAX_FILE = 20 * 1024 * 1024         # a cover picture at most
 MAX_TOTAL = 200 * 1024 * 1024
 _SAFE_NAME = re.compile(r"[^/\\\0]+")
@@ -59,7 +78,13 @@ def export(dest):
                 z.write(path, "presets/" + path.name)
                 counts["presets"] += 1
             for name in SETTINGS:
-                if (settings_dir / name).is_file():
+                if name == "app.json":
+                    app = _portable_app_settings(settings_dir / name)
+                    if app is not None:
+                        z.writestr("settings/" + name, app)
+                    elif (settings_dir / name).is_file():
+                        log.warning("Export: settings/app.json is damaged, left out")
+                elif (settings_dir / name).is_file():
                     z.write(settings_dir / name, "settings/" + name)
             if covers_dir.is_dir():
                 for path in sorted(covers_dir.iterdir()):
@@ -72,6 +97,17 @@ def export(dest):
         raise
     log.info("Exported to %s: %s", dest, counts)
     return counts
+
+
+def _portable_app_settings(path):
+    """app.json without LOCAL_ONLY_SETTINGS, as JSON text; None if there
+    is none or it holds no settings (a damaged file isn't exported: an
+    import would refuse the whole file for it)."""
+    app = config.load_json(path)
+    if not isinstance(app, dict):
+        return None
+    return json.dumps({k: v for k, v in app.items()
+                       if k not in LOCAL_ONLY_SETTINGS}, indent=2, sort_keys=True)
 
 
 def _json(data, name):
@@ -157,6 +193,11 @@ def _merge(name, old, new):
         return [g for g in old if isinstance(g, dict) and g.get("game") not in ids] + new
     if not isinstance(new, dict):
         return old
+    if name == "app.json":
+        skipped = sorted(k for k in new if k in LOCAL_ONLY_SETTINGS)
+        if skipped:
+            log.info("Import: kept this computer's %s", ", ".join(skipped))
+        new = {k: v for k, v in new.items() if k not in LOCAL_ONLY_SETTINGS}
     merged = dict(old) if isinstance(old, dict) else {}
     merged.update(new)
     return merged

@@ -332,32 +332,23 @@ def test_beta_discovery_turns_errors_into_its_own(monkeypatch, error_kind):
         updates.fetch_beta("2.3.3")
 
 
-def test_the_stable_look_doesnt_use_it(monkeypatch):
-    """The stable update check stays as it was: urlopen of LATEST_URL."""
-    def refuse(*a):
-        raise AssertionError("fetch.get used")
-    monkeypatch.setattr(fetch, "get", refuse)
-
-    class Answer:
-        headers = {}
-        rest = json.dumps({"tag_name": "v9.0.0", "prerelease": False,
-                           "draft": False}).encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read1(self, limit):
-            piece, self.rest = self.rest[:limit], self.rest[limit:]
-            return piece
-
+def test_the_stable_look_uses_it(monkeypatch):
+    """The stable update check asks exactly LATEST_URL through fetch.get()
+    (so no redirect is followed), with its own limit and deadline."""
     seen = []
-    monkeypatch.setattr(updates.urllib.request, "urlopen",
-                        lambda req, timeout: seen.append(req.full_url) or Answer())
+
+    def get(url, accept, limit, timeout, deadline):
+        seen.append((url, accept, limit, timeout, deadline))
+        return json.dumps({"tag_name": "v9.0.0", "prerelease": False,
+                           "draft": False}).encode()
+    monkeypatch.setattr(fetch, "get", get)
+
+    def refuse(*a, **k):
+        raise AssertionError("urlopen used")
+    monkeypatch.setattr(updates.urllib.request, "urlopen", refuse)
     assert updates.fetch_latest()["version"] == "9.0.0"
-    assert seen == [updates.LATEST_URL]
+    assert seen == [(updates.LATEST_URL, "application/vnd.github+json",
+                     updates.MAX_LATEST_ANSWER, 10, updates.LATEST_DEADLINE)]
 
 
 @pytest.fixture

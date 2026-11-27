@@ -2525,17 +2525,31 @@ def steps(win):
         close_dialogs(win))
 
     # -- new versions on GitHub (only the AppImage looks) --------------------
-    fetched, restarted = [], []
+    fetched, restarted, downloads = [], [], []
     image = scratch / "Understeer.AppImage"
+    on_github = {"version": "99.0.0"}      # what GitHub answers now
+
+    def release(version):
+        """GitHub's answer for a stable release with its AppImage."""
+        import platform
+        name = f"Understeer-{version}-{platform.machine()}.AppImage"
+        return {"version": version, "url": f"{updates.RELEASES_URL}/tag/v{version}",
+                "asset": {"version": version, "name": name,
+                          "url": f"{updates.DOWNLOAD_URL}v{version}/{name}",
+                          "sha256": "0" * 64, "size": 12}}
+
+    def fake_download(asset, appimage, **_kw):
+        downloads.append(asset)
+        new = scratch / "downloaded.AppImage"
+        new.write_bytes(b"new AppImage")
+        return str(new)
 
     def ask_update_check():
         check(not win.update_banner.get_revealed(), "no update banner from git")
         image.write_bytes(b"old AppImage")
         os.environ["APPIMAGE"] = str(image)
-        updates.fetch_latest = lambda: fetched.append(1) or {
-            "version": "99.0.0", "url": updates.RELEASES_URL + "/tag/v99.0.0",
-            "asset": {"url": updates.DOWNLOAD_URL + "v99.0.0/x", "sha256": "0" * 64,
-                      "size": 3}}
+        updates.fetch_latest = lambda: fetched.append(1) or release(on_github["version"])
+        updates.download = fake_download
         win._start_update_check()
         d = win.get_visible_dialog()
         check(isinstance(d, Adw.AlertDialog)
@@ -2554,19 +2568,92 @@ def steps(win):
         check(fetched == [1] and win.get_visible_dialog() is None,
               "not asked or fetched again within the hour"),
         check(win.update_banner.get_button_label() == "Update Now",
-              f"can update itself: {win.update_banner.get_button_label()!r}"))
+              f"can update itself: {win.update_banner.get_button_label()!r}"),
+        check(set(config.get_setting("update_latest")) == {"version", "url", "has_asset"},
+              f"only shown data kept: {config.get_setting('update_latest')!r}"))
+
+    def update_done():
+        return win._update_state != "updating"
+
+    def update_without_github():
+        """GitHub is asked again before downloading: no answer, nothing
+        downloaded, the update can be tried again."""
+        def offline():
+            raise updates.Error("offline (test)", updates.UNREACHABLE)
+        updates.fetch_latest = offline
+        win.update_banner.emit("button-clicked")
+        check(settle(update_done), "the failed update ends")
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog) and d.get_heading() == "Update Failed",
+              f"told: {d.get_heading() if isinstance(d, Adw.AlertDialog) else d!r}")
+        check(downloads == [] and image.read_bytes() == b"old AppImage",
+              "nothing downloaded without a fresh answer")
+        check(win._update_state is None
+              and win.update_banner.get_button_label() == "Update Now",
+              "can be tried again")
+        close_dialogs(win)
+        updates.fetch_latest = lambda: fetched.append(1) or release(on_github["version"])
+    yield "update without GitHub", update_without_github
+
+    def update_to_a_changed_version():
+        """Another version is newest by now: not installed in its place,
+        shown, and asked for with another click."""
+        on_github["version"] = "99.1.0"
+        win.update_banner.emit("button-clicked")
+        check(settle(update_done), "the update ends")
+        d = win.get_visible_dialog()
+        check(isinstance(d, Adw.AlertDialog)
+              and d.get_heading() == "Another Version Available",
+              f"told: {d.get_heading() if isinstance(d, Adw.AlertDialog) else d!r}")
+        check(downloads == [] and image.read_bytes() == b"old AppImage",
+              "nothing downloaded for another version")
+        check("99.1.0" in win.update_banner.get_title(),
+              f"the new version shown: {win.update_banner.get_title()!r}")
+        close_dialogs(win)
+        # A late answer of an older look doesn't bring back what it found
+        win._update_found(release("99.0.0"), None, seq=0)
+        check(config.get_setting("update_latest")["version"] == "99.1.0",
+              "a late older answer is dropped")
+    yield "update to a changed version", update_to_a_changed_version
+
+    def update_switched_off_meanwhile():
+        """Switching off looking for new versions while GitHub is asked
+        stops the update before anything is downloaded."""
+        asked, go_on = threading.Event(), threading.Event()
+
+        def slow():
+            asked.set()
+            go_on.wait(SETTLE_S)
+            return release(on_github["version"])
+        updates.fetch_latest = slow
+        win.update_banner.emit("button-clicked")
+        check(asked.wait(SETTLE_S), "GitHub asked again")
+        win.set_update_check(False)
+        go_on.set()
+        check(settle(update_done), "the update ends")
+        check(downloads == [] and image.read_bytes() == b"old AppImage",
+              "nothing downloaded once switched off")
+        check(win._update_state is None and not win.update_banner.get_revealed(),
+              "no banner while switched off")
+        check(win._toast_text.get_label()
+              == "Update stopped: looking for new versions was switched off",
+              f"told: {win._toast_text.get_label()!r}")
+        updates.fetch_latest = lambda: fetched.append(1) or release(on_github["version"])
+        win.set_update_check(True)
+        check(settle(lambda: win.update_banner.get_revealed()), "banner back")
+    yield "update switched off meanwhile", update_switched_off_meanwhile
 
     def update_itself():
-        def download(asset, appimage, **_kw):
-            new = scratch / "downloaded.AppImage"
-            new.write_bytes(b"new AppImage")
-            return str(new)
-        updates.download = download
         win.update_banner.emit("button-clicked")
         check("Updating" in win.update_banner.get_title(), "updating shown")
+        win.update_banner.emit("button-clicked")        # clicked twice
+        win._on_update_button()
     yield "update itself", update_itself
 
     def update_installed():
+        check(settle(update_done), "the update ends")
+        check(len(downloads) == 1 and downloads[0] == release("99.1.0")["asset"],
+              f"one download, of the fresh answer: {downloads!r}")
         check(image.read_bytes() == b"new AppImage", "AppImage replaced")
         check(os.access(image, os.X_OK), "new AppImage can run")
         check(win.update_banner.get_button_label() == "Restart",
