@@ -567,10 +567,47 @@ def test_read_body_past_the_deadline_reads_nothing():
 
 
 def test_read_body_just_before_the_deadline():
-    # looks at 1, read "ab", 2; at 3 the end is read: 3 is not past 3
+    # looks at 1, read "ab", 2; at 3 the end is read, 4 after it: 4 is not
+    # past 4 (the read that finds the end is checked too, see below)
     clock = Clock(step=1)
-    assert read(Body([b"ab"]), deadline_at=3, clock=clock) == b"ab"
-    assert clock.now == 3
+    assert read(Body([b"ab"]), deadline_at=4, clock=clock) == b"ab"
+    assert clock.now == 4
+
+
+def test_read_body_past_the_deadline_at_the_end():
+    """The read that finds the end is checked too: an answer that only
+    ended after the deadline is no answer in time."""
+    e = read_error(Body([b"ab"]), deadline_at=3, clock=Clock(step=1))
+    assert (e.kind, str(e)) == ("timeout", "the download took too long")
+
+
+def test_iter_body_hands_out_the_pieces_as_they_come():
+    body = Body([b"abc", b"de"], "5")
+    pieces = fetch.iter_body(body, 5, 100, Clock())
+    assert next(pieces) == b"abc" and body.asked == [6]     # nothing read ahead
+    assert list(pieces) == [b"de"] and body.asked == [6, 3, 1]
+
+
+def test_iter_body_reached_counts_only_when_asked():
+    """The AppImage download asks for reached (>=); every other caller,
+    read_body() among them, keeps "past" (>)."""
+    assert read(Body([b"ab"]), deadline_at=4, clock=Clock(step=1)) == b"ab"
+    body = Body([b"ab"])
+    with pytest.raises(fetch.Error) as e:
+        list(fetch.iter_body(body, 10, 1, Clock(step=1), reached=True))
+    assert e.value.kind == "timeout" and body.asked == []    # none started at it
+
+
+def test_iter_body_checks_like_read_body():
+    with pytest.raises(fetch.Error) as e:
+        list(fetch.iter_body(Body([b"x"], "6"), 5, 100, Clock()))
+    assert (e.value.kind, str(e.value)) == ("too_big", "6 bytes announced")
+    with pytest.raises(fetch.Error) as e:
+        list(fetch.iter_body(Body([b"x" * 6]), 5, 100, Clock()))
+    assert e.value.kind == "too_big"
+    with pytest.raises(fetch.Error) as e:
+        list(fetch.iter_body(Body([b"abc"], "5"), 5, 100, Clock()))
+    assert (e.value.kind, str(e.value)) == ("offline", "3 of 5 bytes came")
 
 
 def test_read_body_of_a_real_chunked_answer(server):

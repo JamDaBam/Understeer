@@ -11,6 +11,11 @@ import pytest
 
 from understeer import releases, updates
 
+# A file that looks like an AppImage (type 2): ELF, and "AI\x02" at byte 8.
+# Only what the format check reads; nothing that would run.
+APPIMAGE_HEAD = b"\x7fELF\x02\x01\x01\x00AI\x02"
+OLD = APPIMAGE_HEAD + b"old"            # the AppImage before an update
+
 
 def test_only_a_released_appimage_looks():
     version = releases.latest()
@@ -70,6 +75,8 @@ def test_no_asset_without_our_url_and_checksum(data):
 
 
 class Download:
+    headers = {}
+
     def __init__(self, body):
         self.body, self.at = body, 0
 
@@ -83,6 +90,8 @@ class Download:
         chunk = self.body[self.at:self.at + n]
         self.at += n
         return chunk
+
+    read1 = read
 
 
 def fake_download(monkeypatch, body):
@@ -101,12 +110,12 @@ def asset_for(body, version="1.10.0"):
 
 def test_download_and_install(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
     body = b"new AppImage" * 1000
     fake_download(monkeypatch, body)
     shares = []
     new = updates.download(asset_for(body), str(old), progress=shares.append)
-    assert old.read_bytes() == b"old"               # untouched until installed
+    assert old.read_bytes() == OLD               # untouched until installed
     assert shares[-1] == 1.0
     updates.install(new, str(old))
     assert old.read_bytes() == body
@@ -116,18 +125,18 @@ def test_download_and_install(tmp_path, monkeypatch):
 
 def test_wrong_checksum_changes_nothing(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
     fake_download(monkeypatch, b"tampered")
     with pytest.raises(updates.Error, match="checksum") as e:
         updates.download(asset_for(b"genuine!"), str(old))      # the same size
     assert e.value.kind == updates.CHECKSUM
-    assert old.read_bytes() == b"old"
+    assert old.read_bytes() == OLD
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
 def test_offline_download(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
 
     def open_https(req, timeout):
         raise updates.urllib.error.URLError("no network")
@@ -142,6 +151,8 @@ def test_can_install(tmp_path):
     image = tmp_path / "Understeer.AppImage"
     assert not updates.can_install(str(image))      # not there
     image.write_bytes(b"x")
+    assert not updates.can_install(str(image))      # no AppImage
+    image.write_bytes(OLD)
     assert updates.can_install(str(image))
     assert not updates.can_install(None)
 
@@ -471,7 +482,7 @@ def test_fetch_latest_closes_an_http_error(monkeypatch, fail):
                                   ValueError("I/O operation on closed file")])
 def test_download_closes_an_http_error(tmp_path, monkeypatch, fail):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
     body = _ErrorBody(fail)
     asset = asset_for(b"x")
 
@@ -488,7 +499,7 @@ def test_download_closes_an_http_error(tmp_path, monkeypatch, fail):
 
 def test_download_closes_an_answer_refused_while_reading(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
     closed = []
 
     class Answer(Download):
@@ -533,7 +544,7 @@ def asset_path(body=NEW_APPIMAGE):
 
 def download_from(tmp_path, body=NEW_APPIMAGE):
     old = tmp_path / "Understeer.AppImage"
-    old.write_bytes(b"old")
+    old.write_bytes(OLD)
     return updates.download(asset_for(body), str(old)), old
 
 
@@ -549,7 +560,7 @@ def test_a_broken_download_is_an_update_error(github, tmp_path, broken):
     assert isinstance(e.value.__cause__, http.client.HTTPException)
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]   # no .part
     assert e.value.kind == updates.DOWNLOAD
-    assert (tmp_path / "Understeer.AppImage").read_bytes() == b"old"
+    assert (tmp_path / "Understeer.AppImage").read_bytes() == OLD
     assert github.answered.wait(5)
 
 
@@ -567,8 +578,8 @@ def test_a_download_cut_short_is_refused(github, tmp_path):
 def test_a_whole_download_is_taken(github, tmp_path, length):
     github.answer = lambda h: h.send_body(NEW_APPIMAGE, length=length)
     new, old = download_from(tmp_path)
-    assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
-    assert old.read_bytes() == b"old"               # untouched until installed
+    assert pathlib.Path(new.path).read_bytes() == NEW_APPIMAGE
+    assert old.read_bytes() == OLD               # untouched until installed
     assert [p for p, _h in github.requests] == [asset_path()]
 
 
@@ -585,7 +596,7 @@ def test_an_https_redirect_is_followed(github, https_servers, tmp_path):
     github.answer = answer
     files.answer = lambda h: h.send_body(NEW_APPIMAGE)
     new, _old = download_from(tmp_path)
-    assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
+    assert pathlib.Path(new.path).read_bytes() == NEW_APPIMAGE
     assert [p for p, _h in github.requests] == [asset_path()]
     assert [p for p, _h in files.requests] == ["/stored"]
 
@@ -814,13 +825,13 @@ def opened(monkeypatch):
 ], ids=["other-host", "http", "file", "dot-dot", "other-machine", "other-tag"])
 def test_a_stored_asset_leads_to_no_download(tmp_path, opened, url):
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     asset = {"version": "9.0.0", "name": "Understeer-9.0.0-x86_64.AppImage",
              "url": url, "sha256": EVIL_SHA, "size": len(EVIL)}
     with pytest.raises(updates.Error):
         updates.install(updates.download(asset, str(image)), str(image))
     assert opened == []                             # refused before asking
-    assert image.read_bytes() == b"old"
+    assert image.read_bytes() == OLD
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
@@ -831,12 +842,12 @@ def test_a_file_and_its_own_checksum_are_not_installed(tmp_path, monkeypatch):
     evil = tmp_path / "Understeer-9.0.0-x86_64.AppImage"
     evil.write_bytes(EVIL)
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     stored = {"version": "9.0.0", "url": updates.RELEASES_URL + "/tag/v9.0.0",
               "asset": {"url": evil.as_uri(), "sha256": EVIL_SHA, "size": len(EVIL)}}
     with pytest.raises(updates.Error):
         updates.install(updates.download(stored["asset"], str(image)), str(image))
-    assert image.read_bytes() == b"old"
+    assert image.read_bytes() == OLD
 
 
 def fresh(version="9.0.0", body=NEW_APPIMAGE, machine="x86_64"):
@@ -854,7 +865,7 @@ def updating(tmp_path, monkeypatch):
     fresh look gives (or raises), downloads lists the assets downloaded."""
     monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     state = {"answer": fresh(), "downloads": [], "image": image}
 
     def fetch_latest(timeout=10):
@@ -866,7 +877,9 @@ def updating(tmp_path, monkeypatch):
         state["downloads"].append(asset)
         new = tmp_path / ".new"
         new.write_bytes(NEW_APPIMAGE)
-        return str(new)
+        st = new.stat()
+        return updates.Downloaded(str(new), st.st_dev, st.st_ino,
+                                  updates._target(appimage))
     monkeypatch.setattr(updates, "fetch_latest", fetch_latest)
     monkeypatch.setattr(updates, "download", download)
     return state
@@ -885,7 +898,7 @@ def test_no_download_when_github_cant_be_asked(updating):
         updates.update_to("9.0.0", "2.3.3", str(updating["image"]))
     assert e.value.kind == updates.UNREACHABLE
     assert updating["downloads"] == []
-    assert updating["image"].read_bytes() == b"old"
+    assert updating["image"].read_bytes() == OLD
 
 
 @pytest.mark.parametrize("size", [True, "5", 0, -1, 200 * 1024 * 1024 + 1, None, 1.5])
@@ -899,7 +912,7 @@ def test_a_download_stops_past_its_size(tmp_path, monkeypatch):
     """Not read on up to MAX_DOWNLOAD once more than the size came."""
     monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     big = Download(b"x" * (2 * 1024 * 1024))
     monkeypatch.setattr(updates.urllib.request, "urlopen", lambda req, timeout: big)
     monkeypatch.setattr(updates.fetch, "open_https", lambda req, timeout: big)
@@ -1005,7 +1018,7 @@ def test_no_download_unless_the_fresh_look_allows_it(updating, answer, kind):
         updates.update_to("9.0.0", "2.3.3", str(updating["image"]))
     assert e.value.kind == kind
     assert updating["downloads"] == []
-    assert updating["image"].read_bytes() == b"old"
+    assert updating["image"].read_bytes() == OLD
 
 
 def test_kinds_of_a_failed_stable_look(monkeypatch):
@@ -1028,7 +1041,7 @@ def test_kinds_of_a_failed_stable_look(monkeypatch):
                                   200 * 1024 * 1024 + 1])
 def test_no_download_without_a_real_size(tmp_path, opened, size):
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     with pytest.raises(updates.Error) as e:
         updates.download({**fresh()["asset"], "size": size}, str(image))
     assert e.value.kind == updates.NO_ASSET and opened == []
@@ -1039,7 +1052,7 @@ def test_called_off_before_the_download(updating):
         updates.update_to("9.0.0", "2.3.3", str(updating["image"]),
                           cancelled=lambda: True)
     assert e.value.kind == updates.CANCELLED and updating["downloads"] == []
-    assert updating["image"].read_bytes() == b"old"
+    assert updating["image"].read_bytes() == OLD
 
 
 def test_called_off_after_the_download(updating, tmp_path):
@@ -1051,26 +1064,725 @@ def test_called_off_after_the_download(updating, tmp_path):
     with pytest.raises(updates.Error) as e:
         updates.update_to("9.0.0", "2.3.3", str(updating["image"]), cancelled=cancelled)
     assert e.value.kind == updates.CANCELLED
-    assert updating["image"].read_bytes() == b"old"
+    assert updating["image"].read_bytes() == OLD
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
 def test_called_off_while_downloading(tmp_path, monkeypatch):
     fake_download(monkeypatch, NEW_APPIMAGE)
     image = tmp_path / "Understeer.AppImage"
-    image.write_bytes(b"old")
+    image.write_bytes(OLD)
     with pytest.raises(updates.Error) as e:
         updates.download(asset_for(NEW_APPIMAGE), str(image), cancelled=lambda: True)
     assert e.value.kind == updates.CANCELLED
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
-def test_a_failed_installation(tmp_path):
+def test_a_failed_installation(tmp_path, monkeypatch):
     new = tmp_path / "new"
     new.write_bytes(NEW_APPIMAGE)
-    target = tmp_path / "Understeer.AppImage"
-    target.mkdir()
-    (target / "in the way").write_text("x")     # a folder can't be replaced
+    st = new.stat()
+    image = old_image(tmp_path)
+
+    def broken(src, dst):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(updates.os, "replace", broken)
     with pytest.raises(updates.Error) as e:
-        updates.install(str(new), str(target))
+        updates.install(updates.Downloaded(str(new), st.st_dev, st.st_ino,
+                                           updates._target(str(image))), str(image))
     assert e.value.kind == updates.INSTALL and not new.exists()
+    assert image.read_bytes() == OLD
+
+
+def test_nothing_to_install_over_a_folder(tmp_path, monkeypatch):
+    target = tmp_path / "Understeer.AppImage"
+    target.mkdir()                              # a folder can't be replaced
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(target), clock=Clock())
+    assert e.value.kind == updates.INSTALL and target.is_dir()
+    assert sorted(os.listdir(tmp_path)) == [target.name]
+
+
+# -- 10.6: a deadline for the download, a temporary file of its own ------------
+class Pieces:
+    """An answer handing out pieces, one per read1 (never read); on_read is
+    called before each, e.g. to move a clock or look at the folder."""
+
+    def __init__(self, pieces, length=None, on_read=None):
+        self.pieces, self.asked, self.on_read = list(pieces), [], on_read
+        self.headers = {} if length is None else {"Content-Length": str(length)}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=None):
+        raise AssertionError("read() blocks until n bytes came: read1() only")
+
+    def read1(self, n):
+        self.asked.append(n)
+        if self.on_read:
+            self.on_read(self)
+        return self.pieces.pop(0) if self.pieces else b""
+
+
+class Clock:
+    def __init__(self, now=0.0):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+def answering(monkeypatch, answer):
+    monkeypatch.setattr(updates.fetch, "open_https", lambda req, timeout: answer)
+
+
+def old_image(tmp_path):
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(OLD)
+    return image
+
+
+def test_the_download_deadline():
+    assert updates.DOWNLOAD_DEADLINE == 600
+
+
+def test_a_trickling_download_stops_at_the_deadline(github, tmp_path, monkeypatch):
+    """A byte now and then, each well within the socket timeout."""
+    monkeypatch.setattr(updates, "DOWNLOAD_DEADLINE", 0.5)
+    body = b"x" * 40
+
+    def trickle(h):
+        h.send_response(200)
+        h.send_header("Content-Length", str(len(body)))
+        h.end_headers()
+        try:
+            for i in range(len(body)):
+                h.wfile.write(body[i:i + 1])
+                h.wfile.flush()
+                time.sleep(0.1)
+        except OSError:
+            pass
+    github.answer = trickle
+    start = time.monotonic()
+    with pytest.raises(updates.Error) as e:
+        download_from(tmp_path, body)
+    assert e.value.kind == updates.TIMEOUT
+    assert time.monotonic() - start < 3        # not the 4 s the whole takes
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_past_the_deadline_before_reading(tmp_path, monkeypatch):
+    clock = Clock()
+    answer = Pieces([NEW_APPIMAGE], on_read=None)
+
+    def open_late(req, timeout):
+        clock.now = updates.DOWNLOAD_DEADLINE + 1    # connecting took that long
+        return answer
+    monkeypatch.setattr(updates.fetch, "open_https", open_late)
+    image = old_image(tmp_path)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    assert e.value.kind == updates.TIMEOUT and answer.asked == []
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_past_the_deadline_at_the_end(tmp_path, monkeypatch):
+    """Also the read that finds the end is checked: no late success."""
+    clock = Clock()
+
+    def late_at_the_end(answer):
+        if not answer.pieces:
+            clock.now = updates.DOWNLOAD_DEADLINE + 1
+    answering(monkeypatch, Pieces([NEW_APPIMAGE], on_read=late_at_the_end))
+    image = old_image(tmp_path)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    assert e.value.kind == updates.TIMEOUT
+    assert image.read_bytes() == OLD
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_the_deadline_reached_exactly_is_a_timeout(tmp_path, monkeypatch):
+    clock = Clock()
+
+    def reach(answer):
+        clock.now = updates.DOWNLOAD_DEADLINE           # not past, but reached
+    answering(monkeypatch, Pieces([NEW_APPIMAGE], on_read=reach))
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)), clock=clock)
+    assert e.value.kind == updates.TIMEOUT
+
+
+def test_a_download_reads_with_read1_in_pieces(tmp_path, monkeypatch):
+    answer = Pieces([NEW_APPIMAGE[:5000], NEW_APPIMAGE[5000:]], len(NEW_APPIMAGE))
+    answering(monkeypatch, answer)
+    image = old_image(tmp_path)
+    new = updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    assert pathlib.Path(new.path).read_bytes() == NEW_APPIMAGE
+    # never more than one byte past the size is asked
+    assert answer.asked == [len(NEW_APPIMAGE) + 1, len(NEW_APPIMAGE) - 5000 + 1, 1]
+
+
+def test_an_announced_size_too_big_is_refused_before_reading(tmp_path, monkeypatch):
+    answer = Pieces([NEW_APPIMAGE + b"x"], len(NEW_APPIMAGE) + 1)
+    answering(monkeypatch, answer)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)), clock=Clock())
+    assert e.value.kind == updates.SIZE and answer.asked == []
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_called_off_between_two_reads(tmp_path, monkeypatch):
+    answer = Pieces([NEW_APPIMAGE[:10], NEW_APPIMAGE[10:]])
+    answering(monkeypatch, answer)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)),
+                         cancelled=lambda: bool(answer.asked), clock=Clock())
+    assert e.value.kind == updates.CANCELLED and len(answer.asked) == 1
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+OLD_PART = ".Understeer-update.AppImage.part"     # the name older versions used
+
+
+def test_the_temporary_file_is_new_and_private(tmp_path, monkeypatch):
+    seen = []
+
+    def look(answer):
+        parts = [p for p in tmp_path.iterdir() if p.name.endswith(".part")]
+        seen.extend((p.name, p.stat().st_mode & 0o777) for p in parts)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE], on_read=look))
+    new = updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)), clock=Clock())
+    name = pathlib.Path(new.path).name
+    assert name.startswith(".Understeer-update-") and name.endswith(".AppImage.part")
+    assert name != OLD_PART and pathlib.Path(new.path).parent == tmp_path
+    assert seen and all(mode == 0o600 for _n, mode in seen)     # while downloading
+    assert pathlib.Path(new.path).stat().st_mode & 0o777 == 0o755   # once checked
+    st = os.lstat(new.path)
+    assert (new.dev, new.ino) == (st.st_dev, st.st_ino)
+
+
+def test_two_downloads_get_two_names(tmp_path, monkeypatch):
+    names = set()
+    for _i in range(2):
+        answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+        names.add(updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)),
+                                   clock=Clock()).path)
+    assert len(names) == 2
+
+
+def test_a_link_under_the_old_name_is_not_followed(tmp_path, monkeypatch):
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"precious")
+    victim.chmod(0o600)
+    (tmp_path / OLD_PART).symlink_to(victim)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    new = updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    updates.install(new, str(image))
+    assert victim.read_bytes() == b"precious" and victim.stat().st_mode & 0o777 == 0o600
+    assert (tmp_path / OLD_PART).is_symlink()           # left alone
+    assert image.read_bytes() == NEW_APPIMAGE
+
+
+def test_an_old_part_file_is_left_alone(tmp_path, monkeypatch):
+    (tmp_path / OLD_PART).write_bytes(b"from an older version")
+    answering(monkeypatch, Pieces([b"broken"]))           # wrong size: fails
+    with pytest.raises(updates.Error):
+        updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)), clock=Clock())
+    assert (tmp_path / OLD_PART).read_bytes() == b"from an older version"
+
+
+def test_flushed_made_runnable_and_synced_through_the_descriptor(tmp_path, monkeypatch):
+    calls = []
+    real_fchmod, real_fsync = os.fchmod, os.fsync
+    monkeypatch.setattr(updates.os, "fchmod",
+                        lambda fd, mode: calls.append(("fchmod", mode)) or real_fchmod(fd, mode))
+    monkeypatch.setattr(updates.os, "fsync",
+                        lambda fd: calls.append(("fsync",)) or real_fsync(fd))
+    monkeypatch.setattr(updates.os, "chmod",
+                        lambda *a, **k: calls.append(("chmod by name",)))
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    updates.install(updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock()),
+                    str(image))
+    assert calls == [("fchmod", 0o755), ("fsync",)]
+    assert image.read_bytes() == NEW_APPIMAGE
+
+
+def test_a_failed_sync_installs_nothing(tmp_path, monkeypatch):
+    def broken(fd):
+        raise OSError(5, "Input/output error")
+    monkeypatch.setattr(updates.os, "fsync", broken)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    with pytest.raises(updates.Error):
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    assert image.read_bytes() == OLD
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_a_replaced_download_is_not_installed(tmp_path, monkeypatch):
+    """Swapped between the check and the installation: refused, and the
+    other file is neither installed, changed nor removed."""
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    new = updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    other = tmp_path / "other"
+    other.write_bytes(EVIL)
+    os.replace(other, new.path)
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image))
+    assert e.value.kind == updates.INSTALL
+    assert image.read_bytes() == OLD
+    assert pathlib.Path(new.path).read_bytes() == EVIL      # not ours: left alone
+
+
+def test_a_replaced_download_is_not_removed_when_called_off(updating, tmp_path, monkeypatch):
+    import tempfile
+
+    def download(asset, appimage, **_kw):
+        fd, path = tempfile.mkstemp(dir=tmp_path, suffix=".part")
+        st = os.fstat(fd)
+        os.close(fd)
+        other = tmp_path / "other"
+        other.write_bytes(EVIL)
+        os.replace(other, path)                        # swapped meanwhile
+        return updates.Downloaded(path, st.st_dev, st.st_ino, updates._target(appimage))
+    monkeypatch.setattr(updates, "download", download)
+    asks = []
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(updating["image"]),
+                          cancelled=lambda: asks.append(1) or len(asks) > 1)
+    assert e.value.kind == updates.CANCELLED
+    left = [p for p in tmp_path.iterdir() if p.name.endswith(".part")]
+    assert len(left) == 1 and left[0].read_bytes() == EVIL
+
+
+@pytest.mark.parametrize("mode", [0o775, 0o757, 0o777])
+def test_no_update_of_itself_in_a_folder_others_can_write(tmp_path, monkeypatch, mode):
+    folder = tmp_path / "apps"
+    folder.mkdir()
+    image = old_image(folder)
+    folder.chmod(mode)
+    try:
+        assert not updates.can_install(str(image))
+        answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+        with pytest.raises(updates.Error) as e:
+            updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+        assert e.value.kind == updates.INSTALL
+        assert image.read_bytes() == OLD and sorted(os.listdir(folder)) == [image.name]
+    finally:
+        folder.chmod(0o700)
+
+
+def test_no_update_of_itself_below_a_folder_others_can_write(tmp_path):
+    shared = tmp_path / "shared"
+    folder = shared / "apps"
+    folder.mkdir(parents=True)
+    image = old_image(folder)
+    shared.chmod(0o777)                  # others could move "apps" away
+    try:
+        assert not updates.can_install(str(image))
+    finally:
+        shared.chmod(0o700)
+
+
+def test_a_sticky_folder_above_is_fine(tmp_path):
+    shared = tmp_path / "shared"
+    folder = shared / "apps"
+    folder.mkdir(parents=True)
+    image = old_image(folder)
+    shared.chmod(0o1777)                 # like /tmp: others can't move "apps"
+    try:
+        assert updates.can_install(str(image))
+    finally:
+        shared.chmod(0o700)
+
+
+def test_no_update_of_itself_in_a_folder_of_someone_else(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    uid = os.getuid()
+    monkeypatch.setattr(updates.os, "getuid", lambda: uid + 12345)
+    assert not updates.can_install(str(image))
+
+
+def test_an_appimage_reached_through_links(tmp_path, monkeypatch):
+    """A linked folder or a link to the AppImage: the real file is updated
+    in its real folder, the links stay as they are."""
+    real = tmp_path / "real"
+    real.mkdir()
+    image = old_image(real)
+    (tmp_path / "linked").symlink_to(real)
+    (tmp_path / "Understeer").symlink_to(image)
+    for path in (tmp_path / "linked" / image.name, tmp_path / "Understeer"):
+        image.write_bytes(OLD)
+        assert updates.can_install(str(path))
+        answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+        new = updates.download(asset_for(NEW_APPIMAGE), str(path), clock=Clock())
+        assert pathlib.Path(new.path).parent == real
+        updates.install(new, str(path))
+        assert image.read_bytes() == NEW_APPIMAGE
+    assert (tmp_path / "Understeer").is_symlink() and (tmp_path / "linked").is_symlink()
+
+
+def test_no_update_of_something_else_than_a_file(tmp_path):
+    folder = tmp_path / "Understeer.AppImage"
+    folder.mkdir()
+    assert not updates.can_install(str(folder))
+    assert not updates.can_install(str(tmp_path / "missing.AppImage"))
+
+
+# -- 10.6 C.2: the target is bound, the temporary file checked again ---------
+def downloaded_into(tmp_path, monkeypatch, image, on_read=None):
+    answering(monkeypatch, Pieces([NEW_APPIMAGE], on_read=on_read))
+    return updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+
+
+@pytest.fixture
+def linked_image(tmp_path):
+    """home/Understeer.AppImage, reached through links/Understeer.AppImage;
+    home/notes.txt is a file of the user's next to it."""
+    home, links = tmp_path / "home", tmp_path / "links"
+    for folder in (home, links):
+        folder.mkdir()
+    real = home / "Understeer.AppImage"
+    real.write_bytes(OLD)
+    notes = home / "notes.txt"
+    notes.write_bytes(b"precious notes")
+    link = links / "Understeer.AppImage"
+    link.symlink_to(real)
+    return {"real": real, "notes": notes, "link": link, "home": home}
+
+
+def test_a_link_bent_during_the_download_installs_nothing(linked_image, tmp_path,
+                                                          monkeypatch):
+    """R1: the target checked before the download is the one replaced, or
+    none; never what the link points to afterwards."""
+    link, real, notes = linked_image["link"], linked_image["real"], linked_image["notes"]
+    new = downloaded_into(tmp_path, monkeypatch, link)
+    link.unlink()
+    link.symlink_to(notes)                          # bent meanwhile
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(link))
+    assert e.value.kind == updates.INSTALL
+    assert notes.read_bytes() == b"precious notes" and real.read_bytes() == OLD
+    assert not pathlib.Path(new.path).exists()          # our own file: removed
+
+
+def test_a_link_to_something_else_than_an_appimage(linked_image, tmp_path, monkeypatch):
+    link, notes = linked_image["link"], linked_image["notes"]
+    link.unlink()
+    link.symlink_to(notes)
+    assert not updates.can_install(str(link))
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(link), clock=Clock())
+    assert e.value.kind == updates.INSTALL
+    assert notes.read_bytes() == b"precious notes"
+    assert sorted(p.name for p in linked_image["home"].iterdir()) == [
+        "Understeer.AppImage", "notes.txt"]
+
+
+@pytest.mark.parametrize("content", [
+    b"", b"\x7fELF", APPIMAGE_HEAD[:10], b"\x7fELF\x02\x01\x01\x00AI\x01old",
+    b"#!/bin/sh\nexec true\n", b"MZ" + b"\x00" * 20,
+], ids=["empty", "elf-only", "cut-short", "type-1", "script", "other"])
+def test_only_an_appimage_is_replaced(tmp_path, monkeypatch, content):
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(content)
+    assert not updates.can_install(str(image))
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    assert e.value.kind == updates.INSTALL and image.read_bytes() == content
+
+
+def test_a_folder_put_in_place_of_the_folder(tmp_path, monkeypatch):
+    folder = tmp_path / "apps"
+    folder.mkdir()
+    image = old_image(folder)
+    new = downloaded_into(tmp_path, monkeypatch, image)
+    folder.rename(tmp_path / "moved")
+    folder.mkdir()
+    (folder / image.name).write_bytes(OLD)          # looks the same
+    os.link(tmp_path / "moved" / pathlib.Path(new.path).name,
+            folder / pathlib.Path(new.path).name)  # so does the download
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image))
+    assert e.value.kind == updates.INSTALL
+    assert (folder / image.name).read_bytes() == OLD
+    assert (tmp_path / "moved" / image.name).read_bytes() == OLD
+
+
+def test_the_appimage_put_in_place_of_meanwhile(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    new = downloaded_into(tmp_path, monkeypatch, image)
+    other = tmp_path / "other"
+    other.write_bytes(APPIMAGE_HEAD + b"another one")
+    os.replace(other, image)                        # another file, as AppImage too
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image))
+    assert e.value.kind == updates.INSTALL
+    assert image.read_bytes() == APPIMAGE_HEAD + b"another one"
+
+
+def test_an_unsafe_folder_when_installing(tmp_path, monkeypatch):
+    folder = tmp_path / "apps"
+    folder.mkdir()
+    image = old_image(folder)
+    new = downloaded_into(tmp_path, monkeypatch, image)
+    folder.chmod(0o777)
+    try:
+        with pytest.raises(updates.Error) as e:
+            updates.install(new, str(image))
+    finally:
+        folder.chmod(0o700)
+    assert e.value.kind == updates.INSTALL and image.read_bytes() == OLD
+    assert sorted(os.listdir(folder)) == [image.name]        # our file gone
+
+
+def test_an_extra_hardlink_to_the_download_installs_nothing(tmp_path, monkeypatch):
+    """R3: another name for the file would still reach the installed
+    AppImage; the extra name itself is left alone."""
+    image = old_image(tmp_path)
+    extra = tmp_path / "extra"
+
+    def link_it(answer):
+        if not extra.exists():
+            part = next(p for p in tmp_path.iterdir() if p.name.endswith(".part"))
+            os.link(part, extra)
+    new = downloaded_into(tmp_path, monkeypatch, image, on_read=link_it)
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image))
+    assert e.value.kind == updates.INSTALL and image.read_bytes() == OLD
+    assert extra.read_bytes() == NEW_APPIMAGE
+
+
+def test_an_old_part_file_as_hardlink_is_left_alone(tmp_path, monkeypatch):
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"precious")
+    os.link(victim, tmp_path / OLD_PART)
+    image = old_image(tmp_path)
+    updates.install(downloaded_into(tmp_path, monkeypatch, image), str(image))
+    assert victim.read_bytes() == b"precious"
+    assert (tmp_path / OLD_PART).read_bytes() == b"precious"
+    assert image.read_bytes() == NEW_APPIMAGE
+
+
+def open_fds():
+    return set(os.listdir("/proc/self/fd"))
+
+
+@pytest.mark.parametrize("broken", ["fstat", "fdopen"])
+def test_the_temporary_file_cant_be_set_up(tmp_path, monkeypatch, caplog, broken):
+    """R2: an updates.Error, the descriptor closed, and a file whose identity
+    isn't known left behind (and said so) rather than removed by name."""
+    image = old_image(tmp_path)
+    real, real_mkstemp = getattr(os, broken), updates.tempfile.mkstemp
+
+    def fail(*a, **k):
+        raise OSError(5, "Input/output error")
+
+    def mkstemp(**kwargs):              # breaks only once the file is made
+        made = real_mkstemp(**kwargs)
+        monkeypatch.setattr(updates.os, broken, fail)
+        return made
+    monkeypatch.setattr(updates.tempfile, "mkstemp", mkstemp)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    before = open_fds()
+    with caplog.at_level("WARNING", logger="understeer.updates"), \
+            pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    monkeypatch.setattr(updates.os, broken, real)
+    assert e.value.kind == updates.INSTALL
+    assert open_fds() == before
+    parts = [p for p in tmp_path.iterdir() if p.name.endswith(".part")]
+    if broken == "fstat":
+        assert len(parts) == 1 and any("Left" in m for m in caplog.messages)
+    else:
+        assert parts == []                  # known to be ours: removed
+    assert image.read_bytes() == OLD
+
+
+def test_the_temporary_file_cant_be_made(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+
+    def fail(*a, **k):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(updates.tempfile, "mkstemp", fail)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    assert e.value.kind == updates.INSTALL
+    assert sorted(os.listdir(tmp_path)) == [image.name] and image.read_bytes() == OLD
+
+
+class Failing:
+    """A file object that fails at one step."""
+
+    def __init__(self, real, step):
+        self.real, self.step = real, step
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+    def _maybe(self, name):
+        if self.step == name:
+            raise OSError(28, "No space left on device")
+
+    def write(self, data):
+        self._maybe("write")
+        return self.real.write(data)
+
+    def flush(self):
+        self._maybe("flush")
+        return self.real.flush()
+
+    def close(self):
+        self.real.close()
+        self._maybe("close")
+
+
+@pytest.mark.parametrize("step", ["write", "flush", "close", "fchmod", "fsync"])
+def test_a_failing_step_installs_nothing_and_leaks_nothing(tmp_path, monkeypatch, step):
+    image = old_image(tmp_path)
+    real_fdopen = os.fdopen
+    if step in ("write", "flush", "close"):
+        monkeypatch.setattr(updates.os, "fdopen",
+                            lambda fd, mode: Failing(real_fdopen(fd, mode), step))
+    else:
+        def fail(*a, **k):
+            raise OSError(5, "Input/output error")
+        monkeypatch.setattr(updates.os, step, fail)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    before = open_fds()
+    with pytest.raises(updates.Error):
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=Clock())
+    assert open_fds() == before
+    assert sorted(os.listdir(tmp_path)) == [image.name] and image.read_bytes() == OLD
+
+
+def test_no_descriptor_is_left_open(tmp_path, monkeypatch):
+    image = old_image(tmp_path)
+    before = open_fds()
+    updates.install(downloaded_into(tmp_path, monkeypatch, image), str(image))
+    assert open_fds() == before and image.read_bytes() == NEW_APPIMAGE
+
+
+def test_a_deadline_reached_exactly_starts_no_read(tmp_path, monkeypatch):
+    """R4: reached is as good as past: no further read1()."""
+    clock = Clock()
+    answer = Pieces([NEW_APPIMAGE])
+
+    def open_at_the_deadline(req, timeout):
+        clock.now = updates.DOWNLOAD_DEADLINE
+        return answer
+    monkeypatch.setattr(updates.fetch, "open_https", open_at_the_deadline)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(old_image(tmp_path)), clock=clock)
+    assert e.value.kind == updates.TIMEOUT and answer.asked == []
+
+
+def test_a_deadline_reached_exactly_at_the_end(tmp_path, monkeypatch):
+    clock = Clock()
+
+    def at_the_end(answer):
+        if not answer.pieces:
+            clock.now = updates.DOWNLOAD_DEADLINE
+    answering(monkeypatch, Pieces([NEW_APPIMAGE], on_read=at_the_end))
+    image = old_image(tmp_path)
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    assert e.value.kind == updates.TIMEOUT and image.read_bytes() == OLD
+
+
+# -- 10.6 R5: the deadline is looked at once more right before replacing ------
+def no_part_left(folder):
+    return [p.name for p in folder.iterdir() if p.name.endswith(".part")] == []
+
+
+def test_the_deadline_reached_while_syncing(tmp_path, monkeypatch):
+    clock, real_fsync = Clock(), os.fsync
+
+    def slow_fsync(fd):
+        real_fsync(fd)
+        clock.now = updates.DOWNLOAD_DEADLINE           # it took that long
+    monkeypatch.setattr(updates.os, "fsync", slow_fsync)
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    assert e.value.kind == updates.TIMEOUT
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+    assert open_fds() == before
+
+
+def test_the_deadline_reached_while_closing(tmp_path, monkeypatch):
+    clock, real_fdopen = Clock(), os.fdopen
+
+    class SlowClose(Failing):
+        def close(self):
+            self.real.close()
+            clock.now = updates.DOWNLOAD_DEADLINE
+    monkeypatch.setattr(updates.os, "fdopen",
+                        lambda fd, mode: SlowClose(real_fdopen(fd, mode), None))
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    assert e.value.kind == updates.TIMEOUT
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+    assert open_fds() == before
+
+
+def test_the_deadline_reached_while_getting_ready_to_install(tmp_path, monkeypatch):
+    """The last look is right before os.replace, after the checks of the
+    target and of the file, which take time too."""
+    clock = Clock()
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    other = tmp_path / "other file"
+    other.write_bytes(b"not ours")
+    new = updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    real_still = updates._still
+
+    def slow_still(target):
+        real_still(target)
+        clock.now = updates.DOWNLOAD_DEADLINE
+    monkeypatch.setattr(updates, "_still", slow_still)
+    before = open_fds()
+    with pytest.raises(updates.Error) as e:
+        updates.install(new, str(image))
+    assert e.value.kind == updates.TIMEOUT
+    assert image.read_bytes() == OLD and no_part_left(tmp_path)
+    assert other.read_bytes() == b"not ours" and open_fds() == before
+
+
+def test_an_installation_done_is_no_timeout(tmp_path, monkeypatch):
+    """Once replaced, it is installed: a deadline passing afterwards
+    doesn't make it a failed update."""
+    clock, real_replace = Clock(), os.replace
+
+    def replace_then_late(src, dst):
+        real_replace(src, dst)
+        clock.now = updates.DOWNLOAD_DEADLINE + 1
+    answering(monkeypatch, Pieces([NEW_APPIMAGE]))
+    image = old_image(tmp_path)
+    new = updates.download(asset_for(NEW_APPIMAGE), str(image), clock=clock)
+    monkeypatch.setattr(updates.os, "replace", replace_then_late)
+    updates.install(new, str(image))
+    assert image.read_bytes() == NEW_APPIMAGE

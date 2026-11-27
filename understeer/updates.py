@@ -18,6 +18,7 @@ never downloaded from. The download is checked against that size and
 checksum and only then put in place of the old file. The running
 Understeer goes on from its mounted image until it is restarted.
 """
+import collections
 import hashlib
 import http.client
 import json
@@ -25,7 +26,9 @@ import logging
 import os
 import platform
 import re
+import stat
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -38,6 +41,7 @@ LATEST_DEADLINE = 20                 # seconds for reading it, see fetch
 RELEASES_URL = "https://github.com/JamDaBam/Understeer/releases"
 DOWNLOAD_URL = RELEASES_URL + "/download/"
 MAX_DOWNLOAD = 200 * 1024 * 1024        # far more than an AppImage needs
+DOWNLOAD_DEADLINE = 600         # seconds for a download (it has about 1.2 MB)
 CHECK_EVERY = 3600              # at most one look an hour, also over restarts
 BETA_CHECK_EVERY = 24 * 3600    # at most one look for a beta a day
 # The tag of a stable release, e.g. v2.3.3: test versions like v2.4.0-beta.1
@@ -65,9 +69,11 @@ NOT_NEWER = "not_newer"         # the newest release is no update any more
 CHANGED = "changed"             # another version than the one chosen is newest
 CANCELLED = "cancelled"         # looking for new versions was switched off
 DOWNLOAD = "download"           # the download broke off
+TIMEOUT = "timeout"             # ... or took too long
 SIZE = "size"                   # ... or has another size than GitHub said
 CHECKSUM = "checksum"           # ... or another SHA-256
-INSTALL = "install"             # the new file could not be put in place
+INSTALL = "install"             # the new file could not be put in place, or
+                                # the AppImage's folder isn't one to update in
 
 
 class Error(Exception):
@@ -382,11 +388,159 @@ def fetch_beta(current=None, timeout=10):
     return newest_beta(_get_json(BETAS_URL, MAX_BETAS_ANSWER, timeout), current)
 
 
+# Where an update goes, as checked before the download (see _target()): the
+# AppImage with links resolved and its folder, each with its device and
+# inode. Installing replaces exactly that file, or none.
+Target = collections.namedtuple("Target", "path dev ino folder folder_dev folder_ino")
+
+# The checked download, waiting to be put in place: its path, which file it
+# is (device and inode, as made) and the Target it was made for, so that a
+# file put there instead is neither installed nor removed; and the deadline
+# of its download with the clock it is a time of (None: none), which
+# install() looks at once more right before replacing.
+Downloaded = collections.namedtuple(
+    "Downloaded", "path dev ino target deadline_at clock", defaults=(None, None))
+
+_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
+# A type 2 AppImage: an ELF file with "AI\x02" at byte 8
+_ELF, _APPIMAGE_2 = b"\x7fELF", b"AI\x02"
+
+
+def _safe_folder(folder):
+    """lstat() of folder if only this user can change what is in it: its
+    own, writable for them and for nobody else (group or others; an ACL
+    that grants it shows in the group bits too), and every folder above
+    this user's or root's and not writable for others, unless it is sticky
+    (like /tmp), where nobody but its owner can move away what isn't
+    theirs. Raises Error (INSTALL) otherwise; nothing is changed."""
+    try:
+        st = os.lstat(folder)
+        uid = os.getuid()
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != uid:
+            raise Error(f"{folder} is not this user's", INSTALL)
+        if st.st_mode & _OTHERS_WRITE:
+            raise Error(f"others may write to {folder}", INSTALL)
+        if not os.access(folder, os.W_OK):
+            raise Error(f"{folder} is not writable", INSTALL)
+        above = folder
+        while above != os.path.dirname(above):
+            above = os.path.dirname(above)
+            up = os.lstat(above)
+            if not stat.S_ISDIR(up.st_mode) or up.st_uid not in (0, uid):
+                raise Error(f"{above} is not this user's or root's", INSTALL)
+            if up.st_mode & _OTHERS_WRITE and not up.st_mode & stat.S_ISVTX:
+                raise Error(f"others may write to {above}", INSTALL)
+    except OSError as e:
+        raise Error(str(e), INSTALL) from e
+    return st
+
+
+def _appimage_file(path):
+    """(device, inode) of the AppImage at path: opened without following a
+    link, a regular file that begins as a type 2 AppImage does. Raises
+    Error (INSTALL) otherwise. Only a check of the format, nothing that
+    says the file can be trusted."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        raise Error(f"{path} can't be opened: {e}", INSTALL) from e
+    try:
+        st = os.fstat(fd)
+        head = b""
+        while stat.S_ISREG(st.st_mode) and len(head) < 11:
+            piece = os.read(fd, 11 - len(head))
+            if not piece:
+                break
+            head += piece
+    except OSError as e:
+        raise Error(f"{path} can't be read: {e}", INSTALL) from e
+    finally:
+        os.close(fd)
+    if not stat.S_ISREG(st.st_mode):
+        raise Error(f"{path} is no file", INSTALL)
+    if head[:4] != _ELF or head[8:11] != _APPIMAGE_2:
+        raise Error(f"{path} is no AppImage", INSTALL)
+    return st.st_dev, st.st_ino
+
+
+def _target(appimage):
+    """The Target to update: the AppImage as it really is, with links
+    resolved, if it is one (see _appimage_file()) in a folder only this
+    user can change (see _safe_folder()). Raises Error (INSTALL) otherwise.
+
+    Updating writes the new file next to the old one and renames it over
+    it. Whoever else may write to that folder could put a file of theirs
+    there in between, and whoever may write to a folder above could put
+    another folder in its place. Processes of this user can still do
+    anything: they are no boundary."""
+    if not appimage:
+        raise Error("no AppImage to update", INSTALL)
+    real = os.path.realpath(appimage)
+    folder = os.path.dirname(real)
+    st = _safe_folder(folder)
+    dev, ino = _appimage_file(real)
+    return Target(real, dev, ino, folder, st.st_dev, st.st_ino)
+
+
+def _still(target):
+    """Raise Error (INSTALL) unless target is still as checked: the same
+    folder (no link on the way to it, the same device and inode, still
+    safe) and the same AppImage in it."""
+    if os.path.realpath(target.folder) != target.folder:
+        raise Error(f"the way to {target.folder} changed", INSTALL)
+    st = _safe_folder(target.folder)
+    if (st.st_dev, st.st_ino) != (target.folder_dev, target.folder_ino):
+        raise Error(f"{target.folder} is another folder now", INSTALL)
+    if _appimage_file(target.path) != (target.dev, target.ino):
+        raise Error(f"{target.path} is another file now", INSTALL)
+
+
 def can_install(appimage):
-    """Whether the AppImage file can be replaced: its folder is writable."""
-    if not appimage or not os.path.isfile(appimage):
+    """Whether Understeer may update the AppImage file itself (see
+    _target()); otherwise only the download page is offered."""
+    try:
+        _target(appimage)
+    except Error:
         return False
-    return os.access(os.path.dirname(os.path.abspath(appimage)), os.W_OK)
+    return True
+
+
+def _is_ours(new):
+    """Whether new.path is still the file the download made (it may have
+    more names, see _installable())."""
+    try:
+        st = os.lstat(new.path)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and (st.st_dev, st.st_ino) == (new.dev, new.ino)
+
+
+def _installable(new):
+    """_is_ours(), and the file has no other name: through one, the
+    installed AppImage could still be changed."""
+    try:
+        st = os.lstat(new.path)
+    except OSError:
+        return False
+    return (stat.S_ISREG(st.st_mode) and (st.st_dev, st.st_ino) == (new.dev, new.ino)
+            and st.st_nlink == 1)
+
+
+def _discard(new):
+    """Remove the name the download made, only if it still names that
+    file; anything put in its place, and other names of it, are left
+    alone."""
+    if new is None:
+        return
+    if not _is_ours(new):
+        if os.path.lexists(new.path):
+            log.warning("Left %s alone: it is not the file the download made",
+                        new.path)
+        return
+    try:
+        os.unlink(new.path)
+    except OSError:
+        pass
 
 
 def prepare_update(latest, offered, current):
@@ -420,76 +574,177 @@ def update_to(offered, current, appimage, cancelled=lambda: False,
         raise Error("the update was called off", CANCELLED, latest)
     new = download(asset, appimage, progress=progress, cancelled=cancelled)
     if cancelled():
-        _remove(new)
+        _discard(new)
         raise Error("the update was called off", CANCELLED, latest)
     install(new, appimage)
     return latest
 
 
-def download(asset, appimage, timeout=30, progress=None, cancelled=None):
+def download(asset, appimage, timeout=30, progress=None, cancelled=None,
+             clock=time.monotonic):
     """Download the new AppImage next to appimage and check its size and
     SHA-256. asset: as checked_asset() lets it through, from a fresh
     answer of GitHub. Redirects are followed to https:// only (GitHub
     sends its files from another host); the size and the checksum the
-    fresh answer gave decide whether the file is ours. Returns the path
-    of the checked file; raises Error. Nothing is left behind otherwise."""
+    fresh answer gave decide whether the file is ours. Returns Downloaded;
+    raises Error. Nothing of this download is left behind otherwise.
+
+    Time: DOWNLOAD_DEADLINE seconds from before connecting, checked before
+    and after each read of the socket (read1, see fetch.iter_body()), also
+    after the one that finds the end, and once more before the file is
+    handed on. Looking up the name, connecting, TLS, the headers and
+    redirects use up that time but aren't stopped by it; they and each read
+    are bound only by timeout, so one step can take longer than the
+    deadline. It is no guaranteed total, nor is the time until a switch-off
+    (cancelled(), asked between the reads: right after one and so right
+    before the next) is noticed. Reached counts as past: no read starts at
+    the deadline.
+
+    The target is checked and bound first (_target()): install() replaces
+    that file or none. The file is made by tempfile.mkstemp in its folder:
+    a new name nobody knew, no link followed, mode 0600 while it is
+    written through that descriptor, and with no other name (st_nlink 1).
+    Once checked it is made 0755 and synced through the descriptor too;
+    the folder itself isn't synced (see install()). If the new file can't
+    be told apart (fstat fails), it is left behind rather than removed by
+    its name, which could by then be another file's."""
     asset = checked_asset(asset)
     if asset is None:
         raise Error("no checked AppImage of a release to download", NO_ASSET)
-    folder = os.path.dirname(os.path.abspath(appimage))
-    part = os.path.join(folder, ".Understeer-update.AppImage.part")
+    target = _target(appimage)
+    stop = cancelled or (lambda: False)
+    if stop():
+        raise Error("the update was called off", CANCELLED)
+    deadline_at = clock() + DOWNLOAD_DEADLINE
     req = urllib.request.Request(asset["url"], headers={"User-Agent": USER_AGENT})
     expected, digest, size = asset["size"], hashlib.sha256(), 0
     try:
-        with fetch.open_https(req, timeout) as resp, open(part, "wb") as out:
-            # Never more than one byte past the size asked for: that tells
-            # that there is more. The size is at most MAX_DOWNLOAD.
-            while chunk := resp.read(min(64 * 1024, expected + 1 - size)):
-                if cancelled is not None and cancelled():
-                    raise Error("the update was called off", CANCELLED)
-                size += len(chunk)
-                if size > expected:
-                    raise Error("the download is bigger than GitHub said", SIZE)
-                digest.update(chunk)
-                out.write(chunk)
-                if progress:
-                    progress(size / expected)
-    except fetch.Error as e:                # a redirect away from HTTPS
-        _remove(part)
-        raise Error(str(e), DOWNLOAD) from e
-    # HTTPException: e.g. a broken status line or a chunk cut short; an
-    # answer cut short otherwise just ends, and the size tells
+        fd, path = tempfile.mkstemp(dir=target.folder, prefix=".Understeer-update-",
+                                    suffix=".AppImage.part")
+    except OSError as e:
+        raise Error(f"no file for the download: {e}", INSTALL) from e
+    try:
+        st = os.fstat(fd)
+    except OSError as e:
+        _close(fd)
+        # Which file it is can't be told: not removed by its name
+        log.warning("Left %s behind: it could not be told apart from another "
+                    "file", path)
+        raise Error(f"the file for the download can't be checked: {e}", INSTALL) from e
+    new = Downloaded(path, st.st_dev, st.st_ino, target, deadline_at, clock)
+    if st.st_nlink != 1:
+        _close(fd)
+        _discard(new)
+        raise Error("the file for the download has another name too", INSTALL)
+    try:
+        out = os.fdopen(fd, "wb")
+    except (OSError, ValueError) as e:
+        _close(fd)
+        _discard(new)
+        raise Error(f"the file for the download can't be written: {e}", INSTALL) from e
+    try:
+        with out:
+            try:
+                answer = fetch.open_https(req, timeout)
+            except fetch.Error as e:            # a redirect away from HTTPS
+                raise Error(str(e), DOWNLOAD) from e
+            with answer as resp:
+                try:
+                    for chunk in fetch.iter_body(resp, expected, deadline_at, clock,
+                                                 reached=True):
+                        if stop():
+                            raise Error("the update was called off", CANCELLED)
+                        size += len(chunk)
+                        digest.update(chunk)
+                        out.write(chunk)
+                        if progress:
+                            progress(size / expected)
+                except fetch.Error as e:
+                    if e.kind == "timeout":
+                        raise Error(str(e), TIMEOUT) from e
+                    if e.kind == "too_big":
+                        raise Error("the download is bigger than GitHub said",
+                                    SIZE) from e
+                    raise Error(f"the download has {e}", SIZE) from e
+            if stop():
+                raise Error("the update was called off", CANCELLED)
+            if size != expected:
+                raise Error(f"the download has {size} of {expected} bytes", SIZE)
+            if digest.hexdigest() != asset["sha256"]:
+                raise Error("the checksum of the download is wrong", CHECKSUM)
+            if clock() >= deadline_at:          # reached counts too
+                raise Error("the download took too long", TIMEOUT)
+            out.flush()
+            os.fchmod(out.fileno(), 0o755)
+            os.fsync(out.fileno())
+        # closed: an error while closing is a failed download too; and
+        # syncing or closing may have taken the rest of the time
+        if clock() >= deadline_at:
+            raise Error("the download took too long", TIMEOUT)
+    except Error:
+        _discard(new)
+        raise
+    # HTTPException: e.g. a broken status line or a chunk cut short;
+    # TimeoutError: one step took longer than timeout
     except (OSError, ValueError, http.client.HTTPException) as e:
         if isinstance(e, urllib.error.HTTPError):
             fetch.release(e)                # it holds the answer, unread
-        _remove(part)
-        raise Error(str(e) or type(e).__name__, DOWNLOAD) from e
+        _discard(new)
+        stalled = isinstance(e, TimeoutError) or isinstance(
+            getattr(e, "reason", None), TimeoutError)
+        raise Error(str(e) or type(e).__name__, TIMEOUT if stalled else DOWNLOAD) from e
+    return new
+
+
+def install(new, appimage):
+    """Put the checked download (Downloaded) in place of the AppImage it
+    was made for (new.target), in one step (os.replace in the same
+    folder); appimage is not looked up again, only compared: if it leads
+    elsewhere now, nothing is installed. Also nothing if the folder or the
+    AppImage in it changed, the folder isn't safe any more (see _still()),
+    or new.path isn't the file the download made, or has another name too.
+    A file put there instead is neither installed nor removed. Raises
+    Error (INSTALL).
+
+    The deadline of the download (new.deadline_at) is looked at once more
+    right before the rename; a step that blocks can still outlast it.
+
+    Between these looks and the rename another process could still swap a
+    file: only in a folder of this user's, so only this user's own
+    processes. The folder isn't synced after the rename: after a power cut
+    right then the old AppImage may be back; the new file itself was
+    synced before."""
+    target = new.target
+    try:
+        if os.path.realpath(appimage) != target.path:
+            raise Error(f"{appimage} leads elsewhere now", INSTALL)
+        _still(target)
+        if os.path.dirname(new.path) != target.folder:
+            raise Error("the download is not next to the AppImage", INSTALL)
     except Error:
-        _remove(part)
+        _discard(new)
         raise
-    if size != expected:
-        _remove(part)
-        raise Error(f"the download has {size} of {expected} bytes", SIZE)
-    if digest.hexdigest() != asset["sha256"]:
-        _remove(part)
-        raise Error("the checksum of the download is wrong", CHECKSUM)
-    return part
-
-
-def install(new_file, appimage):
-    """Put the checked new_file in place of appimage, in one step."""
+    if not _is_ours(new):
+        raise Error("the downloaded file was replaced meanwhile", INSTALL)
+    if not _installable(new):
+        _discard(new)                   # our name; the other one is left
+        raise Error("the downloaded file has another name too", INSTALL)
+    # The last look at the download's deadline: the checks above take time
+    # too. Not started anew; once replaced, the update is done.
+    if new.deadline_at is not None and new.clock() >= new.deadline_at:
+        _discard(new)
+        raise Error("the download took too long", TIMEOUT)
     try:
-        os.chmod(new_file, 0o755)
-        os.replace(new_file, appimage)
+        os.replace(new.path, target.path)
     except OSError as e:
-        _remove(new_file)
+        _discard(new)
         raise Error(str(e), INSTALL) from e
-    log.info("Updated %s", appimage)
+    log.info("Updated %s", target.path)
 
 
-def _remove(path):
+def _close(fd):
     try:
-        os.remove(path)
+        os.close(fd)
     except OSError:
         pass
 
