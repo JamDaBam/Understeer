@@ -10,10 +10,13 @@ Test versions (betas) are never offered by that look: fetch_beta() finds
 the newest one apart from it and only tells its version and page; the
 window asks about it if the user switched that on (should_offer_beta()).
 
-Updating downloads the new AppImage next to the running one, checks it
-against the SHA-256 that GitHub gives for it, and only then puts it in
-place of the old file. The running Understeer goes on from its mounted
-image until it is restarted.
+Updating (update_to()) asks GitHub again first and downloads only the
+file that this fresh answer names, an AppImage of our own release for
+this machine with its size and SHA-256: what was kept in the settings
+from an earlier look (or came with an imported backup) is only shown,
+never downloaded from. The download is checked against that size and
+checksum and only then put in place of the old file. The running
+Understeer goes on from its mounted image until it is restarted.
 """
 import hashlib
 import http.client
@@ -54,8 +57,29 @@ BETA_TAG = re.compile(r"v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}-beta\.[0-9]{1,4}")
 log = logging.getLogger("understeer.updates")
 
 
+# What went wrong (Error.kind)
+UNREACHABLE = "unreachable"     # GitHub could not be asked
+INVALID = "invalid"             # ... or answered something unexpected
+NO_ASSET = "no_asset"           # a release without a checked AppImage for us
+NOT_NEWER = "not_newer"         # the newest release is no update any more
+CHANGED = "changed"             # another version than the one chosen is newest
+CANCELLED = "cancelled"         # looking for new versions was switched off
+DOWNLOAD = "download"           # the download broke off
+SIZE = "size"                   # ... or has another size than GitHub said
+CHECKSUM = "checksum"           # ... or another SHA-256
+INSTALL = "install"             # the new file could not be put in place
+
+
 class Error(Exception):
-    """GitHub could not be asked, or answered something unexpected."""
+    """GitHub could not be asked, answered something unexpected, or an
+    update could not be done. kind: one of the kinds above; latest: the
+    fresh answer of GitHub (parse_latest()) where it tells what to show
+    now (NOT_NEWER, CHANGED, NO_ASSET), else None."""
+
+    def __init__(self, message, kind=INVALID, latest=None):
+        super().__init__(message)
+        self.kind = kind
+        self.latest = latest
 
 
 def can_check(version, environ=os.environ):
@@ -73,9 +97,32 @@ def due(last_checked, now=None, every=CHECK_EVERY):
     return not 0 <= now - last_checked < every
 
 
+def checked_asset(asset, machine=None):
+    """asset ({"version", "name", "url", "sha256", "size"}) if it is the
+    AppImage of our own stable release of that version for this machine
+    (machine: platform.machine() if None), else None: the name and the
+    address exactly as our releases have them, a SHA-256 and a size of
+    more than nothing and at most MAX_DOWNLOAD (a whole number, no bool)."""
+    if not isinstance(asset, dict):
+        return None
+    version, name, url, sha256, size = (
+        asset.get(k) for k in ("version", "name", "url", "sha256", "size"))
+    if not isinstance(version, str) or not STABLE_TAG.fullmatch("v" + version):
+        return None
+    expected = f"Understeer-{version}-{machine or platform.machine()}.AppImage"
+    if name != expected or url != f"{DOWNLOAD_URL}v{version}/{expected}":
+        return None
+    if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        return None
+    if type(size) is not int or not 0 < size <= MAX_DOWNLOAD:
+        return None
+    return {"version": version, "name": name, "url": url, "sha256": sha256,
+            "size": size}
+
+
 def _asset(data, version, machine):
-    """{"url", "sha256", "size"} of the AppImage for this machine in a
-    release, or None; only files of our own releases, with a checksum."""
+    """The AppImage for this machine in a release (see checked_asset()),
+    or None; only files of our own releases, with a checksum and a size."""
     name = f"Understeer-{version}-{machine}.AppImage"
     assets = data.get("assets")
     if not isinstance(assets, list):
@@ -83,13 +130,15 @@ def _asset(data, version, machine):
     for asset in assets:
         if not isinstance(asset, dict) or asset.get("name") != name:
             continue
-        url, digest = asset.get("browser_download_url"), asset.get("digest")
-        if (isinstance(url, str) and url.startswith(DOWNLOAD_URL)
-                and isinstance(digest, str)
-                and re.fullmatch(r"sha256:[0-9a-f]{64}", digest)):
-            return {"url": url, "sha256": digest[7:],
-                    "size": asset.get("size") if isinstance(asset.get("size"), int)
-                    else None}
+        digest = asset.get("digest")
+        found = checked_asset({
+            "version": version, "name": name,
+            "url": asset.get("browser_download_url"),
+            "sha256": digest[7:] if isinstance(digest, str)
+            and digest.startswith("sha256:") else None,
+            "size": asset.get("size")}, machine)
+        if found is not None:
+            return found
     return None
 
 
@@ -104,8 +153,8 @@ def parse_latest(data, machine=None):
         raise Error("the release is no published stable release")
     if not STABLE_TAG.fullmatch(data["tag_name"]):
         raise Error("the release has no tag of a stable version")
-    url = data.get("html_url")
-    if not isinstance(url, str) or not url.startswith(RELEASES_URL + "/"):
+    url = f"{RELEASES_URL}/tag/{data['tag_name']}"
+    if data.get("html_url") != url:
         url = RELEASES_URL                 # only ever open our own page
     version = releases.plain_version(data["tag_name"])
     return {"version": version, "url": url,
@@ -113,29 +162,54 @@ def parse_latest(data, machine=None):
 
 
 def fetch_latest(timeout=10):
-    """The newest release on GitHub; raises Error.
+    """The newest release on GitHub (parse_latest()); raises Error, kind
+    UNREACHABLE if GitHub could not be asked, else INVALID.
 
+    Exactly LATEST_URL is asked (fetch.get()): no redirect is followed,
+    not even on the same server, and TLS is checked as urllib does.
     timeout: seconds for connecting and for each read. Reading the answer
     stops after LATEST_DEADLINE seconds from the start and at
-    MAX_LATEST_ANSWER bytes (see fetch.read_body() for what the deadline
-    doesn't cover). Redirects are followed, as urlopen does."""
-    req = urllib.request.Request(LATEST_URL, headers={
-        "User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
-    start = time.monotonic()
+    MAX_LATEST_ANSWER bytes (see fetch for what the deadline doesn't
+    cover)."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = fetch.read_body(resp, MAX_LATEST_ANSWER,
-                                   start + LATEST_DEADLINE)
+        body = fetch.get(LATEST_URL, "application/vnd.github+json",
+                         MAX_LATEST_ANSWER, timeout, LATEST_DEADLINE)
+    except fetch.Error as e:
+        # A redirect or an answer too big is no answer of the API as asked
+        kind = UNREACHABLE if e.kind in ("offline", "timeout", "http") else INVALID
+        raise Error(str(e), kind) from e
+    try:
         data = json.loads(body)
-    # URLError is an OSError; HTTPException: e.g. a broken status line or
-    # an answer cut short; RecursionError: JSON nested too deeply;
-    # fetch.Error: too big, too slow or cut short
-    except (OSError, ValueError, http.client.HTTPException,
-            RecursionError, fetch.Error) as e:
-        if isinstance(e, urllib.error.HTTPError):
-            fetch.release(e)                # it holds the answer, unread
-        raise Error(str(e) or type(e).__name__) from e
+    except (ValueError, RecursionError) as e:   # also nested too deeply
+        raise Error("the answer is no JSON") from e
     return parse_latest(data)
+
+
+def for_display(latest):
+    """What is kept of a look at GitHub (parse_latest()) in the settings:
+    {"version", "url", "has_asset"}, only for showing the banner."""
+    return {"version": latest["version"], "url": latest["url"],
+            "has_asset": latest.get("asset") is not None}
+
+
+def checked_latest(stored):
+    """{"version", "url", "has_asset"} of update data as kept in the
+    settings (also as older versions kept them, with the whole asset), or
+    None for anything else. Only for showing: nothing is ever downloaded
+    from it (see update_to()), and only our release's own page or the list
+    of releases is opened."""
+    if not isinstance(stored, dict):
+        return None
+    version = stored.get("version")
+    if not isinstance(version, str) or not STABLE_TAG.fullmatch("v" + version):
+        return None
+    page = f"{RELEASES_URL}/tag/v{version}"
+    has_asset = stored.get("has_asset")
+    if not isinstance(has_asset, bool):
+        has_asset = isinstance(stored.get("asset"), dict)
+    return {"version": version,
+            "url": page if stored.get("url") == page else RELEASES_URL,
+            "has_asset": has_asset}
 
 
 def is_newer(latest, current):
@@ -315,37 +389,90 @@ def can_install(appimage):
     return os.access(os.path.dirname(os.path.abspath(appimage)), os.W_OK)
 
 
-def download(asset, appimage, timeout=30, progress=None):
-    """Download the new AppImage next to appimage and check its SHA-256.
-    Returns the path of the checked file; raises Error."""
+def prepare_update(latest, offered, current):
+    """The asset to download for an update to offered (the version the
+    user chose) from latest, the fresh answer of GitHub, while current
+    runs. Raises Error: NOT_NEWER, CHANGED (another version is newest now:
+    the user has to choose again) or NO_ASSET, with latest."""
+    if not is_newer(latest["version"], current):
+        raise Error(f"{latest['version']} is no newer version than {current}",
+                    NOT_NEWER, latest)
+    if latest["version"] != offered:
+        raise Error(f"GitHub offers {latest['version']} now, not {offered}",
+                    CHANGED, latest)
+    asset = checked_asset(latest.get("asset"))
+    if asset is None or asset["version"] != latest["version"]:
+        raise Error("no checked AppImage of this release for this computer",
+                    NO_ASSET, latest)
+    return asset
+
+
+def update_to(offered, current, appimage, cancelled=lambda: False,
+              progress=None):
+    """Update appimage to the version offered, as the user chose it. Asks
+    GitHub again and downloads only the file its fresh answer names,
+    nothing kept from before. cancelled() is asked before the download,
+    while it runs and before the old file is replaced: True stops
+    (CANCELLED). Returns the fresh answer; raises Error."""
+    latest = fetch_latest()
+    asset = prepare_update(latest, offered, current)
+    if cancelled():
+        raise Error("the update was called off", CANCELLED, latest)
+    new = download(asset, appimage, progress=progress, cancelled=cancelled)
+    if cancelled():
+        _remove(new)
+        raise Error("the update was called off", CANCELLED, latest)
+    install(new, appimage)
+    return latest
+
+
+def download(asset, appimage, timeout=30, progress=None, cancelled=None):
+    """Download the new AppImage next to appimage and check its size and
+    SHA-256. asset: as checked_asset() lets it through, from a fresh
+    answer of GitHub. Redirects are followed to https:// only (GitHub
+    sends its files from another host); the size and the checksum the
+    fresh answer gave decide whether the file is ours. Returns the path
+    of the checked file; raises Error. Nothing is left behind otherwise."""
+    asset = checked_asset(asset)
+    if asset is None:
+        raise Error("no checked AppImage of a release to download", NO_ASSET)
     folder = os.path.dirname(os.path.abspath(appimage))
     part = os.path.join(folder, ".Understeer-update.AppImage.part")
     req = urllib.request.Request(asset["url"], headers={"User-Agent": USER_AGENT})
-    digest, size = hashlib.sha256(), 0
+    expected, digest, size = asset["size"], hashlib.sha256(), 0
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp, \
-                open(part, "wb") as out:
-            while chunk := resp.read(64 * 1024):
+        with fetch.open_https(req, timeout) as resp, open(part, "wb") as out:
+            # Never more than one byte past the size asked for: that tells
+            # that there is more. The size is at most MAX_DOWNLOAD.
+            while chunk := resp.read(min(64 * 1024, expected + 1 - size)):
+                if cancelled is not None and cancelled():
+                    raise Error("the update was called off", CANCELLED)
                 size += len(chunk)
-                if size > MAX_DOWNLOAD:
-                    raise Error("the download is far too big")
+                if size > expected:
+                    raise Error("the download is bigger than GitHub said", SIZE)
                 digest.update(chunk)
                 out.write(chunk)
-                if progress and asset.get("size"):
-                    progress(min(size / asset["size"], 1.0))
+                if progress:
+                    progress(size / expected)
+    except fetch.Error as e:                # a redirect away from HTTPS
+        _remove(part)
+        raise Error(str(e), DOWNLOAD) from e
     # HTTPException: e.g. a broken status line or a chunk cut short; an
-    # answer cut short otherwise just ends, and the checksum tells
+    # answer cut short otherwise just ends, and the size tells
     except (OSError, ValueError, http.client.HTTPException) as e:
         if isinstance(e, urllib.error.HTTPError):
             fetch.release(e)                # it holds the answer, unread
         _remove(part)
-        raise Error(str(e) or type(e).__name__) from e
+        raise Error(str(e) or type(e).__name__, DOWNLOAD) from e
     except Error:
         _remove(part)
         raise
+    if size != expected:
+        _remove(part)
+        raise Error(f"the download has {size} of {expected} bytes", SIZE)
     if digest.hexdigest() != asset["sha256"]:
         _remove(part)
-        raise Error("the checksum of the download is wrong")
+        raise Error("the checksum of the download is wrong", CHECKSUM)
     return part
 
 
@@ -356,7 +483,7 @@ def install(new_file, appimage):
         os.replace(new_file, appimage)
     except OSError as e:
         _remove(new_file)
-        raise Error(str(e)) from e
+        raise Error(str(e), INSTALL) from e
     log.info("Updated %s", appimage)
 
 

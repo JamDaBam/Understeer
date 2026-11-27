@@ -13,6 +13,7 @@ nothing is downloaded or installed.
 """
 import logging
 import os
+import threading
 import time
 
 from gi.repository import Adw, GLib, Gtk
@@ -31,7 +32,9 @@ TICK_SECONDS = 600      # how often to see whether a look is due
 class UpdateCheckMixin:
     """Part of TunerWindow. Settings: "update_check" (None: not asked yet),
     "update_checked" (time of the last look), "update_latest" (what GitHub
-    answered then, so the banner shows right away at the next start).
+    answered then, so the banner shows right away at the next start; only
+    for showing it, see updates.checked_latest(): updating asks GitHub
+    again and downloads only what that fresh answer names).
     Betas: "beta_notify" (only True asks), "beta_checked" (time of the
     last look), "beta_latest" (the beta found then), "beta_handled" (the
     newest release whose beta was asked about, e.g. "2.4.0"),
@@ -111,6 +114,9 @@ class UpdateCheckMixin:
             config.set_setting("update_checked", None)      # look right away
             self._start_update_check()
         else:
+            stop = getattr(self, "_update_stop", None)
+            if stop is not None:
+                stop.set()              # an update under way stops before the next step
             self._withdraw_beta()
             self._show_update_banner()
 
@@ -133,16 +139,37 @@ class UpdateCheckMixin:
                 config.get_setting("update_checked")):
             return
         config.set_setting("update_checked", time.time())
+        seq = self._next_update_look()
+        tasks.in_thread(updates.fetch_latest,
+                        lambda latest, error: self._update_found(latest, error, seq),
+                        updates.Error)
 
-        tasks.in_thread(updates.fetch_latest, self._update_found, updates.Error)
+    def _next_update_look(self):
+        """A number for a look at GitHub, higher for each later one."""
+        self._update_looks = getattr(self, "_update_looks", 0) + 1
+        return self._update_looks
 
-    def _update_found(self, latest, error):
+    def _keep_latest(self, latest, seq):
+        """Keep what the look seq found, for showing; the answer of a look
+        older than the one kept last is dropped. Returns whether kept."""
+        if seq < getattr(self, "_update_kept", 0):
+            log.info("An older answer of GitHub came late: %s not kept",
+                     latest["version"])
+            return False
+        self._update_kept = seq
+        config.set_setting("update_latest", updates.for_display(latest))
+        return True
+
+    def _update_found(self, latest, error, seq=None):
+        if not config.get_setting("update_check"):
+            log.info("Looking for new versions was switched off meanwhile")
+            return                          # a late answer: forget it
         if error is not None:
             log.info("Could not look for a new version: %s", error)
             return
         log.info("Newest version on GitHub: %s", latest["version"])
-        config.set_setting("update_latest", latest)
-        self._show_update_banner()
+        if self._keep_latest(latest, self._next_update_look() if seq is None else seq):
+            self._show_update_banner()
 
     # -- test versions ---------------------------------------------------------
     def _beta_wanted(self):
@@ -283,14 +310,13 @@ class UpdateCheckMixin:
         Gtk.UriLauncher.new(beta["url"]).launch(self, None, None)
 
     def _available_update(self):
-        """{"version", "url", "asset"} of a newer version known, or None."""
-        latest = config.get_setting("update_latest")
-        if (not config.get_setting("update_check") or not isinstance(latest, dict)
+        """{"version", "url", "has_asset"} of a newer version known, or
+        None; only for showing (updates.checked_latest())."""
+        latest = updates.checked_latest(config.get_setting("update_latest"))
+        if (not config.get_setting("update_check") or latest is None
                 or not updates.can_check(self._current_version())):
             return None
-        version = latest.get("version")
-        if not isinstance(version, str) or not updates.is_newer(
-                version, self._current_version()):
+        if not updates.is_newer(latest["version"], self._current_version()):
             return None
         return latest
 
@@ -299,7 +325,9 @@ class UpdateCheckMixin:
         return os.environ.get("APPIMAGE")
 
     def _can_update_itself(self, latest):
-        return bool(latest.get("asset")) and updates.can_install(self._appimage())
+        """Whether to offer Update Now: the last look found an AppImage for
+        this computer (only a hint; updating asks GitHub again)."""
+        return latest.get("has_asset") is True and updates.can_install(self._appimage())
 
     def _show_update_banner(self):
         """The banner for the state of updating: available, being updated
@@ -340,30 +368,76 @@ class UpdateCheckMixin:
             self._open_update_page()
 
     def _update_itself(self, latest):
-        """Download, check and put the new AppImage in place, in a thread."""
-        appimage = self._appimage()
-        self._update_state, self._update_version = "updating", latest["version"]
+        """Update to the version shown (latest, chosen with Update Now): in
+        a thread, GitHub is asked again, and only the AppImage its fresh
+        answer names is downloaded, checked and put in place. One update
+        at a time; switching off looking for new versions stops it."""
+        if getattr(self, "_update_state", None) is not None:
+            return                          # under way or done already
+        if not config.get_setting("update_check"):
+            self._notify(_("Looking for new versions is switched off"))
+            return
+        appimage, current = self._appimage(), self._current_version()
+        offered = latest["version"]
+        self._update_state, self._update_version = "updating", offered
+        stop = self._update_stop = threading.Event()
+        seq = self._next_update_look()
         self._show_update_banner()
-        log.info("Updating %s to %s", appimage, latest["version"])
+        log.info("Updating %s to %s", appimage, offered)
 
         tasks.in_thread(
-            lambda: updates.install(updates.download(latest["asset"], appimage),
-                                    appimage),
-            lambda _result, error: self._updated(error), updates.Error)
+            lambda: updates.update_to(offered, current, appimage,
+                                      cancelled=stop.is_set),
+            lambda result, error: self._updated(result, error, seq, stop),
+            updates.Error)
 
-    def _updated(self, error):
+    def _updated(self, result, error, seq, stop):
+        if getattr(self, "_update_stop", None) is stop:
+            self._update_stop = None
+        latest = result if error is None else getattr(error, "latest", None)
+        if latest is not None and config.get_setting("update_check"):
+            self._keep_latest(latest, seq)  # what GitHub says now is shown
         if error is None:
             self._update_state = "installed"
             self._show_update_banner()
             return
-        log.warning("Update failed: %s", error)
+        kind = getattr(error, "kind", None)
+        log.warning("Update failed (%s): %s", kind, error)
         self._update_state = None
         self._show_update_banner()
+        if kind == updates.CANCELLED:
+            self._notify(_("Update stopped: looking for new versions was "
+                           "switched off"))
+            return
+        if kind == updates.CHANGED:
+            self._update_note(
+                _("Another Version Available"),
+                _("Meanwhile Understeer {version} was released. Nothing was "
+                  "downloaded. Choose “Update Now” again to update to it.")
+                .format(version=latest["version"]))
+            return
+        if kind == updates.NOT_NEWER:
+            self._update_note(
+                _("No Update Available"),
+                _("GitHub doesn't offer a newer version than this one any "
+                  "more. Nothing was downloaded."))
+            return
+        reason = {
+            updates.UNREACHABLE: _("GitHub could not be reached"),
+            updates.INVALID: _("GitHub's answer could not be checked"),
+            updates.NO_ASSET: _("GitHub has no checked file of this version "
+                                "for this computer"),
+            updates.DOWNLOAD: _("the download broke off"),
+            updates.SIZE: _("the download doesn't have the size GitHub gave"),
+            updates.CHECKSUM: _("the checksum of the download is wrong"),
+            updates.INSTALL: _("the new version could not be put in place of "
+                               "the old one"),
+        }.get(kind, str(error))
         dialog = Adw.AlertDialog(
             heading=_("Update Failed"),
             body=_("Understeer could not update itself: {reason}. Your "
                    "version stays as it is. You can download the new one "
-                   "from GitHub instead.").format(reason=error))
+                   "from GitHub instead.").format(reason=reason))
         dialog.add_response("close", _("Close"))
         dialog.add_response("download", _("Download"))
         dialog.set_default_response("download")
@@ -374,6 +448,13 @@ class UpdateCheckMixin:
                        and self._open_update_page())
         dialog.present(self)
 
+    def _update_note(self, heading, body):
+        """A dialog about an update that wasn't done, to close only."""
+        dialog = Adw.AlertDialog(heading=heading, body=body)
+        dialog.add_response("close", _("Close"))
+        dialog.set_close_response("close")
+        dialog.present(self)
+
     def _restart_for_update(self):
         """Quit (asking about unsaved preset changes as always) and start
         the new AppImage."""
@@ -382,9 +463,12 @@ class UpdateCheckMixin:
             app.quit_all(restart=self._appimage())
 
     def _open_update_page(self):
+        """The release's own page (as updates.checked_latest() lets it
+        through), else the list of releases; nothing else."""
         latest = self._available_update() or {}
         url = latest.get("url", updates.RELEASES_URL)
-        if not url.startswith(updates.RELEASES_URL):
+        if url != updates.RELEASES_URL and \
+                url != f"{updates.RELEASES_URL}/tag/v{latest.get('version')}":
             url = updates.RELEASES_URL
         log.info("Opening the download page %s", url)
         Gtk.UriLauncher.new(url).launch(self, None, None)

@@ -54,7 +54,8 @@ def release(name="Understeer-1.10.0-x86_64.AppImage", url=None, digest="sha256:"
 
 def test_asset_of_this_machine():
     asset = updates.parse_latest(release(), "x86_64")["asset"]
-    assert asset == {"url": updates.DOWNLOAD_URL
+    assert asset == {"version": "1.10.0", "name": "Understeer-1.10.0-x86_64.AppImage",
+                     "url": updates.DOWNLOAD_URL
                      + "v1.10.0/Understeer-1.10.0-x86_64.AppImage",
                      "sha256": SHA, "size": 5}
     assert updates.parse_latest(release(), "aarch64")["asset"] is None
@@ -85,13 +86,16 @@ class Download:
 
 
 def fake_download(monkeypatch, body):
-    monkeypatch.setattr(updates.urllib.request, "urlopen",
+    monkeypatch.setattr(updates.fetch, "open_https",
                         lambda req, timeout: Download(body))
 
 
-def asset_for(body):
+def asset_for(body, version="1.10.0"):
+    """The asset of our release of version for this machine, with body."""
     import hashlib
-    return {"url": updates.DOWNLOAD_URL + "x", "size": len(body),
+    name = f"Understeer-{version}-{updates.platform.machine()}.AppImage"
+    return {"version": version, "name": name,
+            "url": f"{updates.DOWNLOAD_URL}v{version}/{name}", "size": len(body),
             "sha256": hashlib.sha256(body).hexdigest()}
 
 
@@ -114,8 +118,9 @@ def test_wrong_checksum_changes_nothing(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
     old.write_bytes(b"old")
     fake_download(monkeypatch, b"tampered")
-    with pytest.raises(updates.Error):
-        updates.download(asset_for(b"genuine"), str(old))
+    with pytest.raises(updates.Error, match="checksum") as e:
+        updates.download(asset_for(b"genuine!"), str(old))      # the same size
+    assert e.value.kind == updates.CHECKSUM
     assert old.read_bytes() == b"old"
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
@@ -124,11 +129,12 @@ def test_offline_download(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
     old.write_bytes(b"old")
 
-    def urlopen(req, timeout):
+    def open_https(req, timeout):
         raise updates.urllib.error.URLError("no network")
-    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
-    with pytest.raises(updates.Error):
+    monkeypatch.setattr(updates.fetch, "open_https", open_https)
+    with pytest.raises(updates.Error) as e:
         updates.download(asset_for(b"x"), str(old))
+    assert e.value.kind == updates.DOWNLOAD
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
@@ -247,23 +253,7 @@ def test_a_beta_never_reaches_the_banner(monkeypatch):
         body = json.dumps({"tag_name": "v2.4.0-beta.1", **flags,
                            "html_url": updates.RELEASES_URL + "/tag/v2.4.0-beta.1",
                            "assets": release()["assets"]}).encode()
-
-        class Answer:
-            headers = {}
-            rest = body
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-            def read1(self, limit):
-                piece, self.rest = self.rest[:limit], self.rest[limit:]
-                return piece
-
-        monkeypatch.setattr(updates.urllib.request, "urlopen",
-                            lambda req, timeout: Answer())
+        _github(monkeypatch, answer=_Answer(body))
         with pytest.raises(updates.Error):
             updates.fetch_latest()
 
@@ -291,37 +281,17 @@ def test_is_newer(latest, current, expected):
 
 
 def test_fetch_latest(monkeypatch):
-    class Answer:
-        headers = {}
-        rest = json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read1(self, limit):
-            piece, self.rest = self.rest[:limit], self.rest[limit:]
-            return piece
-
-    seen = {}
-
-    def urlopen(req, timeout):
-        seen["agent"] = req.get_header("User-agent")
-        return Answer()
-
-    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    seen = _github(monkeypatch, answer=_Answer(
+        json.dumps({"tag_name": "v9.0.0", **STABLE}).encode()))
     assert updates.fetch_latest()["version"] == "9.0.0"
-    assert seen["agent"] == "Understeer"           # nothing about the user
+    assert seen[0].get_header("User-agent") == "Understeer"   # nothing about the user
 
 
 def test_fetch_latest_offline(monkeypatch):
-    def urlopen(req, timeout):
-        raise updates.urllib.error.URLError("no network")
-    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
-    with pytest.raises(updates.Error):
+    _github(monkeypatch, error=updates.urllib.error.URLError("no network"))
+    with pytest.raises(updates.Error) as e:
         updates.fetch_latest()
+    assert e.value.kind == updates.UNREACHABLE
 
 
 def test_restart_from_home(monkeypatch):
@@ -349,6 +319,10 @@ def test_a_saved_beta_is_no_update(monkeypatch):
 class _Answer:
     """An answer without Content-Length; read1 hands out its body."""
     headers = {}
+    status = 200
+
+    def geturl(self):
+        return updates.LATEST_URL
 
     def __init__(self, body=b"", error=None):
         self.body, self.error = body, error
@@ -367,20 +341,26 @@ class _Answer:
 
 
 def _github(monkeypatch, answer=None, error=None):
-    """urlopen answers with answer, or raises error; beta discovery and
-    downloading must not be touched."""
-    def urlopen(req, timeout):
-        assert req.full_url == updates.LATEST_URL
-        if error is not None:
-            raise error
-        return answer
+    """The opener of fetch.get() answers with answer, or raises error;
+    beta discovery and downloading must not be touched. Returns the
+    requests made."""
+    requests = []
+
+    class Opener:
+        def open(self, req, timeout):
+            assert req.full_url == updates.LATEST_URL
+            requests.append(req)
+            if error is not None:
+                raise error
+            return answer
 
     def refuse(*a, **k):
         raise AssertionError("not part of the stable look")
-    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(updates.fetch, "_opener", Opener)
+    monkeypatch.setattr(updates.urllib.request, "urlopen", refuse)
     for name in ("fetch_beta", "newest_beta", "download", "install", "restart"):
         monkeypatch.setattr(updates, name, refuse)
-    monkeypatch.setattr(updates.fetch, "get", refuse)
+    return requests
 
 
 @pytest.mark.parametrize("error", [
@@ -441,7 +421,8 @@ def test_fetch_latest_stable_release_with_asset(monkeypatch):
     monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
     assert updates.fetch_latest() == {
         "version": "1.10.0", "url": updates.RELEASES_URL + "/tag/v1.10.0",
-        "asset": {"url": updates.DOWNLOAD_URL
+        "asset": {"version": "1.10.0", "name": "Understeer-1.10.0-x86_64.AppImage",
+                  "url": updates.DOWNLOAD_URL
                   + "v1.10.0/Understeer-1.10.0-x86_64.AppImage",
                   "sha256": SHA, "size": 5}}
 
@@ -480,8 +461,9 @@ def test_fetch_latest_closes_an_http_error(monkeypatch, fail):
     _github(monkeypatch, error=error)
     with pytest.raises(updates.Error) as e:
         updates.fetch_latest()
-    assert str(e.value) == "HTTP Error 404: Not Found"
-    assert e.value.__cause__ is error
+    assert str(e.value) == "HTTP 404" and e.value.kind == updates.UNREACHABLE
+    assert isinstance(e.value.__cause__, updates.fetch.Error)
+    assert e.value.__cause__.code == 404
     assert body.closed
 
 
@@ -493,9 +475,9 @@ def test_download_closes_an_http_error(tmp_path, monkeypatch, fail):
     body = _ErrorBody(fail)
     asset = asset_for(b"x")
 
-    def urlopen(req, timeout):
+    def open_https(req, timeout):
         raise _http_error(req.full_url, 404, body)
-    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(updates.fetch, "open_https", open_https)
     with pytest.raises(updates.Error) as e:
         updates.download(asset, str(old))
     assert str(e.value) == "HTTP Error 404: Not Found"
@@ -508,22 +490,22 @@ def test_download_closes_an_answer_refused_while_reading(tmp_path, monkeypatch):
     old = tmp_path / "Understeer.AppImage"
     old.write_bytes(b"old")
     closed = []
-    monkeypatch.setattr(updates, "MAX_DOWNLOAD", 0)
 
     class Answer(Download):
         def __exit__(self, *exc):
             closed.append(exc[0])
             return False
-    monkeypatch.setattr(updates.urllib.request, "urlopen",
+    monkeypatch.setattr(updates.fetch, "open_https",
                         lambda req, timeout: Answer(b"too big"))
-    with pytest.raises(updates.Error, match="far too big"):
-        updates.download(asset_for(b"too big"), str(old))
+    with pytest.raises(updates.Error, match="bigger") as e:
+        updates.download(asset_for(b"x"), str(old))     # one byte said
+    assert e.value.kind == updates.SIZE
     assert closed == [updates.Error]
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
 # -- broken answers, from a real server on 127.0.0.1 --------------------------
-from test_fetch import Server  # noqa: E402
+import test_fetch  # noqa: E402
 
 NEW_APPIMAGE = b"new AppImage" * 1000
 
@@ -535,64 +517,123 @@ def local():
     s.close()
 
 
-def download_from(server, tmp_path, body=NEW_APPIMAGE):
+https_servers = test_fetch.https_servers   # https:// hosts served locally
+
+
+@pytest.fixture
+def github(https_servers):
+    """A local server for https://github.com, where the real DOWNLOAD_URL
+    points; no name is looked up, nothing leaves the computer."""
+    return https_servers("github.com")
+
+
+def asset_path(body=NEW_APPIMAGE):
+    return updates.urllib.parse.urlsplit(asset_for(body)["url"]).path
+
+
+def download_from(tmp_path, body=NEW_APPIMAGE):
     old = tmp_path / "Understeer.AppImage"
     old.write_bytes(b"old")
-    asset = dict(asset_for(body), url=f"http://{server.address}/Understeer.AppImage")
-    return updates.download(asset, str(old)), old
+    return updates.download(asset_for(body), str(old)), old
 
 
 @pytest.mark.parametrize("broken", [
     b"NONSENSE\r\n\r\n",                                        # no status line
     b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3e8\r\n" + b"n" * 100,
 ], ids=["bad-status-line", "chunk-cut-short"])
-def test_a_broken_download_is_an_update_error(local, tmp_path, broken):
-    local.answer = lambda h: h.wfile.write(broken)
+def test_a_broken_download_is_an_update_error(github, tmp_path, broken):
+    github.answer = lambda h: h.wfile.write(broken)
     with pytest.raises(updates.Error) as e:
-        download_from(local, tmp_path)
+        download_from(tmp_path)
     assert str(e.value)                                 # shown in the dialog
     assert isinstance(e.value.__cause__, http.client.HTTPException)
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]   # no .part
+    assert e.value.kind == updates.DOWNLOAD
     assert (tmp_path / "Understeer.AppImage").read_bytes() == b"old"
-    assert local.answered.wait(5)
+    assert github.answered.wait(5)
 
 
-def test_a_download_cut_short_fails_its_checksum(local, tmp_path):
-    local.answer = lambda h: h.wfile.write(
+def test_a_download_cut_short_is_refused(github, tmp_path):
+    github.answer = lambda h: h.wfile.write(
         b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(NEW_APPIMAGE)
         + NEW_APPIMAGE[:100])
-    with pytest.raises(updates.Error, match="checksum"):
-        download_from(local, tmp_path)
+    with pytest.raises(updates.Error, match="100 of 12000 bytes") as e:
+        download_from(tmp_path)
+    assert e.value.kind == updates.SIZE
     assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
 @pytest.mark.parametrize("length", [True, False], ids=["length", "no-length"])
-def test_a_whole_download_is_taken(local, tmp_path, length):
-    local.answer = lambda h: h.send_body(NEW_APPIMAGE, length=length)
-    new, old = download_from(local, tmp_path)
+def test_a_whole_download_is_taken(github, tmp_path, length):
+    github.answer = lambda h: h.send_body(NEW_APPIMAGE, length=length)
+    new, old = download_from(tmp_path)
     assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
     assert old.read_bytes() == b"old"               # untouched until installed
+    assert [p for p, _h in github.requests] == [asset_path()]
 
 
-def test_a_redirect_is_still_followed(local, tmp_path):
-    """GitHub sends release files from another address."""
+def test_an_https_redirect_is_followed(github, https_servers, tmp_path):
+    """GitHub sends release files from another host; the checksum and the
+    size of the fresh answer tell that the file is ours."""
+    files = https_servers("release-assets.example")
+
     def answer(h):
-        if h.path == "/Understeer.AppImage":
-            h.send_response(302)
-            h.send_header("Location", "/stored/Understeer.AppImage")
-            h.send_header("Content-Length", "0")
-            h.end_headers()
-        else:
-            h.send_body(NEW_APPIMAGE)
-    local.answer = answer
-    new, _old = download_from(local, tmp_path)
+        h.send_response(302)
+        h.send_header("Location", "https://release-assets.example/stored")
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+    github.answer = answer
+    files.answer = lambda h: h.send_body(NEW_APPIMAGE)
+    new, _old = download_from(tmp_path)
     assert pathlib.Path(new).read_bytes() == NEW_APPIMAGE
-    assert [p for p, _h in local.requests] == ["/Understeer.AppImage",
-                                              "/stored/Understeer.AppImage"]
+    assert [p for p, _h in github.requests] == [asset_path()]
+    assert [p for p, _h in files.requests] == ["/stored"]
+
+
+@pytest.mark.parametrize("location", [
+    "http://release-assets.example/stored", "ftp://release-assets.example/stored",
+    "file:///etc/passwd"])
+def test_a_redirect_away_from_https_is_refused(github, https_servers, tmp_path,
+                                               location):
+    files = https_servers("release-assets.example")
+
+    def answer(h):
+        h.send_response(302)
+        h.send_header("Location", location)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+    github.answer = answer
+    with pytest.raises(updates.Error) as e:
+        download_from(tmp_path)
+    assert e.value.kind == updates.DOWNLOAD
+    assert files.requests == []
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+@pytest.mark.parametrize("extra", [1, 64 * 1024, 5 * 1024 * 1024])
+def test_a_download_bigger_than_said_stops_at_once(github, tmp_path, extra):
+    """Refused one byte past the size GitHub gave, not read on to
+    MAX_DOWNLOAD."""
+    sent = []
+
+    def answer(h):
+        h.send_response(200)
+        h.end_headers()
+        try:
+            for _i in range(0, len(NEW_APPIMAGE) + extra, 4096):
+                h.wfile.write(b"x" * 4096)
+                sent.append(4096)
+        except OSError:
+            pass                            # the download hung up
+    github.answer = answer
+    with pytest.raises(updates.Error, match="bigger") as e:
+        download_from(tmp_path)
+    assert e.value.kind == updates.SIZE
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
 
 
 # -- fetch_latest from a real server on 127.0.0.1: size and time -------------
-import test_fetch  # noqa: E402
+Server = test_fetch.Server
 
 answers = test_fetch.answers       # every HTTP answer opened, see there
 
@@ -695,18 +736,24 @@ def test_a_slow_latest_answer_within_the_deadline_is_read(local, monkeypatch):
     assert latest_from(local, monkeypatch)["version"] == "9.0.0"
 
 
-def test_the_latest_answer_still_follows_a_redirect(local, monkeypatch, answers):
+@pytest.mark.parametrize("location", [
+    "/moved",                                       # the same server
+    "/repos/JamDaBam/Understeer/releases/latest",   # even the same path
+    "https://api.github.com.evil.example/latest",   # another host
+    "http://127.0.0.1:9/latest",                    # away from HTTPS
+])
+def test_the_stable_look_follows_no_redirect(local, monkeypatch, answers, location):
+    """Only the fixed address of the API answers; a redirect is refused
+    before anything is asked of where it points."""
     def answer(h):
-        if h.path == "/latest":
-            h.send_response(302)
-            h.send_header("Location", "/moved")
-            h.send_header("Content-Length", "0")
-            h.end_headers()
-        else:
-            h.send_body(latest_json())
+        h.send_response(302)
+        h.send_header("Location", location)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
     local.answer = answer
-    assert latest_from(local, monkeypatch)["version"] == "9.0.0"
-    assert [path for path, _headers in local.requests] == ["/latest", "/moved"]
+    e = latest_error(local, monkeypatch)
+    assert e.kind == updates.INVALID
+    assert [path for path, _headers in local.requests] == ["/latest"]
     assert answers and all(a.closed for a in answers)
 
 
@@ -714,8 +761,8 @@ def test_the_latest_answer_still_follows_a_redirect(local, monkeypatch, answers)
 def test_a_latest_http_error_is_closed(local, monkeypatch, answers, status):
     local.answer = lambda h: h.send_body(b"error", status)
     e = latest_error(local, monkeypatch)
-    assert str(e).startswith(f"HTTP Error {status}")
-    assert isinstance(e.__cause__, updates.urllib.error.HTTPError)
+    assert str(e) == f"HTTP {status}" and e.kind == updates.UNREACHABLE
+    assert isinstance(e.__cause__, updates.fetch.Error) and e.__cause__.code == status
     assert len(answers) == 1 and answers[0].closed
 
 
@@ -723,5 +770,307 @@ def test_latest_reading_errors_stay_update_errors(local, monkeypatch, answers):
     local.answer = lambda h: h.wfile.write(
         b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\nabc")
     e = latest_error(local, monkeypatch)
-    assert isinstance(e.__cause__, http.client.IncompleteRead) and str(e)
+    assert isinstance(e.__cause__, updates.fetch.Error) and str(e)
+    assert e.kind == updates.UNREACHABLE
     assert len(answers) == 1 and answers[0].closed
+
+
+# -- U-006: only a fresh, checked answer of GitHub leads to an installation --
+# Stored update data (app.json, maybe from an imported backup) can name any
+# file together with its checksum: a checksum alone proves nothing then.
+EVIL = b"not an Understeer"
+EVIL_SHA = __import__("hashlib").sha256(EVIL).hexdigest()
+
+
+def official(version="9.0.0", machine="x86_64"):
+    name = f"Understeer-{version}-{machine}.AppImage"
+    return name, f"{updates.DOWNLOAD_URL}v{version}/{name}"
+
+
+@pytest.fixture
+def opened(monkeypatch):
+    """Every address a download opens; each answers EVIL. No request
+    leaves: the old way of opening (urlopen) and the new one are replaced."""
+    seen = []
+
+    def answer(req, timeout=None):
+        seen.append(getattr(req, "full_url", req))
+        return Download(EVIL)
+    monkeypatch.setattr(updates.urllib.request, "urlopen", answer)
+    monkeypatch.setattr(updates.fetch, "open_https", answer)
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    return seen
+
+
+@pytest.mark.parametrize("url", [
+    "https://evil.example/Understeer-9.0.0-x86_64.AppImage",
+    "http://github.com/JamDaBam/Understeer/releases/download/v9.0.0/"
+    "Understeer-9.0.0-x86_64.AppImage",
+    "file:///tmp/Understeer-9.0.0-x86_64.AppImage",
+    updates.DOWNLOAD_URL + "v9.0.0/../../../../someone/else/releases/download/"
+    "v9.0.0/Understeer-9.0.0-x86_64.AppImage",
+    updates.DOWNLOAD_URL + "v9.0.0/Understeer-9.0.0-aarch64.AppImage",
+    updates.DOWNLOAD_URL + "v8.0.0/Understeer-9.0.0-x86_64.AppImage",
+], ids=["other-host", "http", "file", "dot-dot", "other-machine", "other-tag"])
+def test_a_stored_asset_leads_to_no_download(tmp_path, opened, url):
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    asset = {"version": "9.0.0", "name": "Understeer-9.0.0-x86_64.AppImage",
+             "url": url, "sha256": EVIL_SHA, "size": len(EVIL)}
+    with pytest.raises(updates.Error):
+        updates.install(updates.download(asset, str(image)), str(image))
+    assert opened == []                             # refused before asking
+    assert image.read_bytes() == b"old"
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_a_file_and_its_own_checksum_are_not_installed(tmp_path, monkeypatch):
+    """The attack as it would happen: stored data point at a file of the
+    attacker's with the matching checksum."""
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    evil = tmp_path / "Understeer-9.0.0-x86_64.AppImage"
+    evil.write_bytes(EVIL)
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    stored = {"version": "9.0.0", "url": updates.RELEASES_URL + "/tag/v9.0.0",
+              "asset": {"url": evil.as_uri(), "sha256": EVIL_SHA, "size": len(EVIL)}}
+    with pytest.raises(updates.Error):
+        updates.install(updates.download(stored["asset"], str(image)), str(image))
+    assert image.read_bytes() == b"old"
+
+
+def fresh(version="9.0.0", body=NEW_APPIMAGE, machine="x86_64"):
+    """What fetch_latest gives for a checked stable release with its file."""
+    import hashlib
+    name, url = official(version, machine)
+    return {"version": version, "url": f"{updates.RELEASES_URL}/tag/v{version}",
+            "asset": {"version": version, "name": name, "url": url,
+                      "sha256": hashlib.sha256(body).hexdigest(), "size": len(body)}}
+
+
+@pytest.fixture
+def updating(tmp_path, monkeypatch):
+    """update_to() with GitHub and the download replaced: answer is what the
+    fresh look gives (or raises), downloads lists the assets downloaded."""
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    state = {"answer": fresh(), "downloads": [], "image": image}
+
+    def fetch_latest(timeout=10):
+        if isinstance(state["answer"], Exception):
+            raise state["answer"]
+        return state["answer"]
+
+    def download(asset, appimage, timeout=30, progress=None, cancelled=None):
+        state["downloads"].append(asset)
+        new = tmp_path / ".new"
+        new.write_bytes(NEW_APPIMAGE)
+        return str(new)
+    monkeypatch.setattr(updates, "fetch_latest", fetch_latest)
+    monkeypatch.setattr(updates, "download", download)
+    return state
+
+
+def test_only_the_fresh_answer_is_downloaded(updating):
+    result = updates.update_to("9.0.0", "2.3.3", str(updating["image"]))
+    assert updating["downloads"] == [fresh()["asset"]]
+    assert result["version"] == "9.0.0"
+    assert updating["image"].read_bytes() == NEW_APPIMAGE
+
+
+def test_no_download_when_github_cant_be_asked(updating):
+    updating["answer"] = updates.Error("offline", updates.UNREACHABLE)
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(updating["image"]))
+    assert e.value.kind == updates.UNREACHABLE
+    assert updating["downloads"] == []
+    assert updating["image"].read_bytes() == b"old"
+
+
+@pytest.mark.parametrize("size", [True, "5", 0, -1, 200 * 1024 * 1024 + 1, None, 1.5])
+def test_an_asset_needs_a_real_size(size):
+    data = release()
+    data["assets"][1]["size"] = size
+    assert updates.parse_latest(data, "x86_64")["asset"] is None
+
+
+def test_a_download_stops_past_its_size(tmp_path, monkeypatch):
+    """Not read on up to MAX_DOWNLOAD once more than the size came."""
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    big = Download(b"x" * (2 * 1024 * 1024))
+    monkeypatch.setattr(updates.urllib.request, "urlopen", lambda req, timeout: big)
+    monkeypatch.setattr(updates.fetch, "open_https", lambda req, timeout: big)
+    with pytest.raises(updates.Error):
+        updates.download(fresh(body=b"x" * 10)["asset"], str(image))
+    assert big.at <= 64 * 1024
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_stored_update_data_are_only_shown():
+    name, url = official()
+    stored = {"version": "9.0.0", "url": updates.RELEASES_URL + "/tag/v9.0.0",
+              "asset": {"url": url, "sha256": EVIL_SHA, "size": 5}}
+    assert updates.checked_latest(stored) == {
+        "version": "9.0.0", "url": updates.RELEASES_URL + "/tag/v9.0.0",
+        "has_asset": True}
+
+
+# -- what is kept of a look, and what it is good for -------------------------
+PAGE = updates.RELEASES_URL + "/tag/v9.0.0"
+
+
+@pytest.mark.parametrize("stored, expected", [
+    ({"version": "9.0.0", "url": PAGE, "has_asset": True},
+     {"version": "9.0.0", "url": PAGE, "has_asset": True}),
+    ({"version": "9.0.0", "url": PAGE, "has_asset": False},
+     {"version": "9.0.0", "url": PAGE, "has_asset": False}),
+    # as older versions kept it, with the whole asset: only shown
+    ({"version": "9.0.0", "url": PAGE, "asset": {"url": "https://evil.example/x"}},
+     {"version": "9.0.0", "url": PAGE, "has_asset": True}),
+    ({"version": "9.0.0", "url": PAGE, "asset": None},
+     {"version": "9.0.0", "url": PAGE, "has_asset": False}),
+    # another page than the release's own: the list of releases instead
+    ({"version": "9.0.0", "url": "https://evil.example/", "has_asset": True},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": True}),
+    ({"version": "9.0.0", "url": "http://github.com/JamDaBam/Understeer/releases/tag/v9.0.0"},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": False}),
+    ({"version": "9.0.0", "url": "file:///etc/passwd"},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": False}),
+    ({"version": "9.0.0", "url": updates.RELEASES_URL + "/tag/v8.0.0"},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": False}),
+    ({"version": "9.0.0", "url": PAGE + "/../../../../evil"},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": False}),
+    ({"version": "9.0.0", "url": 5, "has_asset": "yes"},
+     {"version": "9.0.0", "url": updates.RELEASES_URL, "has_asset": False}),
+])
+def test_stored_update_data_as_shown(stored, expected):
+    assert updates.checked_latest(stored) == expected
+
+
+@pytest.mark.parametrize("stored", [
+    None, [], "9.0.0", 5, {}, {"version": 9}, {"version": "9.0"},
+    {"version": "9.0.0-beta.1"}, {"version": "v9.0.0"}, {"version": "../9.0.0"},
+    {"version": "9.0.0\n"}, {"version": "٩.0.0"},
+])
+def test_broken_stored_update_data_are_ignored(stored):
+    assert updates.checked_latest(stored) is None
+
+
+def test_what_is_kept_of_a_look():
+    assert updates.for_display(fresh()) == {"version": "9.0.0", "url": PAGE,
+                                            "has_asset": True}
+    assert updates.for_display({**fresh(), "asset": None})["has_asset"] is False
+
+
+# -- the fresh look decides ---------------------------------------------------
+@pytest.mark.parametrize("answer, kind", [
+    (fresh("9.0.0"), None),
+    (fresh("2.3.3"), updates.NOT_NEWER),            # no update any more
+    (fresh("2.0.0"), updates.NOT_NEWER),
+    (fresh("9.1.0"), updates.CHANGED),              # another one is newest now
+    (fresh("8.0.0"), updates.CHANGED),
+    ({**fresh(), "asset": None}, updates.NO_ASSET),
+    (fresh(machine="aarch64"), updates.NO_ASSET),   # not for this computer
+    ({**fresh(), "asset": {**fresh()["asset"], "url": "https://evil.example/x"}},
+     updates.NO_ASSET),
+    ({**fresh(), "asset": {**fresh()["asset"], "size": True}}, updates.NO_ASSET),
+    ({**fresh(), "asset": fresh("8.0.0")["asset"]}, updates.NO_ASSET),
+])
+def test_prepare_update(monkeypatch, answer, kind):
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    if kind is None:
+        assert updates.prepare_update(answer, "9.0.0", "2.3.3") == fresh()["asset"]
+        return
+    with pytest.raises(updates.Error) as e:
+        updates.prepare_update(answer, "9.0.0", "2.3.3")
+    assert e.value.kind == kind and e.value.latest is answer
+
+
+@pytest.mark.parametrize("answer, kind", [
+    (updates.Error("offline", updates.UNREACHABLE), updates.UNREACHABLE),
+    (updates.Error("the answer is no JSON"), updates.INVALID),
+    (updates.Error("the release is no published stable release"), updates.INVALID),
+    (fresh("2.3.3"), updates.NOT_NEWER),
+    (fresh("9.1.0"), updates.CHANGED),
+    ({**fresh(), "asset": None}, updates.NO_ASSET),
+])
+def test_no_download_unless_the_fresh_look_allows_it(updating, answer, kind):
+    """An answer that can't be read is never taken for one that says there
+    is no update: INVALID and UNREACHABLE stay apart from NOT_NEWER."""
+    updating["answer"] = answer
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(updating["image"]))
+    assert e.value.kind == kind
+    assert updating["downloads"] == []
+    assert updating["image"].read_bytes() == b"old"
+
+
+def test_kinds_of_a_failed_stable_look(monkeypatch):
+    _github(monkeypatch, answer=_Answer(b"not json"))
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert e.value.kind == updates.INVALID
+    _github(monkeypatch, answer=_Answer(json.dumps(
+        {"tag_name": "v9.0.0", "prerelease": True, "draft": False}).encode()))
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert e.value.kind == updates.INVALID
+    _github(monkeypatch, answer=_Answer(b" " * (updates.MAX_LATEST_ANSWER + 1)))
+    with pytest.raises(updates.Error) as e:
+        updates.fetch_latest()
+    assert e.value.kind == updates.INVALID
+
+
+@pytest.mark.parametrize("size", [True, False, "5", 0, -1, 1.5, None,
+                                  200 * 1024 * 1024 + 1])
+def test_no_download_without_a_real_size(tmp_path, opened, size):
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    with pytest.raises(updates.Error) as e:
+        updates.download({**fresh()["asset"], "size": size}, str(image))
+    assert e.value.kind == updates.NO_ASSET and opened == []
+
+
+def test_called_off_before_the_download(updating):
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(updating["image"]),
+                          cancelled=lambda: True)
+    assert e.value.kind == updates.CANCELLED and updating["downloads"] == []
+    assert updating["image"].read_bytes() == b"old"
+
+
+def test_called_off_after_the_download(updating, tmp_path):
+    asks = []
+
+    def cancelled():
+        asks.append(1)
+        return len(asks) > 1            # switched off while downloading
+    with pytest.raises(updates.Error) as e:
+        updates.update_to("9.0.0", "2.3.3", str(updating["image"]), cancelled=cancelled)
+    assert e.value.kind == updates.CANCELLED
+    assert updating["image"].read_bytes() == b"old"
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_called_off_while_downloading(tmp_path, monkeypatch):
+    fake_download(monkeypatch, NEW_APPIMAGE)
+    image = tmp_path / "Understeer.AppImage"
+    image.write_bytes(b"old")
+    with pytest.raises(updates.Error) as e:
+        updates.download(asset_for(NEW_APPIMAGE), str(image), cancelled=lambda: True)
+    assert e.value.kind == updates.CANCELLED
+    assert [p.name for p in tmp_path.iterdir()] == ["Understeer.AppImage"]
+
+
+def test_a_failed_installation(tmp_path):
+    new = tmp_path / "new"
+    new.write_bytes(NEW_APPIMAGE)
+    target = tmp_path / "Understeer.AppImage"
+    target.mkdir()
+    (target / "in the way").write_text("x")     # a folder can't be replaced
+    with pytest.raises(updates.Error) as e:
+        updates.install(str(new), str(target))
+    assert e.value.kind == updates.INSTALL and not new.exists()

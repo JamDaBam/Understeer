@@ -2767,71 +2767,123 @@ msgstr "The games in it are deleted for good."
 msgid "Empty Trash"
 msgstr "Empty Trash"
 
-#: understeer/ui/update_check.py:80
+#: understeer/ui/update_check.py:83
 msgid "Look for New Versions?"
 msgstr "Look for New Versions?"
 
-#: understeer/ui/update_check.py:81
+#: understeer/ui/update_check.py:84
 msgid "Understeer can ask GitHub at start and every hour whether there is a newer version and then show a note at the top. Only the version number is fetched; nothing about you is sent. You can change this in the preferences."
 msgstr "Understeer can ask GitHub at start and every hour whether there is a newer version and then show a note at the top. Only the version number is fetched; nothing about you is sent. You can change this in the preferences."
 
-#: understeer/ui/update_check.py:85
+#: understeer/ui/update_check.py:88
 msgid "Don't Look"
 msgstr "Don't Look"
 
-#: understeer/ui/update_check.py:86
+#: understeer/ui/update_check.py:89
 msgid "Look"
 msgstr "Look"
 
-#: understeer/ui/update_check.py:229
+#: understeer/ui/update_check.py:256
 msgid "Test Version Available"
 msgstr "Test Version Available"
 
-#: understeer/ui/update_check.py:231
+#: understeer/ui/update_check.py:258
 msgid "Understeer {version} is a newer test version than the one you use. Understeer tells you once about each newer test version; nothing is downloaded or installed."
 msgstr "Understeer {version} is a newer test version than the one you use. Understeer tells you once about each newer test version; nothing is downloaded or installed."
 
-#: understeer/ui/update_check.py:235
+#: understeer/ui/update_check.py:262
 msgid "Understeer {version} is a test version of the next release. You can try it and tell what works and what doesn't. Understeer asks only once for each release; nothing is downloaded or installed."
 msgstr "Understeer {version} is a test version of the next release. You can try it and tell what works and what doesn't. Understeer asks only once for each release; nothing is downloaded or installed."
 
-#: understeer/ui/update_check.py:241
+#: understeer/ui/update_check.py:268
 msgid "Not Now"
 msgstr "Not Now"
 
-#: understeer/ui/update_check.py:242
+#: understeer/ui/update_check.py:269
 msgid "View on GitHub"
 msgstr "View on GitHub"
 
-#: understeer/ui/update_check.py:315
+#: understeer/ui/update_check.py:343
 msgid "Understeer {version} is installed. Restart to use it."
 msgstr "Understeer {version} is installed. Restart to use it."
 
-#: understeer/ui/update_check.py:317
+#: understeer/ui/update_check.py:345
 msgid "Restart"
 msgstr "Restart"
 
-#: understeer/ui/update_check.py:319
+#: understeer/ui/update_check.py:347
 msgid "Updating to Understeer {version}…"
 msgstr "Updating to Understeer {version}…"
 
-#: understeer/ui/update_check.py:323
+#: understeer/ui/update_check.py:351
 msgid "Understeer {version} is available"
 msgstr "Understeer {version} is available"
 
-#: understeer/ui/update_check.py:325
+#: understeer/ui/update_check.py:353
 msgid "Update Now"
 msgstr "Update Now"
 
-#: understeer/ui/update_check.py:327
+#: understeer/ui/update_check.py:355
 msgid "Download"
 msgstr "Download"
 
-#: understeer/ui/update_check.py:363
+#: understeer/ui/update_check.py:378
+msgid "Looking for new versions is switched off"
+msgstr "Looking for new versions is switched off"
+
+#: understeer/ui/update_check.py:409
+msgid "Update stopped: looking for new versions was switched off"
+msgstr "Update stopped: looking for new versions was switched off"
+
+#: understeer/ui/update_check.py:414
+msgid "Another Version Available"
+msgstr "Another Version Available"
+
+#: understeer/ui/update_check.py:415
+msgid "Meanwhile Understeer {version} was released. Nothing was downloaded. Choose “Update Now” again to update to it."
+msgstr "Meanwhile Understeer {version} was released. Nothing was downloaded. Choose “Update Now” again to update to it."
+
+#: understeer/ui/update_check.py:421
+msgid "No Update Available"
+msgstr "No Update Available"
+
+#: understeer/ui/update_check.py:422
+msgid "GitHub doesn't offer a newer version than this one any more. Nothing was downloaded."
+msgstr "GitHub doesn't offer a newer version than this one any more. Nothing was downloaded."
+
+#: understeer/ui/update_check.py:426
+msgid "GitHub could not be reached"
+msgstr "GitHub could not be reached"
+
+#: understeer/ui/update_check.py:427
+msgid "GitHub's answer could not be checked"
+msgstr "GitHub's answer could not be checked"
+
+#: understeer/ui/update_check.py:428
+msgid "GitHub has no checked file of this version for this computer"
+msgstr "GitHub has no checked file of this version for this computer"
+
+#: understeer/ui/update_check.py:430
+msgid "the download broke off"
+msgstr "the download broke off"
+
+#: understeer/ui/update_check.py:431
+msgid "the download doesn't have the size GitHub gave"
+msgstr "the download doesn't have the size GitHub gave"
+
+#: understeer/ui/update_check.py:432
+msgid "the checksum of the download is wrong"
+msgstr "the checksum of the download is wrong"
+
+#: understeer/ui/update_check.py:433
+msgid "the new version could not be put in place of the old one"
+msgstr "the new version could not be put in place of the old one"
+
+#: understeer/ui/update_check.py:437
 msgid "Update Failed"
 msgstr "Update Failed"
 
-#: understeer/ui/update_check.py:364
+#: understeer/ui/update_check.py:438
 msgid "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 msgstr "Understeer could not update itself: {reason}. Your version stays as it is. You can download the new one from GitHub instead."
 
