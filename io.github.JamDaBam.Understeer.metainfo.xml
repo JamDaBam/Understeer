@@ -49,6 +49,36 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
+        <release version="2.4.0-beta.4" type="development">
+            <description>
+                <p>Security &amp; Reliability Update: this beta focuses on improving the security and reliability of Understeer's update mechanism and backup handling. It introduces no new hardware features or changes to wheelbase control.</p>
+                <p xml:lang="de">Sicherheits- und Zuverlässigkeitsupdate: Diese Beta verbessert vor allem die Sicherheit und Zuverlässigkeit der Aktualisierung von Understeer und des Umgangs mit Backups. Sie bringt keine neuen Hardwarefunktionen und ändert nichts an der Steuerung der Wheelbase.</p>
+                <ul>
+                    <li>Self-updates now require fresh, validated GitHub release information, including the expected download size and SHA-256 checksum</li>
+                    <li xml:lang="de">Eine Aktualisierung von Understeer selbst setzt jetzt frische, geprüfte Release-Angaben von GitHub voraus, einschließlich der erwarteten Downloadgröße und SHA-256-Prüfsumme</li>
+                    <li>Cached update information is used for display only. Imported backups cannot provide the information used to install an update</li>
+                    <li xml:lang="de">Zwischengespeicherte Update-Angaben dienen nur noch der Anzeige. Importierte Backups können keine Angaben liefern, nach denen ein Update installiert wird</li>
+                    <li>Backups no longer include local update and beta-notification settings. Existing backups remain supported</li>
+                    <li xml:lang="de">Backups enthalten keine lokalen Einstellungen zu Updates und Testversions-Hinweisen mehr. Bestehende Backups lassen sich weiterhin verwenden</li>
+                    <li>AppImage downloads use streaming and a download deadline, with clearer error messages when a download takes too long</li>
+                    <li xml:lang="de">AppImage-Downloads werden fortlaufend gelesen und haben eine Zeitgrenze, mit verständlicheren Fehlermeldungen, wenn ein Download zu lange dauert</li>
+                    <li>Temporary download files are created securely, and the original installation target is checked again before replacement</li>
+                    <li xml:lang="de">Temporäre Downloaddateien werden sicher angelegt, und das ursprüngliche Installationsziel wird vor dem Ersetzen erneut geprüft</li>
+                    <li>Self-updates are restricted to suitable AppImage installations in trusted directories. Otherwise, a manual Download option is offered</li>
+                    <li xml:lang="de">Understeer aktualisiert sich nur noch selbst, wenn es als geeignetes AppImage in einem vertrauenswürdigen Ordner liegt. Andernfalls wird „Herunterladen“ angeboten</li>
+                    <li>Cancellation is checked throughout the update process, including immediately before replacement</li>
+                    <li xml:lang="de">Ein Abbruch wird während der ganzen Aktualisierung beachtet, auch unmittelbar vor dem Ersetzen</li>
+                    <li>Automated test isolation and regression coverage have been improved</li>
+                    <li xml:lang="de">Die Isolation der automatischen Tests und die Abdeckung durch Regressionstests wurden verbessert</li>
+                </ul>
+                <p>This remains a beta release. It must be downloaded manually from the official GitHub release page. Keep your previous AppImage and back up your settings and presets before switching versions.</p>
+                <p xml:lang="de">Dies ist weiterhin eine Beta. Sie muss von Hand über die offizielle Release-Seite auf GitHub heruntergeladen werden. Behalte dein bisheriges AppImage und sichere deine Einstellungen und Presets, bevor du die Version wechselst.</p>
+                <p>The download deadline is not a guaranteed maximum duration for every network or filesystem operation.</p>
+                <p xml:lang="de">Die Zeitgrenze für Downloads ist keine garantierte Höchstdauer für jeden Netzwerk- oder Dateisystemvorgang.</p>
+                <p>Feedback and bug reports are welcome through the GitHub issue tracker.</p>
+                <p xml:lang="de">Rückmeldungen und Fehlerberichte sind über den Issue-Tracker auf GitHub willkommen.</p>
+            </description>
+        </release>
         <release version="2.4.0-beta.3" date="2026-11-22" type="development">
             <description>
                 <p>The third test version (beta) of 2.4.0. It tells beta users about newer test versions, shows the drive of a shared preset before it is sent and makes downloads from the internet more reliable and safer.</p>
