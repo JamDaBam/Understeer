@@ -208,10 +208,10 @@ def test_script_refuses_an_unready_release(metainfo):
 
 
 def test_the_shipped_metainfo():
-    """2.3.3 and 2.4.0-beta.1 to beta.3 are dated and ready; each beta is
+    """2.3.3 and 2.4.0-beta.1 to beta.4 are dated and ready; each beta is
     published as a prerelease that doesn't become the latest release."""
     release_tag.check_metainfo("v2.3.3")
-    for beta in ("2.4.0-beta.1", "2.4.0-beta.2", "2.4.0-beta.3"):
+    for beta in ("2.4.0-beta.1", "2.4.0-beta.2", "2.4.0-beta.3", "2.4.0-beta.4"):
         release_tag.check_metainfo(f"v{beta}")
         done = run(f"v{beta}")
         assert done.returncode == 0, done.stderr
@@ -229,47 +229,48 @@ def shipped_releases():
     return root.findall("releases/release")
 
 
-def test_the_shipped_beta_4_is_prepared_but_waits_for_its_date(metainfo):
+def test_the_shipped_beta_4_is_dated_and_ready(metainfo):
     """2.4.0-beta.4 is in the metainfo file as the newest release, a test
-    version with notes in English and German, but without its date: it
-    can't be released until the real day is added. With a date it is
-    released as a beta, a prerelease that doesn't become the latest. The
-    releases below it stay as they are."""
+    version with notes in English and German and the day it is released:
+    it is released as a beta, a prerelease that doesn't become the latest.
+    The same entry without its date still can't be released. The releases
+    below it stay as they are."""
     entries = shipped_releases()
     versions = [e.get("version") for e in entries]
     assert versions[:5] == ["2.4.0-beta.4", "2.4.0-beta.3", "2.4.0-beta.2",
                             "2.4.0-beta.1", "2.3.3"]
     assert len(versions) == len(set(versions))          # each exactly once
     beta4 = entries[0]
-    assert beta4.get("type") == "development" and beta4.get("date") is None
+    assert beta4.get("type") == "development"
+    assert beta4.get("date") == "2026-11-28"
     description = beta4.find("description")
     for tag in ("p", "ul/li"):
         english = [e.text for e in description.findall(tag) if e.get(LANG) is None]
         german = [e.text for e in description.findall(tag) if e.get(LANG) == "de"]
         assert english and len(english) == len(german)
         assert all(text and text.strip() for text in english + german)
-    with pytest.raises(ValueError, match="no date yet"):
-        release_tag.check_metainfo("v2.4.0-beta.4")
+    release_tag.check_metainfo("v2.4.0-beta.4")
     done = run("v2.4.0-beta.4")
-    assert done.returncode == 1 and done.stdout == ""   # nothing to publish
-    assert "has no date yet" in done.stderr
-
-    # The same file once the day is written in: a beta like the others
-    shipped = (ROOT / "io.github.JamDaBam.Understeer.metainfo.xml").read_text(
-        encoding="utf-8")
-    undated = '<release version="2.4.0-beta.4" type="development">'
-    assert shipped.count(undated) == 1
-    path = metainfo(shipped.replace(
-        undated, '<release version="2.4.0-beta.4" date="2026-12-01" type="development">'))
-    release_tag.check_metainfo("v2.4.0-beta.4", path)
-    done = run("--metainfo", str(path), "v2.4.0-beta.4")
     assert done.returncode == 0, done.stderr
     assert done.stdout == (
         "version=2.4.0-beta.4\nkind=beta\nflags=--prerelease --latest=false\n")
 
+    # The same file without the day: nothing to publish
+    shipped = (ROOT / "io.github.JamDaBam.Understeer.metainfo.xml").read_text(
+        encoding="utf-8")
+    dated = '<release version="2.4.0-beta.4" date="2026-11-28" type="development">'
+    assert shipped.count(dated) == 1
+    path = metainfo(shipped.replace(
+        dated, '<release version="2.4.0-beta.4" type="development">'))
+    with pytest.raises(ValueError, match="no date yet"):
+        release_tag.check_metainfo("v2.4.0-beta.4", path)
+    done = run("--metainfo", str(path), "v2.4.0-beta.4")
+    assert done.returncode == 1 and done.stdout == ""
+    assert "has no date yet" in done.stderr
+
 
 def test_the_shipped_beta_3_is_dated_and_ready():
-    """2.4.0-beta.3, the release below the prepared beta.4, is a test
+    """2.4.0-beta.3, the release below beta.4, is a test
     version with notes in English and German and the day it was released."""
     entries = shipped_releases()
     versions = [e.get("version") for e in entries]

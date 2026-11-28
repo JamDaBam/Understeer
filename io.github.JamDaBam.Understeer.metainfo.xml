@@ -49,7 +49,7 @@
          update, and the release build takes the GitHub notes from here.
          Translations: the same element again with xml:lang. -->
     <releases>
-        <release version="2.4.0-beta.4" type="development">
+        <release version="2.4.0-beta.4" date="2026-11-28" type="development">
             <description>
                 <p>Security &amp; Reliability Update: this beta focuses on improving the security and reliability of Understeer's update mechanism and backup handling. It introduces no new hardware features or changes to wheelbase control.</p>
                 <p xml:lang="de">Sicherheits- und Zuverlässigkeitsupdate: Diese Beta verbessert vor allem die Sicherheit und Zuverlässigkeit der Aktualisierung von Understeer und des Umgangs mit Backups. Sie bringt keine neuen Hardwarefunktionen und ändert nichts an der Steuerung der Wheelbase.</p>
