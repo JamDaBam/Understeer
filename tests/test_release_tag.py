@@ -223,17 +223,59 @@ def test_the_shipped_metainfo():
 LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
-def test_the_shipped_beta_3_is_dated_and_ready():
-    """2.4.0-beta.3 is in the metainfo file as the newest release, a test
-    version with notes in English and German and the day it is released.
-    The releases below it stay as they are."""
+def shipped_releases():
     import xml.etree.ElementTree as ET
     root = ET.parse(ROOT / "io.github.JamDaBam.Understeer.metainfo.xml").getroot()
-    entries = root.findall("releases/release")
+    return root.findall("releases/release")
+
+
+def test_the_shipped_beta_4_is_prepared_but_waits_for_its_date(metainfo):
+    """2.4.0-beta.4 is in the metainfo file as the newest release, a test
+    version with notes in English and German, but without its date: it
+    can't be released until the real day is added. With a date it is
+    released as a beta, a prerelease that doesn't become the latest. The
+    releases below it stay as they are."""
+    entries = shipped_releases()
     versions = [e.get("version") for e in entries]
-    assert versions[:4] == ["2.4.0-beta.3", "2.4.0-beta.2", "2.4.0-beta.1", "2.3.3"]
+    assert versions[:5] == ["2.4.0-beta.4", "2.4.0-beta.3", "2.4.0-beta.2",
+                            "2.4.0-beta.1", "2.3.3"]
     assert len(versions) == len(set(versions))          # each exactly once
-    beta3 = entries[0]
+    beta4 = entries[0]
+    assert beta4.get("type") == "development" and beta4.get("date") is None
+    description = beta4.find("description")
+    for tag in ("p", "ul/li"):
+        english = [e.text for e in description.findall(tag) if e.get(LANG) is None]
+        german = [e.text for e in description.findall(tag) if e.get(LANG) == "de"]
+        assert english and len(english) == len(german)
+        assert all(text and text.strip() for text in english + german)
+    with pytest.raises(ValueError, match="no date yet"):
+        release_tag.check_metainfo("v2.4.0-beta.4")
+    done = run("v2.4.0-beta.4")
+    assert done.returncode == 1 and done.stdout == ""   # nothing to publish
+    assert "has no date yet" in done.stderr
+
+    # The same file once the day is written in: a beta like the others
+    shipped = (ROOT / "io.github.JamDaBam.Understeer.metainfo.xml").read_text(
+        encoding="utf-8")
+    undated = '<release version="2.4.0-beta.4" type="development">'
+    assert shipped.count(undated) == 1
+    path = metainfo(shipped.replace(
+        undated, '<release version="2.4.0-beta.4" date="2026-12-01" type="development">'))
+    release_tag.check_metainfo("v2.4.0-beta.4", path)
+    done = run("--metainfo", str(path), "v2.4.0-beta.4")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == (
+        "version=2.4.0-beta.4\nkind=beta\nflags=--prerelease --latest=false\n")
+
+
+def test_the_shipped_beta_3_is_dated_and_ready():
+    """2.4.0-beta.3, the release below the prepared beta.4, is a test
+    version with notes in English and German and the day it was released."""
+    entries = shipped_releases()
+    versions = [e.get("version") for e in entries]
+    assert versions[1:5] == ["2.4.0-beta.3", "2.4.0-beta.2", "2.4.0-beta.1", "2.3.3"]
+    assert len(versions) == len(set(versions))          # each exactly once
+    beta3 = entries[1]
     assert beta3.get("type") == "development"
     assert beta3.get("date") == "2026-11-22"
     description = beta3.find("description")
